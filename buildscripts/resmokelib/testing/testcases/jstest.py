@@ -168,6 +168,7 @@ class JSTestCase(interface.TestCase):
         is_main_test = thread_id == 0
         test_data["isMainTest"] = is_main_test
         test_data["numTestClients"] = self.num_clients
+        test_data["threadID"] = thread_id
 
         global_vars["TestData"] = test_data
         shell_options["global_vars"] = global_vars
