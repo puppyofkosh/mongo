@@ -11,19 +11,19 @@ import sys
 import threading
 
 from . import interface
+from . import single_jstest
 from ... import config
 from ... import core
 from ... import utils
 from ...utils import registry
 
 
-class JSTestCase(interface.TestCase):
+class MultipleCopyJSTestCase(interface.TestCase):
     """
     A jstest to execute.
     """
 
-    # FIXME
-    REGISTERED_NAME = registry.LEAVE_UNREGISTERED
+    REGISTERED_NAME = "js_test"
 
     # A wrapper for the thread class that lets us propagate exceptions.
     class ExceptionThread(threading.Thread):
@@ -50,16 +50,20 @@ class JSTestCase(interface.TestCase):
                  shell_executable=None,
                  shell_options=None,
                  test_kind="JSTest"):
-        """Initializes the JSTestCase with the JS file to run."""
+        """Initializes the MultipleCopyJSTestCase with the JS file to run."""
 
         interface.TestCase.__init__(self, logger, test_kind, js_filename)
+
+        # FIXME: Remove
+        print("Creating multi copy JS Test case")
 
         # Command line options override the YAML configuration.
         self.shell_executable = utils.default_if_none(config.MONGO_EXECUTABLE, shell_executable)
 
         self.js_filename = js_filename
         self.shell_options = utils.default_if_none(shell_options, {}).copy()
-        self.num_clients = JSTestCase.DEFAULT_CLIENT_NUM
+        self.num_clients = MultipleCopyJSTestCase.DEFAULT_CLIENT_NUM
+        self.test_cases = []
 
     def configure(self, fixture, num_clients=DEFAULT_CLIENT_NUM, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
@@ -117,6 +121,19 @@ class JSTestCase(interface.TestCase):
 
         self.shell_options["process_kwargs"] = process_kwargs
 
+        if num_clients < 1:
+            raise RuntimeError("Must have at least 1 client")
+
+        # Initialize the individual test cases
+        for _ in xrange(num_clients):
+            # TODO: logger should depend on num_clients.
+            # If num_clients is 1 use self.logger otherwise use the other one.
+            
+            test = single_jstest.SingleJSTestCase(self.logger, self.js_filename,
+                                              self.shell_executable, self.shell_options)
+            test.configure(self.fixture, self.shell_executable, self.shell_options)
+            self.test_cases.append(test)
+
     def _get_data_dir(self, global_vars):
         """
         Returns the value that the mongo shell should set for the
@@ -131,14 +148,25 @@ class JSTestCase(interface.TestCase):
                             "job%d" % (self.fixture.job_num),
                             config.MONGO_RUNNER_SUBDIR)
 
+    def _make_process(self):
+        if len(self.test_cases) > 0:
+            return self.test_cases[0]._make_process()
+        else:
+            return None
+
     def run_test(self):
+        print("Running multi copy jstest")
         threads = []
         try:
             # Don't thread if there is only one client.
-            if self.num_clients == 1:
-                shell = self._make_process(self.logger)
-                self._execute(shell)
+            if len(self.test_cases) == 1:
+                # Just run the one test case in this thread.
+                self.test_cases[0].run_test()
+
+                # FIXME Must do this for both cases
+                self.return_code = self.test_cases[0]
             else:
+                raise RuntimeError("nyi")
                 # If there are multiple clients, make a new thread for each client.
                 for i in xrange(self.num_clients):
                     t = self.ExceptionThread(my_target=self._run_test_in_thread, my_args=[i])
@@ -155,40 +183,4 @@ class JSTestCase(interface.TestCase):
             for t in threads:
                 if t._get_exception() is not None:
                     raise t._get_exception()
-
-    def _make_process(self, logger=None, thread_id=0):
-        # Since _make_process() is called by each thread, we make a shallow copy of the mongo shell
-        # options to avoid modifying the shared options for the JSTestCase.
-        shell_options = self.shell_options.copy()
-        global_vars = shell_options["global_vars"].copy()
-        test_data = global_vars["TestData"].copy()
-
-        # We set a property on TestData to mark the main test when multiple clients are going to run
-        # concurrently in case there is logic within the test that must execute only once. We also
-        # set a property on TestData to indicate how many clients are going to run the test so they
-        # can avoid executing certain logic when there may be other operations running concurrently.
-        is_main_test = thread_id == 0
-        test_data["isMainTest"] = is_main_test
-        test_data["numTestClients"] = self.num_clients
-        test_data["threadID"] = thread_id
-
-        global_vars["TestData"] = test_data
-        shell_options["global_vars"] = global_vars
-
-        # If logger is none, it means that it's not running in a thread and thus logger should be
-        # set to self.logger.
-        logger = utils.default_if_none(logger, self.logger)
-
-        return core.programs.mongo_shell_program(
-            logger,
-            executable=self.shell_executable,
-            filename=self.js_filename,
-            connection_string=self.fixture.get_driver_connection_url(),
-            **shell_options)
-
-    def _run_test_in_thread(self, thread_id):
-        # Make a logger for each thread. When this method gets called self.logger has been
-        # overridden with a TestLogger instance by the TestReport in the startTest() method.
-        logger = self.logger.new_test_thread_logger(self.test_kind, str(thread_id))
-        shell = self._make_process(logger, thread_id)
-        self._execute(shell)
+            print("run_test finished")
