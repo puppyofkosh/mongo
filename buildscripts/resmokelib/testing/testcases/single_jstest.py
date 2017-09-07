@@ -24,23 +24,6 @@ class SingleJSTestCase(interface.TestCase):
 
     REGISTERED_NAME = registry.LEAVE_UNREGISTERED
 
-    # A wrapper for the thread class that lets us propagate exceptions.
-    class ExceptionThread(threading.Thread):
-        def __init__(self, my_target, my_args):
-            threading.Thread.__init__(self, target=my_target, args=my_args)
-            self.err = None
-
-        def run(self):
-            try:
-                threading.Thread.run(self)
-            except:
-                self.err = sys.exc_info()[1]
-            else:
-                self.err = None
-
-        def _get_exception(self):
-            return self.err
-
     DEFAULT_CLIENT_NUM = 1
 
     def __init__(self,
@@ -68,9 +51,10 @@ class SingleJSTestCase(interface.TestCase):
         self.shell_options = shell_options
         self.num_clients = num_clients
 
-    def run_test(self):
-        shell = self._make_process(self.logger)
+    def run_test_as_thread(self, thread_id, logger, retcode_queue):
+        shell = self._make_process(logger, thread_id)
         self._execute(shell)
+        retcode_queue.put(self.return_code)
 
     def _make_process(self, logger=None, thread_id=0):
         # Since _make_process() is called by each thread, we make a shallow copy of the mongo shell
@@ -101,10 +85,3 @@ class SingleJSTestCase(interface.TestCase):
             filename=self.js_filename,
             connection_string=self.fixture.get_driver_connection_url(),
             **shell_options)
-
-    def _run_test_in_thread(self, thread_id):
-        # Make a logger for each thread. When this method gets called self.logger has been
-        # overridden with a TestLogger instance by the TestReport in the startTest() method.
-        logger = self.logger.new_test_thread_logger(self.test_kind, str(thread_id))
-        shell = self._make_process(logger, thread_id)
-        self._execute(shell)

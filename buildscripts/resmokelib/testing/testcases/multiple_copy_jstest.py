@@ -16,7 +16,7 @@ from ... import config
 from ... import core
 from ... import utils
 from ...utils import registry
-
+from ...utils import queue as _queue
 
 class MultipleCopyJSTestCase(interface.TestCase):
     """
@@ -126,12 +126,9 @@ class MultipleCopyJSTestCase(interface.TestCase):
 
         # Initialize the individual test cases
         for _ in xrange(num_clients):
-            # TODO: logger should depend on num_clients.
-            # If num_clients is 1 use self.logger otherwise use the other one.
-            
             test = single_jstest.SingleJSTestCase(self.logger, self.js_filename,
-                                              self.shell_executable, self.shell_options)
-            test.configure(self.fixture, self.shell_executable, self.shell_options)
+                                                  self.shell_executable, self.shell_options)
+            test.configure(self.fixture, self.shell_executable, self.shell_options, num_clients)
             self.test_cases.append(test)
 
     def _get_data_dir(self, global_vars):
@@ -149,27 +146,25 @@ class MultipleCopyJSTestCase(interface.TestCase):
                             config.MONGO_RUNNER_SUBDIR)
 
     def _make_process(self):
-        if len(self.test_cases) > 0:
-            return self.test_cases[0]._make_process()
-        else:
-            return None
+        # This function should only be called by interface.py's as_command()
+        assert len(self.test_cases) > 0
+        return self.test_cases[0]._make_process()
 
     def run_test(self):
         print("Running multi copy jstest")
+        retcode_queue = _queue.Queue()
         threads = []
         try:
             # Don't thread if there is only one client.
             if len(self.test_cases) == 1:
                 # Just run the one test case in this thread.
-                self.test_cases[0].run_test()
-
-                # FIXME Must do this for both cases
-                self.return_code = self.test_cases[0]
+                self.test_cases[0].run_test_as_thread(0, self.logger, retcode_queue)
             else:
-                raise RuntimeError("nyi")
                 # If there are multiple clients, make a new thread for each client.
                 for i in xrange(self.num_clients):
-                    t = self.ExceptionThread(my_target=self._run_test_in_thread, my_args=[i])
+                    logger = self.logger.new_test_thread_logger(self.test_kind, str(i))
+                    t = self.ExceptionThread(my_target=self.test_cases[i].run_test_as_thread,
+                                             my_args=[i, logger, retcode_queue])
                     t.start()
                     threads.append(t)
         except self.failureException:
@@ -183,4 +178,13 @@ class MultipleCopyJSTestCase(interface.TestCase):
             for t in threads:
                 if t._get_exception() is not None:
                     raise t._get_exception()
+
             print("run_test finished")
+
+            # Go through each thread's return code and find the first nonzero one if it exists
+            self.return_code = 0
+            while not retcode_queue.empty():
+                return_code = retcode_queue.get_nowait()
+                if return_code != 0:
+                    self.return_code = return_code
+                    break
