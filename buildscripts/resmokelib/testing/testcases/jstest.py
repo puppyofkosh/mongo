@@ -22,7 +22,6 @@ class JSTestCase(interface.TestCase):
     A jstest to execute.
     """
 
-    # FIXME
     REGISTERED_NAME = registry.LEAVE_UNREGISTERED
 
     # A wrapper for the thread class that lets us propagate exceptions.
