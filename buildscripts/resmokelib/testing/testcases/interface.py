@@ -120,7 +120,6 @@ class TestCase(unittest.TestCase):
         self.logger.info("%s started with pid %s.", self.shortDescription(), process.pid)
 
         self.return_code = process.wait()
-        print("The return code is {0}".format(self.return_code))
         if self.return_code != 0:
             raise self.failureException("%s failed" % (self.shortDescription()))
 
