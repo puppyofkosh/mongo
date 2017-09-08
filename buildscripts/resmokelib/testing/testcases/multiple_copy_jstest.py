@@ -15,8 +15,9 @@ from . import single_jstest
 from ... import config
 from ... import core
 from ... import utils
-from ...utils import registry
 from ...utils import queue as _queue
+from ...utils import registry
+
 
 class MultipleCopyJSTestCase(interface.TestCase):
     """
