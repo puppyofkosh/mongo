@@ -147,7 +147,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
         return self.single_test_case._make_process()
 
     def _get_shell_options_for_thread(self, thread_id):
-        """Set up a thread's up TestData object"""
+        """Get shell_options with an initialized TestData object for given thread"""
 
         # We give each JSSingleTestCase its own copy of the shell_options.
         shell_options = self.shell_options.copy()
