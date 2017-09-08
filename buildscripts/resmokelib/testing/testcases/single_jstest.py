@@ -19,7 +19,7 @@ from ...utils import registry
 
 class SingleJSTestCase(interface.TestCase):
     """
-    A jstest to execute.
+    A single jstest to execute.
     """
 
     REGISTERED_NAME = registry.LEAVE_UNREGISTERED
@@ -32,7 +32,7 @@ class SingleJSTestCase(interface.TestCase):
                  shell_executable=None,
                  shell_options=None,
                  test_kind="SingleJSTest"):
-        """Initializes the JSTestCase with the JS file to run."""
+        """Initializes the JSSingleTestCase with the JS file to run."""
 
         interface.TestCase.__init__(self, logger, test_kind, js_filename)
 

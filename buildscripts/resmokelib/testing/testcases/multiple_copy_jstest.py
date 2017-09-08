@@ -208,7 +208,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
             for t in threads:
                 t.join()
 
-            # Go through each thread's return code and store the first nonzero one if it exists.
+            # Go through each test's return code and store the first nonzero one if it exists.
             self.return_code = 0
             for test_case in test_cases_run:
                 if test_case.return_code != 0:
