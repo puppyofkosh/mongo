@@ -43,8 +43,7 @@ class SingleJSTestCase(interface.TestCase):
         self.shell_options = utils.default_if_none(shell_options, {}).copy()
         self.num_clients = SingleJSTestCase.DEFAULT_CLIENT_NUM
 
-    def configure(self, fixture, shell_executable, shell_options,
-                  num_clients=DEFAULT_CLIENT_NUM,
+    def configure(self, fixture, shell_executable, shell_options, num_clients,
                   *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
         self.shell_executable = shell_executable

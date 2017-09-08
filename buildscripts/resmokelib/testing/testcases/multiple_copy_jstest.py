@@ -54,7 +54,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
 
         interface.TestCase.__init__(self, logger, test_kind, js_filename)
 
-        # FIXME: Remove
+        # FIXME: Remove.
         print("Creating multi copy JS Test case")
 
         # Command line options override the YAML configuration.
@@ -124,7 +124,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
         if num_clients < 1:
             raise RuntimeError("Must have at least 1 client")
 
-        # Initialize the individual test cases
+        # Initialize the individual test cases.
         for _ in xrange(num_clients):
             test = single_jstest.SingleJSTestCase(self.logger, self.js_filename,
                                                   self.shell_executable, self.shell_options)
@@ -146,7 +146,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
                             config.MONGO_RUNNER_SUBDIR)
 
     def _make_process(self):
-        # This function should only be called by interface.py's as_command()
+        # This function should only be called by interface.py's as_command().
         assert len(self.test_cases) > 0
         return self.test_cases[0]._make_process()
 
@@ -179,9 +179,10 @@ class MultipleCopyJSTestCase(interface.TestCase):
                 if t._get_exception() is not None:
                     raise t._get_exception()
 
+            #FIXME: Remove.
             print("run_test finished")
 
-            # Go through each thread's return code and find the first nonzero one if it exists
+            # Go through each thread's return code and find the first nonzero one if it exists.
             self.return_code = 0
             while not retcode_queue.empty():
                 return_code = retcode_queue.get_nowait()
