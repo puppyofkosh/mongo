@@ -1,0 +1,44 @@
+test_kind: js_test
+
+selector:
+  roots:
+  - jstestfuzz/out/*.js
+
+executor:
+  config:
+    shell_options:
+      readMode: commands
+      global_vars:
+        TestData:
+          runningWithConfigStepdowns: true
+          # ian FIXME: Just for now.
+          runningWithShardStepdowns: false
+  hooks:
+  - class: ContinuousStepdown
+    config_stepdown: true
+    #ian FIXME: Just for now.
+    shard_stepdown: false
+  #ian FIXME: Temporarily removed ValidateCollections until SERVER-31128 is fixed
+  fixture:
+    class: ShardedClusterFixture
+    mongos_options:
+      set_parameters:
+        enableTestCommands: 1
+      verbose: ''
+    mongod_options:
+      set_parameters:
+        enableTestCommands: 1
+        numInitialSyncAttempts: 1
+      verbose: ''
+    num_shards: 2
+    num_rs_nodes_per_shard: 2
+    configsvr_options:
+      all_nodes_electable: true
+      replset_config_options:
+        settings:
+          electionTimeoutMillis: 3000
+    shard_options:
+      # ian FIXME: Just for now.
+      all_nodes_electable: false
+    enable_sharding:
+    - test
