@@ -6,30 +6,96 @@
     assert.eq(typeof db, 'object', 'Invalid `db` object, is the shell connected to a mongod?');
     load('jstests/hooks/validate_collections.js');  // For validateCollections
 
-    var serverList = [];
-    serverList.push(db.getMongo());
+    function getReplSetMembers(conn) {
+        // If conn does not point to a repl set, then this function returns [conn]
+        var res = conn.adminCommand({"isMaster": 1});
+        var connections = [];
 
-    var addSecondaryNodes = function() {
-        var cmdLineOpts = db.adminCommand('getCmdLineOpts');
-        assert.commandWorked(cmdLineOpts);
-
-        if (cmdLineOpts.parsed.hasOwnProperty('replication') &&
-            cmdLineOpts.parsed.replication.hasOwnProperty('replSet')) {
-            var rst = new ReplSetTest(db.getMongo().host);
-            // Call getPrimary to populate rst with information about the nodes.
-            var primary = rst.getPrimary();
-            assert(primary, 'calling getPrimary() failed');
-            serverList.push(...rst.getSecondaries());
+        if (res.hasOwnProperty("hosts")) {
+            for (var hostString of res.hosts) {
+                connections.push(new Mongo(hostString));
+            }
+        } else {
+            connections.push(conn);
         }
-    };
 
-    addSecondaryNodes();
+        return connections;
+    }
 
+    function getConfigConnStr(db) {
+        var shardMap = db.adminCommand({"getShardMap": 1});
+        if (!shardMap.hasOwnProperty("map")) {
+            throw new Error('Expected getShardMap to return an object with a "map" field');
+        }
+
+        var map = shardMap.map;
+
+        if (!map.hasOwnProperty('config')) {
+            throw new Error('Expected getShardMap().map to have a "config" field');
+        }
+
+        return map.config;
+    }
+
+    function getServerList() {
+        var serverList = [];
+        var status = db.serverStatus()
+
+        if (!status.hasOwnProperty('process')) {
+            throw new Error('db.serverStatus() did not have a "process" field');
+        }
+
+        if (status.process === 'mongod') {
+            var cmdLineOpts = db.adminCommand('getCmdLineOpts');
+            assert.commandWorked(cmdLineOpts);
+
+            if (cmdLineOpts.parsed.hasOwnProperty('replication') &&
+                cmdLineOpts.parsed.replication.hasOwnProperty('replSet')) {
+                // We're connected to a replica set.
+
+                var rst = new ReplSetTest(db.getMongo().host);
+                // Call getPrimary to populate rst with information about the nodes.
+                var primary = rst.getPrimary();
+                assert(primary, 'calling getPrimary() failed');
+                serverList.push(primary);
+                serverList.push(...rst.getSecondaries());
+            } else {
+                // We're connected to a standalone.
+                serverList.push(db.getMongo())
+            }
+
+        } else if (status.process === 'mongos') {
+            // We're connected to a sharded cluster.
+
+            // 1) Add all the config servers to the server list.
+            var configConnStr = getConfigConnStr(db);
+            var configServerReplSetConn = new Mongo(configConnStr);
+            serverList.push(...getReplSetMembers(configServerReplSetConn));
+
+            // 2) Get all shard members.
+            var configDB = db.getSiblingDB("config");
+            var res = configDB.shards.find();
+
+            while (res.hasNext()) {
+                var shard = res.next();
+                var shardReplSetConn = new Mongo(shard.host);
+                serverList.push(...getReplSetMembers(shardReplSetConn));
+            }
+        } else {
+            throw new Error('Unrecognized "process" field in serverStatus: ' + status.process);
+        }
+
+        return serverList;
+    }
+
+
+    var serverList = getServerList();
     for (var server of serverList) {
         print('Running validate() on ' + server.host);
+        server.setSlaveOk();
         var dbNames = server.getDBNames();
         for (var dbName of dbNames) {
-            if (!validateCollections(db.getSiblingDB(dbName), {full: true})) {
+            if (!validateCollections(server.getDB(dbName), {full: true})) {
                 throw new Error('Collection validation failed');
             }
         }
