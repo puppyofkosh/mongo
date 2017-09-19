@@ -8,10 +8,10 @@
 
     function getReplSetMembers(conn) {
         // If conn does not point to a repl set, then this function returns [conn].
-        var res = conn.adminCommand({"isMaster": 1});
+        var res = conn.adminCommand({'isMaster': 1});
         var connections = [];
 
-        if (res.hasOwnProperty("hosts")) {
+        if (res.hasOwnProperty('hosts')) {
             for (var hostString of res.hosts) {
                 connections.push(new Mongo(hostString));
             }
@@ -23,8 +23,8 @@
     }
 
     function getConfigConnStr(db) {
-        var shardMap = db.adminCommand({"getShardMap": 1});
-        if (!shardMap.hasOwnProperty("map")) {
+        var shardMap = db.adminCommand({'getShardMap': 1});
+        if (!shardMap.hasOwnProperty('map')) {
             throw new Error('Expected getShardMap to return an object with a "map" field');
         }
 
@@ -59,7 +59,7 @@
         var serverList = [];
 
         if (isMongos(db)) {
-            // We're connected to a sharded cluster.
+            // We're connected to a sharded cluster through a mongos.
 
             // 1) Add all the config servers to the server list.
             var configConnStr = getConfigConnStr(db);
@@ -67,7 +67,7 @@
             serverList.push(...getReplSetMembers(configServerReplSetConn));
 
             // 2) Add shard members to the server list.
-            var configDB = db.getSiblingDB("config");
+            var configDB = db.getSiblingDB('config');
             var res = configDB.shards.find();
 
             while (res.hasNext()) {
