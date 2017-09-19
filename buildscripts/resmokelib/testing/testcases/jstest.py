@@ -44,6 +44,7 @@ class _JSTestCase(interface.TestCase):
     def configure(self, fixture, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
 
+    def configure_shell(self):
         global_vars = self.shell_options.get("global_vars", {}).copy()
         data_dir = self._get_data_dir(global_vars)
 
@@ -68,8 +69,8 @@ class _JSTestCase(interface.TestCase):
             global_vars["MongoRunner.mongoShellPath"] = self.shell_executable
 
         test_data = global_vars.get("TestData", {}).copy()
-        test_data["minPort"] = core.network.PortAllocator.min_test_port(fixture.job_num)
-        test_data["maxPort"] = core.network.PortAllocator.max_test_port(fixture.job_num)
+        test_data["minPort"] = core.network.PortAllocator.min_test_port(self.fixture.job_num)
+        test_data["maxPort"] = core.network.PortAllocator.max_test_port(self.fixture.job_num)
 
         global_vars["TestData"] = test_data
         self.shell_options["global_vars"] = global_vars
@@ -94,6 +95,7 @@ class _JSTestCase(interface.TestCase):
             process_kwargs["KRB5CCNAME"] = "DIR:" + os.path.join(krb5_dir, ".")
 
         self.shell_options["process_kwargs"] = process_kwargs
+
 
     def _get_data_dir(self, global_vars):
         """
@@ -167,7 +169,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
     def configure(self, fixture, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
         self.test_case_template.configure(fixture, *args, **kwargs)
-
+        self.test_case_template.configure_shell()
 
     def _make_process(self):
         # This function should only be called by interface.py's as_command().
