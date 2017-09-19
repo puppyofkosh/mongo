@@ -14,6 +14,7 @@ from . import interface
 from ... import config
 from ... import core
 from ... import utils
+from ...utils import registry
 
 
 class JSTestCase(interface.TestCase):
@@ -21,7 +22,7 @@ class JSTestCase(interface.TestCase):
     A jstest to execute.
     """
 
-    REGISTERED_NAME = "js_test"
+    REGISTERED_NAME = registry.LEAVE_UNREGISTERED
 
     # A wrapper for the thread class that lets us propagate exceptions.
     class ExceptionThread(threading.Thread):
@@ -168,6 +169,7 @@ class JSTestCase(interface.TestCase):
         is_main_test = thread_id == 0
         test_data["isMainTest"] = is_main_test
         test_data["numTestClients"] = self.num_clients
+        test_data["threadID"] = thread_id
 
         global_vars["TestData"] = test_data
         shell_options["global_vars"] = global_vars
