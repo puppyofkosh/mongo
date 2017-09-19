@@ -47,6 +47,14 @@
         return res.isdbgrid === 1;
     }
 
+    /**
+     * Returns true if conn is a connection to mongos,
+     * and false otherwise.
+     */
+    function isMongos(db) {
+        return db.isMaster().msg === 'isdbgrid';
+    }
+
     function getServerList() {
         var serverList = [];
 
