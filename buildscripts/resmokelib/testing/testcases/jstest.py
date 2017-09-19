@@ -26,20 +26,94 @@ class _JSTestCase(interface.TestCase):
 
     def __init__(self,
                  logger,
-                 js_filename,
-                 shell_executable=None,
-                 shell_options=None):
+                 js_filename):
         """
         Initializes the JSTestCase with the JS file to run.
         """
 
         interface.TestCase.__init__(self, logger, "JSTest", js_filename)
+        self.js_filename = js_filename
+
+        # These fields are set in configure().
+        self.shell_executable = None
+        self.shell_options = None
+
+    def configure(self, fixture, shell_executable, shell_options, *args, **kwargs):
+        interface.TestCase.configure(self, fixture, *args, **kwargs)
+        self.shell_executable = shell_executable
+        self.shell_options = shell_options
+
+    def run_test(self):
+        try:
+            shell = self._make_process()
+            self._execute(shell)
+        except self.failureException:
+            raise
+        except:
+            self.logger.exception("Encountered an error running jstest %s.", self.basename())
+            raise
+
+    def _make_process(self):
+        return core.programs.mongo_shell_program(
+            self.logger,
+            executable=self.shell_executable,
+            filename=self.js_filename,
+            connection_string=self.fixture.get_driver_connection_url(),
+            **self.shell_options)
+
+class MultipleCopyJSTestCase(interface.TestCase):
+    """
+    A wrapper for several copies of a jstest to execute.
+    """
+
+    REGISTERED_NAME = "js_test"
+
+    class ThreadWithException(threading.Thread):
+        """
+        A wrapper for the thread class that lets us propagate exceptions.
+        """
+
+        def __init__(self, *args, **kwargs):
+            threading.Thread.__init__(self, *args, **kwargs)
+            self.exc_info = None
+
+        def run(self):
+            try:
+                threading.Thread.run(self)
+            except:
+                self.exc_info = sys.exc_info()
+
+    def __init__(self,
+                 logger,
+                 js_filename,
+                 shell_executable=None,
+                 shell_options=None):
+        """
+        Initializes the MultipleCopyJSTestCase with the JS file to run.
+        """
+
+        interface.TestCase.__init__(self, logger, "JSTest", js_filename)
+
+        self.num_clients = config.NUM_CLIENTS_PER_FIXTURE
+        self.test_case_template = _JSTestCase(logger, js_filename)
 
         # Command line options override the YAML configuration.
         self.shell_executable = utils.default_if_none(config.MONGO_EXECUTABLE, shell_executable)
-
-        self.js_filename = js_filename
         self.shell_options = utils.default_if_none(shell_options, {}).copy()
+
+    def _get_data_dir(self, global_vars):
+        """
+        Returns the value that the mongo shell should set for the
+        MongoRunner.dataDir property.
+        """
+
+        # Command line options override the YAML configuration.
+        data_dir_prefix = utils.default_if_none(config.DBPATH_PREFIX,
+                                                global_vars.get("MongoRunner.dataDir"))
+        data_dir_prefix = utils.default_if_none(data_dir_prefix, config.DEFAULT_DBPATH_PREFIX)
+        return os.path.join(data_dir_prefix,
+                            "job%d" % (self.fixture.job_num),
+                            config.MONGO_RUNNER_SUBDIR)
 
     def configure(self, fixture, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
@@ -94,80 +168,8 @@ class _JSTestCase(interface.TestCase):
             process_kwargs["KRB5CCNAME"] = "DIR:" + os.path.join(krb5_dir, ".")
 
         self.shell_options["process_kwargs"] = process_kwargs
-
-    def _get_data_dir(self, global_vars):
-        """
-        Returns the value that the mongo shell should set for the
-        MongoRunner.dataDir property.
-        """
-
-        # Command line options override the YAML configuration.
-        data_dir_prefix = utils.default_if_none(config.DBPATH_PREFIX,
-                                                global_vars.get("MongoRunner.dataDir"))
-        data_dir_prefix = utils.default_if_none(data_dir_prefix, config.DEFAULT_DBPATH_PREFIX)
-        return os.path.join(data_dir_prefix,
-                            "job%d" % (self.fixture.job_num),
-                            config.MONGO_RUNNER_SUBDIR)
-
-    def run_test(self):
-        try:
-            shell = self._make_process()
-            self._execute(shell)
-        except self.failureException:
-            raise
-        except:
-            self.logger.exception("Encountered an error running jstest %s.", self.basename())
-            raise
-
-    def _make_process(self):
-        return core.programs.mongo_shell_program(
-            self.logger,
-            executable=self.shell_executable,
-            filename=self.js_filename,
-            connection_string=self.fixture.get_driver_connection_url(),
-            **self.shell_options)
-
-
-class MultipleCopyJSTestCase(interface.TestCase):
-    """
-    A wrapper for several copies of a jstest to execute.
-    """
-
-    REGISTERED_NAME = "js_test"
-
-    class ThreadWithException(threading.Thread):
-        """
-        A wrapper for the thread class that lets us propagate exceptions.
-        """
-
-        def __init__(self, *args, **kwargs):
-            threading.Thread.__init__(self, *args, **kwargs)
-            self.exc_info = None
-
-        def run(self):
-            try:
-                threading.Thread.run(self)
-            except:
-                self.exc_info = sys.exc_info()
-
-    def __init__(self,
-                 logger,
-                 js_filename,
-                 shell_executable=None,
-                 shell_options=None):
-        """
-        Initializes the MultipleCopyJSTestCase with the JS file to run.
-        """
-
-        interface.TestCase.__init__(self, logger, "JSTest", js_filename)
-
-        self.num_clients = config.NUM_CLIENTS_PER_FIXTURE
-        self.test_case_template = _JSTestCase(logger, js_filename, shell_executable, shell_options)
-
-    def configure(self, fixture, *args, **kwargs):
-        interface.TestCase.configure(self, fixture, *args, **kwargs)
-        self.test_case_template.configure(fixture, *args, **kwargs)
-
+        self.test_case_template.configure(fixture, self.shell_executable, self.shell_options,
+                                          *args, **kwargs)
 
     def _make_process(self):
         # This function should only be called by interface.py's as_command().
@@ -203,12 +205,8 @@ class MultipleCopyJSTestCase(interface.TestCase):
         """
 
         shell_options = self._get_shell_options_for_thread(thread_id)
-        test_case = _JSTestCase(logger,
-                                self.test_case_template.js_filename,
-                                self.test_case_template.shell_executable,
-                                shell_options)
-
-        test_case.configure(self.fixture)
+        test_case = _JSTestCase(logger, self.test_case_template.js_filename)
+        test_case.configure(self.fixture, self.test_case_template.shell_executable, shell_options)
         return test_case
 
     def _run_single_test(self):
@@ -253,7 +251,6 @@ class MultipleCopyJSTestCase(interface.TestCase):
                         "Encountered an error inside thread %d running jstest %s.",
                         thread_id, self.basename())
                     raise thread.exc_info
-
 
     def run_test(self):
         if self.num_clients == 1:
