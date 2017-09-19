@@ -166,8 +166,8 @@ class MultipleCopyJSTestCase(interface.TestCase):
 
     def configure(self, fixture, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
-
         self.test_case_template.configure(fixture, *args, **kwargs)
+
 
     def _make_process(self):
         # This function should only be called by interface.py's as_command().
@@ -211,15 +211,15 @@ class MultipleCopyJSTestCase(interface.TestCase):
         test_case.configure(self.fixture)
         return test_case
 
-    def run_test(self):
-        if self.num_clients == 1:
-            test_case = self._create_test_case_for_thread(self.logger, thread_id=0)
-            try:
-                test_case.run_test()
-            finally:
-                self.return_code = test_case.return_code
-            return
+    def _run_single_test(self):
+        test_case = self._create_test_case_for_thread(self.logger, thread_id=0)
+        try:
+            test_case.run_test()
+            # If there was an exception, it will be logged in test_case's run_test function.
+        finally:
+            self.return_code = test_case.return_code
 
+    def _run_threaded_tests(self):
         threads = []
         test_cases = []
         try:
@@ -233,7 +233,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
                 threads.append(thread)
                 thread.start()
         except:
-            self.logger.exception("Encountered an error running jstest %s.", self.basename())
+            self.logger.exception("Encountered an starting threads for jstest %s.", self.basename())
             raise
         finally:
             for thread in threads:
@@ -247,14 +247,16 @@ class MultipleCopyJSTestCase(interface.TestCase):
                     break
             self.return_code = return_code
 
-            try:
-                for thread in threads:
-                    if thread.exc_info is not None:
-                        raise thread.exc_info
-            except self.failureException:
-                raise
-            except:
-                self.logger.exception(
-                    "Encountered an error inside one of the threads running jstest %s.",
-                    self.basename())
-                raise
+            for (thread_id, thread) in enumerate(threads):
+                if thread.exc_info is not None:
+                    self.logger.exception(
+                        "Encountered an error inside thread %d running jstest %s.",
+                        thread_id, self.basename())
+                    raise thread.exc_info
+
+
+    def run_test(self):
+        if self.num_clients == 1:
+            self._run_single_test()
+        else:
+            self._run_threaded_tests()
