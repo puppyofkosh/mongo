@@ -130,7 +130,7 @@ class _JSTestCase(interface.TestCase):
 
 class MultipleCopyJSTestCase(interface.TestCase):
     """
-    A wrapper for several jstests to execute.
+    A wrapper for several copies of a jstest to execute.
     """
 
     REGISTERED_NAME = "js_test"
