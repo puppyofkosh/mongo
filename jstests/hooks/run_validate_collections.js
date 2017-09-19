@@ -4,10 +4,10 @@
 
 (function() {
     assert.eq(typeof db, 'object', 'Invalid `db` object, is the shell connected to a mongod?');
-    load('jstests/hooks/validate_collections.js');  // For validateCollections
+    load('jstests/hooks/validate_collections.js');  // For validateCollections.
 
     function getReplSetMembers(conn) {
-        // If conn does not point to a repl set, then this function returns [conn]
+        // If conn does not point to a repl set, then this function returns [conn].
         var res = conn.adminCommand({"isMaster": 1});
         var connections = [];
 
@@ -37,15 +37,39 @@
         return map.config;
     }
 
-    function getServerList() {
-        var serverList = [];
-        var status = db.serverStatus()
+    function isMongos(db) {
+        var res = db.adminCommand({isdbgrid: 1});
 
-        if (!status.hasOwnProperty('process')) {
-            throw new Error('db.serverStatus() did not have a "process" field');
+        if (!res.ok) {
+            throw new Error('isdbgrid returned not ok');
         }
 
-        if (status.process === 'mongod') {
+        return res.isdbgrid === 1;
+    }
+
+    function getServerList() {
+        var serverList = [];
+
+        if (isMongos(db)) {
+            // We're connected to a sharded cluster.
+
+            // 1) Add all the config servers to the server list.
+            var configConnStr = getConfigConnStr(db);
+            var configServerReplSetConn = new Mongo(configConnStr);
+            serverList.push(...getReplSetMembers(configServerReplSetConn));
+
+            // 2) Add shard members to the server list.
+            var configDB = db.getSiblingDB("config");
+            var res = configDB.shards.find();
+
+            while (res.hasNext()) {
+                var shard = res.next();
+                var shardReplSetConn = new Mongo(shard.host);
+                serverList.push(...getReplSetMembers(shardReplSetConn));
+            }
+        } else {
+            // We're connected to a mongod.
+
             var cmdLineOpts = db.adminCommand('getCmdLineOpts');
             assert.commandWorked(cmdLineOpts);
 
@@ -61,28 +85,9 @@
                 serverList.push(...rst.getSecondaries());
             } else {
                 // We're connected to a standalone.
-                serverList.push(db.getMongo())
+                serverList.push(db.getMongo());
             }
 
-        } else if (status.process === 'mongos') {
-            // We're connected to a sharded cluster.
-
-            // 1) Add all the config servers to the server list.
-            var configConnStr = getConfigConnStr(db);
-            var configServerReplSetConn = new Mongo(configConnStr);
-            serverList.push(...getReplSetMembers(configServerReplSetConn));
-
-            // 2) Get all shard members.
-            var configDB = db.getSiblingDB("config");
-            var res = configDB.shards.find();
-
-            while (res.hasNext()) {
-                var shard = res.next();
-                var shardReplSetConn = new Mongo(shard.host);
-                serverList.push(...getReplSetMembers(shardReplSetConn));
-            }
-        } else {
-            throw new Error('Unrecognized "process" field in serverStatus: ' + status.process);
         }
 
         return serverList;
