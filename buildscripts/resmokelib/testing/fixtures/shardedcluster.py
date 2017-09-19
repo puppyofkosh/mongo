@@ -145,15 +145,6 @@ class ShardedClusterFixture(interface.Fixture):
             self.logger.info(
                 "Sharded cluster was expected to be running in _do_teardown(), but wasn't.")
 
-        if self.configsvr is not None:
-            if running_at_start:
-                self.logger.info("Stopping config server...")
-
-            success = self.configsvr.teardown() and success
-
-            if running_at_start:
-                self.logger.info("Successfully terminated the config server.")
-
         if self.mongos is not None:
             if running_at_start:
                 self.logger.info("Stopping mongos...")
@@ -169,6 +160,15 @@ class ShardedClusterFixture(interface.Fixture):
             success = shard.teardown() and success
         if running_at_start:
             self.logger.info("Successfully terminated all shards.")
+
+        if self.configsvr is not None:
+            if running_at_start:
+                self.logger.info("Stopping config server...")
+
+            success = self.configsvr.teardown() and success
+
+            if running_at_start:
+                self.logger.info("Successfully terminated the config server.")
 
         return success
 
