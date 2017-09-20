@@ -17,7 +17,7 @@ from ... import utils
 from ...utils import registry
 
 
-class SingleJSTestCase(interface.TestCase):
+class _SingleJSTestCase(interface.TestCase):
     """
     A jstest to execute.
     """
@@ -30,7 +30,7 @@ class SingleJSTestCase(interface.TestCase):
                  shell_executable=None,
                  shell_options=None):
         """
-        Initializes the SingleJSTestCase with the JS file to run.
+        Initializes the _SingleJSTestCase with the JS file to run.
         """
 
         interface.TestCase.__init__(self, logger, "JSTest", js_filename)
@@ -132,7 +132,7 @@ class SingleJSTestCase(interface.TestCase):
 
 class JSTestCase(interface.TestCase):
     """
-    A wrapper for several copies of a jstest to execute.
+    A wrapper for several copies of a SingleJSTest to execute.
     """
 
     REGISTERED_NAME = "js_test"
@@ -165,7 +165,7 @@ class JSTestCase(interface.TestCase):
         interface.TestCase.__init__(self, logger, test_kind, js_filename)
 
         self.num_clients = config.NUM_CLIENTS_PER_FIXTURE
-        self.test_case_template = SingleJSTestCase(logger, js_filename, shell_executable, shell_options)
+        self.test_case_template = _SingleJSTestCase(logger, js_filename, shell_executable, shell_options)
 
     def configure(self, fixture, *args, **kwargs):
         interface.TestCase.configure(self, fixture, *args, **kwargs)
@@ -181,7 +181,7 @@ class JSTestCase(interface.TestCase):
         Get shell_options with an initialized TestData object for given thread.
         """
 
-        # We give each SingleJSTestCase its own copy of the shell_options.
+        # We give each _SingleJSTestCase its own copy of the shell_options.
         shell_options = self.test_case_template.shell_options.copy()
         global_vars = shell_options["global_vars"].copy()
         test_data = global_vars["TestData"].copy()
@@ -202,14 +202,14 @@ class JSTestCase(interface.TestCase):
 
     def _create_test_case_for_thread(self, logger, thread_id):
         """
-        Create and configure a SingleJSTestCase to be run in a separate thread.
+        Create and configure a _SingleJSTestCase to be run in a separate thread.
         """
 
         shell_options = self._get_shell_options_for_thread(thread_id)
-        test_case = SingleJSTestCase(logger,
-                                     self.test_case_template.js_filename,
-                                     self.test_case_template.shell_executable,
-                                     shell_options)
+        test_case = _SingleJSTestCase(logger,
+                                      self.test_case_template.js_filename,
+                                      self.test_case_template.shell_executable,
+                                      shell_options)
 
         test_case.configure(self.fixture)
         return test_case
