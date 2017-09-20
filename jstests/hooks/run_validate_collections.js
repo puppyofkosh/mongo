@@ -8,11 +8,11 @@
 
     function getDirectConnections(conn) {
         // If conn does not point to a repl set, then this function returns [conn].
-        var res = conn.adminCommand({isMaster: 1});
-        var connections = [];
+        const res = conn.adminCommand({isMaster: 1});
+        const connections = [];
 
         if (res.hasOwnProperty('hosts')) {
-            for (var hostString of res.hosts) {
+            for (const hostString of res.hosts) {
                 connections.push(new Mongo(hostString));
             }
         } else {
@@ -23,13 +23,13 @@
     }
 
     function getConfigConnStr(db) {
-        var shardMap = db.adminCommand({getShardMap: 1});
+        const shardMap = db.adminCommand({getShardMap: 1});
         if (!shardMap.hasOwnProperty('map')) {
             throw new Error('Expected getShardMap() to return an object a "map" field: ' +
                             tojson(shardMap));
         }
 
-        var map = shardMap.map;
+        const map = shardMap.map;
 
         if (!map.hasOwnProperty('config')) {
             throw new Error('Expected getShardMap().map to have a "config" field: ' +
@@ -44,23 +44,23 @@
     }
 
     function getServerList() {
-        var serverList = [];
+        const serverList = [];
 
         if (isMongos(db)) {
             // We're connected to a sharded cluster through a mongos.
 
             // 1) Add all the config servers to the server list.
-            var configConnStr = getConfigConnStr(db);
-            var configServerReplSetConn = new Mongo(configConnStr);
+            const configConnStr = getConfigConnStr(db);
+            const configServerReplSetConn = new Mongo(configConnStr);
             serverList.push(...getDirectConnections(configServerReplSetConn));
 
             // 2) Add shard members to the server list.
-            var configDB = db.getSiblingDB('config');
-            var cursor = configDB.shards.find();
+            const configDB = db.getSiblingDB('config');
+            const cursor = configDB.shards.find();
 
             while (cursor.hasNext()) {
-                var shard = cursor.next();
-                var shardReplSetConn = new Mongo(shard.host);
+                const shard = cursor.next();
+                const shardReplSetConn = new Mongo(shard.host);
                 serverList.push(...getDirectConnections(shardReplSetConn));
             }
         } else {
@@ -71,12 +71,12 @@
         return serverList;
     }
 
-    var serverList = getServerList();
-    for (let server of serverList) {
+    const serverList = getServerList();
+    for (const server of serverList) {
         print('Running validate() on ' + server.host);
         server.setSlaveOk();
-        var dbNames = server.getDBNames();
-        for (var dbName of dbNames) {
+        const dbNames = server.getDBNames();
+        for (const dbName of dbNames) {
             if (!validateCollections(server.getDB(dbName), {full: true})) {
                 throw new Error('Collection validation failed');
             }
