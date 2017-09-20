@@ -12,7 +12,7 @@
         const connections = [];
 
         if (res.hasOwnProperty('hosts')) {
-            for (const hostString of res.hosts) {
+            for (let hostString of res.hosts) {
                 connections.push(new Mongo(hostString));
             }
         } else {
@@ -72,11 +72,11 @@
     }
 
     const serverList = getServerList();
-    for (const server of serverList) {
+    for (let server of serverList) {
         print('Running validate() on ' + server.host);
         server.setSlaveOk();
         const dbNames = server.getDBNames();
-        for (const dbName of dbNames) {
+        for (let dbName of dbNames) {
             if (!validateCollections(server.getDB(dbName), {full: true})) {
                 throw new Error('Collection validation failed');
             }
