@@ -30,7 +30,7 @@ class _JSTestCase(interface.TestCase):
                  shell_executable=None,
                  shell_options=None):
         """
-        Initializes the JSTestCase with the JS file to run.
+        Initializes the _JSTestCase with the JS file to run.
         """
 
         interface.TestCase.__init__(self, logger, "JSTest", js_filename)
@@ -180,7 +180,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
         Get shell_options with an initialized TestData object for given thread.
         """
 
-        # We give each JSTestCase its own copy of the shell_options.
+        # We give each _JSTestCase its own copy of the shell_options.
         shell_options = self.test_case_template.shell_options.copy()
         global_vars = shell_options["global_vars"].copy()
         test_data = global_vars["TestData"].copy()
@@ -201,7 +201,7 @@ class MultipleCopyJSTestCase(interface.TestCase):
 
     def _create_test_case_for_thread(self, logger, thread_id):
         """
-        Create and configure a SingleJSTestCase to be run in a separate thread.
+        Create and configure a _JSTestCase to be run in a separate thread.
         """
 
         shell_options = self._get_shell_options_for_thread(thread_id)
