@@ -22,7 +22,7 @@
         return connections;
     }
 
-    function getConfigConnStr(db) {
+    function getConfigConnStr() {
         const shardMap = db.adminCommand({getShardMap: 1});
         if (!shardMap.hasOwnProperty('map')) {
             throw new Error('Expected getShardMap() to return an object a "map" field: ' +
@@ -39,18 +39,18 @@
         return map.config;
     }
 
-    function isMongos(db) {
+    function isMongos() {
         return db.isMaster().msg === 'isdbgrid';
     }
 
     function getServerList() {
         const serverList = [];
 
-        if (isMongos(db)) {
+        if (isMongos()) {
             // We're connected to a sharded cluster through a mongos.
 
             // 1) Add all the config servers to the server list.
-            const configConnStr = getConfigConnStr(db);
+            const configConnStr = getConfigConnStr();
             const configServerReplSetConn = new Mongo(configConnStr);
             serverList.push(...getDirectConnections(configServerReplSetConn));
 
