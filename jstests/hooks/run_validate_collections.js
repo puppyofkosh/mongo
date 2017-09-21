@@ -74,6 +74,15 @@
     for (let server of serverList) {
         print('Running validate() on ' + server.host);
         server.setSlaveOk();
+
+        if (TestData.auth) {
+            print('Attempting to authenticate on ' + server.host);
+            server.getDB(TestData.authenticationDatabase).auth({
+                user: TestData.username,
+                pwd: TestData.password,
+            });
+        }
+
         const dbNames = server.getDBNames();
         for (let dbName of dbNames) {
             if (!validateCollections(server.getDB(dbName), {full: true})) {
