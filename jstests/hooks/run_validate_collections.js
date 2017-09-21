@@ -32,8 +32,7 @@
         const map = shardMap.map;
 
         if (!map.hasOwnProperty('config')) {
-            throw new Error('Expected getShardMap().map to have a "config" field: ' +
-                            tojson(map));
+            throw new Error('Expected getShardMap().map to have a "config" field: ' + tojson(map));
         }
 
         return map.config;
