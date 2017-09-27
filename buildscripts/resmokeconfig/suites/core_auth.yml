@@ -35,13 +35,10 @@ executor:
       global_vars:
         TestData:
           auth: true
-          authenticationDatabase: admin
           authMechanism: SCRAM-SHA-1
           keyFile: *keyFile
           keyFileData: *keyFileData
-          password: *keyFileData
           skipValidationOnNamespaceNotFound: false
-          username: __system
   - class: CleanEveryN
     n: 20
   fixture:
