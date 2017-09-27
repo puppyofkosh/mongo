@@ -195,7 +195,7 @@ executor:
   config:
     shell_options:
       global_vars:
-        TestData:
+        TestData: &TestData
           auth: true
           authMechanism: SCRAM-SHA-1
           keyFile: *keyFile
@@ -230,9 +230,8 @@ executor:
   - class: ValidateCollections
     shell_options:
       global_vars:
-        TestData:
-          auth: true
-          <<: *authOptions
+        TestData: *TestData
+        eval: jsTest.authenticate(db.getMongo())
       <<: *authOptions
   - class: CleanEveryN
     n: 20
