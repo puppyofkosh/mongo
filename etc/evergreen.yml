@@ -2389,6 +2389,28 @@ tasks:
       <<: *jstestfuzz_config_vars
       resmoke_args: --suites=jstestfuzz_sharded_causal_consistency --storageEngine=wiredTiger --numClientsPerFixture=10
 
+## jstestfuzz concurrent sharded cluster continuous stepdown mmapv1 ##
+- <<: *jstestfuzz_template
+  name: jstestfuzz_concurrent_sharded_continuous_stepdown
+  commands:
+  - func: "do setup"
+  - func: "run jstestfuzz"
+  - <<: *run_jstestfuzz_tests
+    vars:
+      <<: *jstestfuzz_config_vars
+      resmoke_args: --suites=jstestfuzz_sharded_continuous_stepdown --storageEngine=mmapv1 --numClientsPerFixture=10
+
+## jstestfuzz concurrent sharded cluster continuous stepdown WT ##
+- <<: *jstestfuzz_template
+  name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
+  commands:
+  - func: "do setup"
+  - func: "run jstestfuzz"
+  - <<: *run_jstestfuzz_tests
+    vars:
+      <<: *jstestfuzz_config_vars
+      resmoke_args: --suites=jstestfuzz_sharded_continuous_stepdown --storageEngine=wiredTiger --numClientsPerFixture=10
+
 ## jstestfuzz concurrent sharded cluster with logical session mmapv1 ##
 - <<: *jstestfuzz_template
   name: jstestfuzz_concurrent_sharded_session
@@ -2554,6 +2576,28 @@ tasks:
     vars:
       <<: *jstestfuzz_config_vars
       resmoke_args: --suites=jstestfuzz_sharded_causal_consistency --storageEngine=wiredTiger
+
+## jstestfuzz sharded cluster continuous stepdown mmapv1 ##
+- <<: *jstestfuzz_template
+  name: jstestfuzz_sharded_continuous_stepdown
+  commands:
+  - func: "do setup"
+  - func: "run jstestfuzz"
+  - <<: *run_jstestfuzz_tests
+    vars:
+      <<: *jstestfuzz_config_vars
+      resmoke_args: --suites=jstestfuzz_sharded_continuous_stepdown --storageEngine=mmapv1
+
+## jstestfuzz sharded cluster continuous stepdown WT ##
+- <<: *jstestfuzz_template
+  name: jstestfuzz_sharded_continuous_stepdown_WT
+  commands:
+  - func: "do setup"
+  - func: "run jstestfuzz"
+  - <<: *run_jstestfuzz_tests
+    vars:
+      <<: *jstestfuzz_config_vars
+      resmoke_args: --suites=jstestfuzz_sharded_continuous_stepdown --storageEngine=wiredTiger
 
 ## jstestfuzz sharded cluster with logical session mmapv1 ##
 - <<: *jstestfuzz_template
@@ -6587,6 +6631,8 @@ buildvariants:
   - name: jstestfuzz_concurrent_sharded_WT
   - name: jstestfuzz_concurrent_sharded_causal_consistency
   - name: jstestfuzz_concurrent_sharded_causal_consistency_WT
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
   - name: jstestfuzz_concurrent_sharded_session
   - name: jstestfuzz_concurrent_sharded_session_WT
   - name: jstestfuzz_replication
@@ -6597,6 +6643,8 @@ buildvariants:
   - name: jstestfuzz_sharded_WT
   - name: jstestfuzz_sharded_causal_consistency
   - name: jstestfuzz_sharded_causal_consistency_WT
+  - name: jstestfuzz_sharded_continuous_stepdown
+  - name: jstestfuzz_sharded_continuous_stepdown_WT
   - name: jstestfuzz_sharded_session
   - name: jstestfuzz_sharded_session_WT
   - name: master_slave
@@ -6773,6 +6821,8 @@ buildvariants:
   - name: jstestfuzz_concurrent_sharded_WT
   - name: jstestfuzz_concurrent_sharded_causal_consistency
   - name: jstestfuzz_concurrent_sharded_causal_consistency_WT
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
   - name: jstestfuzz_concurrent_sharded_session
   - name: jstestfuzz_concurrent_sharded_session_WT
   - name: jstestfuzz_replication
@@ -6783,6 +6833,8 @@ buildvariants:
   - name: jstestfuzz_sharded_WT
   - name: jstestfuzz_sharded_causal_consistency
   - name: jstestfuzz_sharded_causal_consistency_WT
+  - name: jstestfuzz_sharded_continuous_stepdown
+  - name: jstestfuzz_sharded_continuous_stepdown_WT
   - name: jstestfuzz_sharded_session
   - name: jstestfuzz_sharded_session_WT
   - name: master_slave
@@ -7107,6 +7159,8 @@ buildvariants:
   - name: jstestfuzz_concurrent_sharded_WT
   - name: jstestfuzz_concurrent_sharded_causal_consistency
   - name: jstestfuzz_concurrent_sharded_causal_consistency_WT
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
   - name: jstestfuzz_concurrent_sharded_session
   - name: jstestfuzz_concurrent_sharded_session_WT
   - name: jstestfuzz_replication
@@ -7119,6 +7173,8 @@ buildvariants:
   - name: jstestfuzz_sharded_WT
   - name: jstestfuzz_sharded_causal_consistency
   - name: jstestfuzz_sharded_causal_consistency_WT
+  - name: jstestfuzz_sharded_continuous_stepdown
+  - name: jstestfuzz_sharded_continuous_stepdown_WT
   - name: jstestfuzz_sharded_session
   - name: jstestfuzz_sharded_session_WT
   - name: master_slave
@@ -9429,10 +9485,12 @@ buildvariants:
   - name: jstestfuzz_concurrent_replication_session_WT
   - name: jstestfuzz_concurrent_sharded_WT
   - name: jstestfuzz_concurrent_sharded_causal_consistency_WT
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
   - name: jstestfuzz_concurrent_sharded_session_WT
   - name: jstestfuzz_replication_WT
   - name: jstestfuzz_replication_session_WT
   - name: jstestfuzz_sharded_WT
+  - name: jstestfuzz_sharded_continuous_stepdown_WT
   - name: jstestfuzz_sharded_session_WT
   - name: jstestfuzz_sharded_causal_consistency_WT
   - name: master_slave_WT
@@ -9993,6 +10051,8 @@ buildvariants:
   - name: jstestfuzz_concurrent_sharded_WT
   - name: jstestfuzz_concurrent_sharded_causal_consistency
   - name: jstestfuzz_concurrent_sharded_causal_consistency_WT
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown
+  - name: jstestfuzz_concurrent_sharded_continuous_stepdown_WT
   - name: jstestfuzz_concurrent_sharded_session
   - name: jstestfuzz_concurrent_sharded_session_WT
   - name: jstestfuzz_replication
@@ -10003,6 +10063,8 @@ buildvariants:
   - name: jstestfuzz_sharded_WT
   - name: jstestfuzz_sharded_causal_consistency
   - name: jstestfuzz_sharded_causal_consistency_WT
+  - name: jstestfuzz_sharded_continuous_stepdown
+  - name: jstestfuzz_sharded_continuous_stepdown_WT
   - name: jstestfuzz_sharded_session
   - name: jstestfuzz_sharded_session_WT
 
