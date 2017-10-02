@@ -844,6 +844,8 @@ functions:
           set -o errexit
           set -o verbose
 
+          git checkout cfg-no-sharding-drop
+
           if [ "Windows_NT" = "$OS" ]; then
             # An "npm" directory might not have been created in %APPDATA% by the Windows installer.
             # Work around the issue by specifying a different %APPDATA% path.
