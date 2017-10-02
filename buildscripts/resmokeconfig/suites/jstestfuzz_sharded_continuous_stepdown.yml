@@ -13,6 +13,7 @@ executor:
           runningWithConfigStepdowns: true
           # ian FIXME: Just for now.
           runningWithShardStepdowns: false
+          inReplSet: true
   hooks:
   - class: ContinuousStepdown
     config_stepdown: true
