@@ -128,7 +128,9 @@ variables:
   # resmoke.py writes the test output to logkeeper and only writes to stdout when starting the next test.
   # resmoke.py not producing output on stdout means that the test is still running and presumably not going to finish.
   # Note that timeout_secs is different from exec_timeout_secs, which applies to a task and times out regardless of whether output has been written to stdout.
-  timeout_secs: 1800
+
+  #FIXME: Ian, don't let this get into master. It's just for now
+  timeout_secs: 7200
   vars:
     <<: *jstestfuzz_config_vars
 
