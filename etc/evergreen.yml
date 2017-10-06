@@ -846,7 +846,7 @@ functions:
           set -o errexit
           set -o verbose
 
-          git checkout cfg-no-sharding-drop
+          git checkout server-30979-blacklists
 
           if [ "Windows_NT" = "$OS" ]; then
             # An "npm" directory might not have been created in %APPDATA% by the Windows installer.
