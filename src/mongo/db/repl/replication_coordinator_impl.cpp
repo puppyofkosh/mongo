@@ -1653,7 +1653,7 @@ Status ReplicationCoordinatorImpl::stepDown(OperationContext* opCtx,
         // Note this check is inherently racy - it's always possible for the node to
         // stepdown from some other path before we acquire the global exclusive lock.  This check
         // is just to try to save us from acquiring the global X lock unnecessarily.
-        return {ErrorCodes::NotMaster, "not primary so can't step down"};
+        return {ErrorCodes::NotMaster, "not master so can't step down"};
     }
 
     auto globalLock = stdx::make_unique<Lock::GlobalLock>(
