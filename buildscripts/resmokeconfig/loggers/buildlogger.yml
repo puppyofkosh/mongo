@@ -10,4 +10,4 @@ logging:
   tests:
     format: '[%(name)s] %(asctime)s %(message)s'
     handlers:
-      - class: logging.StreamHandler
+      - class: buildlogger
