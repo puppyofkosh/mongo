@@ -33,8 +33,10 @@
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/document_source_limit.h"
+#include "mongo/db/query/explain.h"
 #include "mongo/db/query/plan_executor.h"
 #include "mongo/db/query/plan_summary_stats.h"
+
 
 namespace mongo {
 
@@ -162,6 +164,11 @@ private:
 
     void recordPlanSummaryStats();
 
+    Value serializeToExplain(ExplainOptions::Verbosity explain,
+                             Collection* collection,
+                             Status executePlanStatus,
+                             const Explain::PreExecutionStats& allStats) const;
+
     std::deque<Document> _currentBatch;
 
     // BSONObj members must outlive _projection and cursor.
@@ -173,6 +180,9 @@ private:
     boost::intrusive_ptr<DocumentSourceLimit> _limit;
     long long _docsAddedToBatches;  // for _limit enforcement
 
+    // Holds serialized explain output for this DocumentSource when executed with explain.
+    Value _serializedExplain;
+
     // The underlying query plan which feeds this pipeline. Must be destroyed while holding the
     // collection lock.
     std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> _exec;
@@ -180,6 +190,8 @@ private:
     BSONObjSet _outputSorts;
     std::string _planSummary;
     PlanSummaryStats _planSummaryStats;
+
+    Explain::PreExecutionStats _allStats;
 };
 
 }  // namespace mongo

@@ -35,7 +35,6 @@
 #include "mongo/db/db_raii.h"
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/db/pipeline/document.h"
-#include "mongo/db/query/explain.h"
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/util/scopeguard.h"
 
@@ -106,6 +105,17 @@ void DocumentSourceCursor::loadBatch() {
                 }
             }
         }
+
+        //TODO: change execPlanStatus so that it is NOT hard-coded with Status::OK. Use 'state' to get true Status
+        Status execPlanStatus = Status::OK();
+
+        if (pExpCtx->explain) {
+            _serializedExplain =
+                serializeToExplain(pExpCtx->explain.get(),
+                                   autoColl.getCollection(),
+                                   execPlanStatus,
+                                   _allStats);
+        }
     }
 
     // If we got here, there won't be any more documents, so destroy our PlanExecutor. Note we can't
@@ -167,15 +177,39 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!explain)
         return Value();
 
+    // When explain is run in QueryPlanner mode we will not execute the aggregation pipeline and
+    // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
+    // serialized explain here.
+    if (*explain == ExplainOptions::Verbosity::kQueryPlanner) {
+
+        invariant(_serializedExplain.missing());
+        invariant(_exec);
+
+        AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
+        _exec->restoreState();
+        auto serializedExplain =
+            serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
+        _exec->saveState();
+        return serializedExplain;
+
+        // PlanExecutor has already been run and serialized, so we just return the serialized copy
+        // that's already been saved.
+    } else {
+        invariant(!_serializedExplain.missing());
+    }
+    return _serializedExplain;
+}
+
+Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain,
+                                               Collection* collection,
+                                               Status executePlanStatus,
+                                               const Explain::PreExecutionStats& allStats) const {
+
     // Get planner-level explain info from the underlying PlanExecutor.
     invariant(_exec);
     BSONObjBuilder explainBuilder;
-    {
-        AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-        _exec->restoreState();
-        Explain::explainStages(_exec.get(), autoColl.getCollection(), *explain, &explainBuilder);
-        _exec->saveState();
-    }
+    Explain::explainStagesPostExec(
+        _exec.get(), collection, explain, &explainBuilder, executePlanStatus, allStats);
 
     MutableDocument out;
     out["query"] = Value(_query);
@@ -193,7 +227,7 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     BSONObj explainObj = explainBuilder.obj();
     invariant(explainObj.hasField("queryPlanner"));
     out["queryPlanner"] = Value(explainObj["queryPlanner"]);
-    if (*explain >= ExplainOptions::Verbosity::kExecStats) {
+    if (explain >= ExplainOptions::Verbosity::kExecStats) {
         invariant(explainObj.hasField("executionStats"));
         out["executionStats"] = Value(explainObj["executionStats"]);
     }
@@ -254,6 +288,8 @@ DocumentSourceCursor::DocumentSourceCursor(
 
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
+
+    Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
 
     if (collection) {
         collection->infoCache()->notifyOfQuery(pExpCtx->opCtx, _planSummaryStats.indexesUsed);

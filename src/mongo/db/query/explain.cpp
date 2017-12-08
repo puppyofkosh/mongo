@@ -94,7 +94,7 @@ void flattenExecTree(const PlanStage* root, vector<const PlanStage*>* flattened)
 
 /**
  * Get a pointer to the MultiPlanStage inside the stage tree rooted at 'root'.
- * Returns NULL if there is no MPS.
+ * Returns nullptr if there is no MPS.
  */
 MultiPlanStage* getMultiPlanStage(PlanStage* root) {
     if (root->stageType() == STAGE_MULTI_PLAN) {
@@ -110,7 +110,19 @@ MultiPlanStage* getMultiPlanStage(PlanStage* root) {
         }
     }
 
-    return NULL;
+    return nullptr;
+}
+
+/**
+ * Get a pointer to the PipelineProxyStage if it is the root of the tree.
+ * Returns nullptr if there is no PPS that is root.
+ */
+PipelineProxyStage* getPipelineProxyStage(PlanStage* root) {
+    if (root->stageType() == STAGE_PIPELINE_PROXY) {
+        return static_cast<PipelineProxyStage*>(root);
+    }
+
+    return nullptr;
 }
 
 /**
@@ -690,11 +702,9 @@ void Explain::generateServerInfo(BSONObjBuilder* out) {
     serverBob.doneFast();
 }
 
-// static
-void Explain::explainStages(PlanExecutor* exec,
-                            const Collection* collection,
-                            ExplainOptions::Verbosity verbosity,
-                            BSONObjBuilder* out) {
+void Explain::explainStagesPreExec(PlanExecutor* exec,
+                                   ExplainOptions::Verbosity verbosity,
+                                   PreExecutionStats* allStats) {
     //
     // Collect plan stats, running the plan if necessary. The stats also give the structure of the
     // plan tree.
@@ -702,39 +712,35 @@ void Explain::explainStages(PlanExecutor* exec,
 
     // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
     // this point, since we have a PlanExecutor.
-    MultiPlanStage* mps = getMultiPlanStage(exec->getRootStage());
+    auto mps = getMultiPlanStage(exec->getRootStage());
 
     // Get stats of the winning plan from the trial period, if the verbosity level is high enough
     // and there was a runoff between multiple plans.
-    unique_ptr<PlanStageStats> winningStatsTrial;
     if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans && mps) {
-        winningStatsTrial = std::move(mps->getStats()->children[mps->bestPlanIdx()]);
-        invariant(winningStatsTrial.get());
+        allStats->winningStatsTrial = std::move(mps->getStats()->children[mps->bestPlanIdx()]);
+        invariant(allStats->winningStatsTrial.get());
     }
 
     // If more than one plan was considered, get the stats from the trial period for the rejected
     // plans.
-    vector<unique_ptr<PlanStageStats>> allPlansStats;
     if (mps) {
         auto mpsStats = mps->getStats();
         for (size_t i = 0; i < mpsStats->children.size(); ++i) {
             if (i != static_cast<size_t>(mps->bestPlanIdx())) {
-                allPlansStats.emplace_back(std::move(mpsStats->children[i]));
+                allStats->allPlansStats.emplace_back(std::move(mpsStats->children[i]));
             }
         }
     }
+}
 
-    // If we need execution stats, then run the plan in order to gather the stats.
-    Status executePlanStatus = Status::OK();
-    if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        executePlanStatus = exec->executePlan();
-    }
+void Explain::explainStagesPostExec(PlanExecutor* exec,
+                                    const Collection* collection,
+                                    ExplainOptions::Verbosity verbosity,
+                                    BSONObjBuilder* out,
+                                    Status executePlanStatus,
+                                    const PreExecutionStats& allStats) {
 
-    // If executing the query failed because it was killed, then the collection may no longer be
-    // valid. We indicate this by setting our collection pointer to null.
-    if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
-        collection = nullptr;
-    }
+    auto mps = getMultiPlanStage(exec->getRootStage());
 
     // Get stats for the winning plan. If there is only a single candidate plan, it is considered
     // the winner.
@@ -747,7 +753,7 @@ void Explain::explainStages(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec, collection, winningStats.get(), allPlansStats, out);
+        generatePlannerInfo(exec, collection, winningStats.get(), allStats.allPlansStats, out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
@@ -774,17 +780,22 @@ void Explain::explainStages(PlanExecutor* exec,
             // from the trial period of the winning plan. The "allPlansExecution" section
             // will contain an apples-to-apples comparison of the winning plan's stats against
             // all rejected plans' stats collected during the trial period.
-            if (mps) {
-                invariant(winningStatsTrial.get());
-                allPlansStats.emplace_back(std::move(winningStatsTrial));
-            }
 
             BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
-            for (size_t i = 0; i < allPlansStats.size(); ++i) {
+            for (size_t i = 0; i < allStats.allPlansStats.size(); ++i) {
                 BSONObjBuilder planBob(allPlansBob.subobjStart());
-                generateExecStats(allPlansStats[i].get(), verbosity, &planBob, boost::none);
+                generateExecStats(
+                    allStats.allPlansStats[i].get(), verbosity, &planBob, boost::none);
                 planBob.doneFast();
             }
+            if (mps) {
+                invariant(allStats.winningStatsTrial.get());
+                BSONObjBuilder planBob(allPlansBob.subobjStart());
+                generateExecStats(
+                    allStats.winningStatsTrial.get(), verbosity, &planBob, boost::none);
+                planBob.doneFast();
+            }
+
             allPlansBob.doneFast();
         }
 
@@ -792,6 +803,37 @@ void Explain::explainStages(PlanExecutor* exec,
     }
 
     generateServerInfo(out);
+}
+
+// static
+void Explain::explainStages(PlanExecutor* exec,
+                            const Collection* collection,
+                            ExplainOptions::Verbosity verbosity,
+                            BSONObjBuilder* out) {
+
+    PreExecutionStats allStats;
+
+    explainStagesPreExec(exec, verbosity, &allStats);
+
+    // If we need execution stats, then run the plan in order to gather the stats.
+    Status executePlanStatus = Status::OK();
+    if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
+        executePlanStatus = exec->executePlan();
+    }
+
+    // If executing the query failed because it was killed, then the collection may no longer be
+    // valid. We indicate this by setting our collection pointer to null.
+    if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
+        collection = nullptr;
+    }
+
+    PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
+    if (pps) {
+        *out << "stages" << Value(pps->writeExplainOps(verbosity));
+        return;
+    }
+
+    explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, allStats);
 }
 
 // static

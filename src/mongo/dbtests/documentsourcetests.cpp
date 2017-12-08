@@ -90,6 +90,12 @@ public:
         _ctx->tempDir = storageGlobalParams.dbpath + "/_tmp";
     }
 
+    void executePipeline() {
+        while (!_source->getNext().isEOF()) {
+            // Do nothing.
+        }
+    }
+
 protected:
     void createSource(boost::optional<BSONObj> hint = boost::none) {
         // clean up first if this was called before
@@ -311,7 +317,7 @@ public:
     }
 };
 
-class SerializationRespectsExplainModes : public Base {
+class SerializationRespectsQueryPlannerExplainMode : public Base {
 public:
     void run() {
         createSource();
@@ -327,21 +333,38 @@ public:
             ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
             ASSERT_TRUE(explainResult["$cursor"]["executionStats"].missing());
         }
+        source()->dispose();
+    }
+};
 
-        {
-            auto explainResult = source()->serialize(ExplainOptions::Verbosity::kExecStats);
-            ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
-            ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
-            ASSERT_TRUE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
-        }
+class SerializationRespectsExecutionStatsExplainMode : public Base {
+public:
+    void run() {
+        createSource();
 
-        {
-            auto explainResult =
-                source()->serialize(ExplainOptions::Verbosity::kExecAllPlans).getDocument();
-            ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
-            ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
-            ASSERT_FALSE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
-        }
+        ctx()->explain = ExplainOptions::Verbosity::kExecStats;
+        executePipeline();
+        auto explainResult = source()->serialize(ExplainOptions::Verbosity::kExecStats);
+        ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
+        ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
+        ASSERT_TRUE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
+
+        source()->dispose();
+    }
+};
+
+class SerializationRespectsAllPlansExecutionExplainMode : public Base {
+public:
+    void run() {
+        createSource();
+
+        ctx()->explain = ExplainOptions::Verbosity::kExecAllPlans;
+        executePipeline();
+        auto explainResult = source()->serialize(ExplainOptions::Verbosity::kExecAllPlans);
+        ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
+        ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
+        ASSERT_FALSE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
+
         source()->dispose();
     }
 };
@@ -361,7 +384,9 @@ public:
         add<DocumentSourceCursor::IndexScanProvidesSortOnKeys>();
         add<DocumentSourceCursor::ReverseIndexScanProvidesSort>();
         add<DocumentSourceCursor::CompoundIndexScanProvidesMultipleSorts>();
-        add<DocumentSourceCursor::SerializationRespectsExplainModes>();
+        add<DocumentSourceCursor::SerializationRespectsQueryPlannerExplainMode>();
+        add<DocumentSourceCursor::SerializationRespectsExecutionStatsExplainMode>();
+        add<DocumentSourceCursor::SerializationRespectsAllPlansExecutionExplainMode>();
     }
 };
 

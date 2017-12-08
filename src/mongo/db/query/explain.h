@@ -47,6 +47,11 @@ struct PlanSummaryStats;
  */
 class Explain {
 public:
+    struct PreExecutionStats {
+        std::unique_ptr<PlanStageStats> winningStatsTrial;
+        std::vector<std::unique_ptr<PlanStageStats>> allPlansStats;
+    };
+
     /**
      * Get explain BSON for the execution stages contained by 'exec'. Use this function if you
      * have a PlanExecutor and want to convert it into a human readable explain format. Any
@@ -121,6 +126,17 @@ public:
      * Does not take ownership of its arguments.
      */
     static void getSummaryStats(const PlanExecutor& exec, PlanSummaryStats* statsOut);
+
+    static void explainStagesPreExec(PlanExecutor* exec,
+                                     ExplainOptions::Verbosity verbosity,
+                                     PreExecutionStats* allStats);
+
+    static void explainStagesPostExec(PlanExecutor* exec,
+                                      const Collection* collection,
+                                      ExplainOptions::Verbosity verbosity,
+                                      BSONObjBuilder* out,
+                                      Status executePlanStatus,
+                                      const PreExecutionStats& allStats);
 
 private:
     /**
