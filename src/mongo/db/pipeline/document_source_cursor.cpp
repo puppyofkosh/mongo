@@ -121,6 +121,17 @@ void DocumentSourceCursor::loadBatch() {
             }
         }
 
+        // ian Question: I'm deliberately avoiding any uasserts before calling cleanupExecutor. Is
+        // this necessary??
+        if (pExpCtx->explain && (state == PlanExecutor::ADVANCED || PlanExecutor::IS_EOF)) {
+            // We've reached our limit or exhausted the cursor.
+            Status execPlanStatus = Status::OK();
+            if (pExpCtx->explain) {
+                _serializedExplain = serializeToExplain(
+                    pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
+            }
+        }
+
         // If we got here, there won't be any more documents, so destroy our PlanExecutor. Note we
         // must hold a collection lock to destroy '_exec', but we can only assume that our locks are
         // still held if '_exec' did not end in an error. If '_exec' encountered an error during a
@@ -184,18 +195,41 @@ void DocumentSourceCursor::recordPlanSummaryStats() {
 
 Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
     // We never parse a DocumentSourceCursor, so we only serialize for explain.
+    // ian TODO: could be invariant(explain)?
     if (!explain)
         return Value();
+
+    // When explain is run in QueryPlanner mode we will not execute the aggregation pipeline and
+    // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
+    // serialized explain here.
+    if (*explain == ExplainOptions::Verbosity::kQueryPlanner) {
+        invariant(_serializedExplain.missing());
+        invariant(_exec);
+
+        AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
+        uassertStatusOK(_exec->restoreState());
+        auto serializedExplain =
+            serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
+        _exec->saveState();
+        return serializedExplain;
+    }
+
+    // PlanExecutor has already been run and serialized, so we just return the serialized copy
+    // that's already been saved.
+    invariant(!_serializedExplain.missing());
+    return _serializedExplain;
+}
+
+Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain,
+                                               Collection* collection,
+                                               Status executePlanStatus,
+                                               const Explain::PreExecutionStats& allStats) const {
 
     // Get planner-level explain info from the underlying PlanExecutor.
     invariant(_exec);
     BSONObjBuilder explainBuilder;
-    {
-        AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-        uassertStatusOK(_exec->restoreState());
-        Explain::explainStages(_exec.get(), autoColl.getCollection(), *explain, &explainBuilder);
-        _exec->saveState();
-    }
+    Explain::explainStagesPostExec(
+        _exec.get(), collection, explain, &explainBuilder, executePlanStatus, allStats);
 
     MutableDocument out;
     out["query"] = Value(_query);
@@ -213,7 +247,7 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     BSONObj explainObj = explainBuilder.obj();
     invariant(explainObj.hasField("queryPlanner"));
     out["queryPlanner"] = Value(explainObj["queryPlanner"]);
-    if (*explain >= ExplainOptions::Verbosity::kExecStats) {
+    if (explain >= ExplainOptions::Verbosity::kExecStats) {
         invariant(explainObj.hasField("executionStats"));
         out["executionStats"] = Value(explainObj["executionStats"]);
     }
@@ -282,6 +316,10 @@ DocumentSourceCursor::DocumentSourceCursor(
 
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
+
+    if (pExpCtx->explain) {
+        Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
+    }
 
     if (collection) {
         collection->infoCache()->notifyOfQuery(pExpCtx->opCtx, _planSummaryStats.indexesUsed);
