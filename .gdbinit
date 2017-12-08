@@ -9,3 +9,7 @@ source buildscripts/gdb/mongo_printers.py
 
 # Load the mongodb lock analysis
 source buildscripts/gdb/mongo_lock.py
+
+break mongo::Explain::explainStages
+break mongo::DocumentSourceCursor::serialize
+break mongo::DocumentSourceCursor::serializeToExplain
