@@ -181,7 +181,6 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
     // serialized explain here.
     if (*explain == ExplainOptions::Verbosity::kQueryPlanner) {
-
         invariant(_serializedExplain.missing());
         invariant(_exec);
 
@@ -289,7 +288,11 @@ DocumentSourceCursor::DocumentSourceCursor(
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
 
-    Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
+    // tmp
+    auto verb = ExplainOptions::Verbosity::kExecAllPlans;
+    Explain::explainStagesPreExec(_exec.get(), {verb}, &_allStats);
+    //Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
+    
 
     if (collection) {
         collection->infoCache()->notifyOfQuery(pExpCtx->opCtx, _planSummaryStats.indexesUsed);
