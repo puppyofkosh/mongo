@@ -8,6 +8,10 @@ selector:
   - jstests/aggregation/sources/*/*.js
   exclude_with_any_tags:
   - do_not_wrap_aggregations_in_facets
+  exclude_files:
+  # explain-limit checks the document returned by explain(), which is different when
+  # facets are used
+  - jstests/aggregation/explain-limit.js
 
 executor:
   config:
