@@ -288,11 +288,9 @@ DocumentSourceCursor::DocumentSourceCursor(
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
 
-    // tmp
-    auto verb = ExplainOptions::Verbosity::kExecAllPlans;
-    Explain::explainStagesPreExec(_exec.get(), {verb}, &_allStats);
-    //Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
-    
+    if (pExpCtx->explain) {
+        Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
+    }
 
     if (collection) {
         collection->infoCache()->notifyOfQuery(pExpCtx->opCtx, _planSummaryStats.indexesUsed);
