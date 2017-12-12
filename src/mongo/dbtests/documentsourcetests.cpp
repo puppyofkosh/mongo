@@ -82,9 +82,12 @@ public:
     }
 
 protected:
-    void createSource(boost::optional<BSONObj> hint = boost::none) {
+    void createSource(boost::optional<BSONObj> hint = boost::none,
+                      boost::optional<ExplainOptions::Verbosity> explain = boost::none) {
         // clean up first if this was called before
         _source.reset();
+
+        ctx()->explain = explain;
 
         OldClientWriteContext ctx(opCtx(), nss.ns());
 
@@ -111,6 +114,12 @@ protected:
 
     OperationContext* opCtx() {
         return _opCtx.get();
+    }
+
+    void exhaustCursor() {
+         while (!_source->getNext().isEOF()) {
+             // Just pull everything out of the cursor.
+         }
     }
 
 protected:
@@ -280,36 +289,56 @@ TEST_F(DocumentSourceCursorTest, CompoundIndexScanProvidesMultipleSorts) {
 }
 
 TEST_F(DocumentSourceCursorTest, SerializationRespectsExplainModes) {
-    createSource();
-
     {
         // Nothing serialized when no explain mode specified.
+        createSource();
         auto explainResult = source()->serialize();
         ASSERT_TRUE(explainResult.missing());
+
+        source()->dispose();
     }
 
     {
-        auto explainResult = source()->serialize(ExplainOptions::Verbosity::kQueryPlanner);
+        auto verb = ExplainOptions::Verbosity::kQueryPlanner;
+        createSource();
+
+        auto explainResult = source()->serialize(verb);
         ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
         ASSERT_TRUE(explainResult["$cursor"]["executionStats"].missing());
+
+        source()->dispose();
     }
 
-    // TODO: this test is messed up
     {
-        auto explainResult = source()->serialize(ExplainOptions::Verbosity::kExecStats);
+        auto verb = ExplainOptions::Verbosity::kExecStats;
+        createSource(boost::none, verb);
+
+        // Execute the plan so that the source populates its internal executionStats.
+        exhaustCursor();
+
+        auto explainResult = source()->serialize(verb);
         ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
         ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
         ASSERT_TRUE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
+
+        source()->dispose();
     }
 
     {
+        auto verb = ExplainOptions::Verbosity::kExecAllPlans;
+        createSource(boost::none, verb);
+
+        // Execute the plan so that the source populates its internal executionStats.
+        exhaustCursor();
+
         auto explainResult =
-            source()->serialize(ExplainOptions::Verbosity::kExecAllPlans).getDocument();
+            source()->serialize(verb).getDocument();
         ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
         ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
         ASSERT_FALSE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
+
+        source()->dispose();
     }
-    source()->dispose();
 }
 
 TEST_F(DocumentSourceCursorTest, TailableAwaitDataCursorShouldErrorAfterTimeout) {
