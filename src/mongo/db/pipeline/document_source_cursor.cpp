@@ -106,15 +106,15 @@ void DocumentSourceCursor::loadBatch() {
             }
         }
 
-        //TODO: change execPlanStatus so that it is NOT hard-coded with Status::OK. Use 'state' to get true Status
-        Status execPlanStatus = Status::OK();
-
-        if (pExpCtx->explain) {
-            _serializedExplain =
-                serializeToExplain(pExpCtx->explain.get(),
-                                   autoColl.getCollection(),
-                                   execPlanStatus,
-                                   _allStats);
+        // ian Question: I'm deliberately avoiding any uasserts before calling cleanupExecutor. Is
+        // this necessary??
+        if (pExpCtx->explain && (state == PlanExecutor::ADVANCED || PlanExecutor::IS_EOF)) {
+            // We've reached our limit or exhausted the cursor.
+            Status execPlanStatus = Status::OK();
+            if (pExpCtx->explain) {
+                _serializedExplain = serializeToExplain(
+                    pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
+            }
         }
     }
 
@@ -174,6 +174,7 @@ void DocumentSourceCursor::recordPlanSummaryStats() {
 
 Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
     // We never parse a DocumentSourceCursor, so we only serialize for explain.
+    // ian TODO: could be invariant(explain)?
     if (!explain)
         return Value();
 
@@ -190,12 +191,11 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
             serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
         _exec->saveState();
         return serializedExplain;
-
-        // PlanExecutor has already been run and serialized, so we just return the serialized copy
-        // that's already been saved.
-    } else {
-        invariant(!_serializedExplain.missing());
     }
+
+    // PlanExecutor has already been run and serialized, so we just return the serialized copy
+    // that's already been saved.
+    invariant(!_serializedExplain.missing());
     return _serializedExplain;
 }
 
