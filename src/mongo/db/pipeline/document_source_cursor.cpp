@@ -193,7 +193,6 @@ void DocumentSourceCursor::recordPlanSummaryStats() {
 
 Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
     // We never parse a DocumentSourceCursor, so we only serialize for explain.
-    // ian TODO: could be invariant(explain)?
     if (!explain)
         return Value();
 

@@ -294,6 +294,7 @@ TEST_F(DocumentSourceCursorTest, SerializationRespectsExplainModes) {
         ASSERT_TRUE(explainResult["$cursor"]["executionStats"].missing());
     }
 
+    // TODO: this test is messed up
     {
         auto explainResult = source()->serialize(ExplainOptions::Verbosity::kExecStats);
         ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
