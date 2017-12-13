@@ -117,9 +117,9 @@ protected:
     }
 
     void exhaustCursor() {
-         while (!_source->getNext().isEOF()) {
-             // Just pull everything out of the cursor.
-         }
+        while (!_source->getNext().isEOF()) {
+            // Just pull everything out of the cursor.
+        }
     }
 
 protected:
@@ -331,8 +331,7 @@ TEST_F(DocumentSourceCursorTest, SerializationRespectsExplainModes) {
         // Execute the plan so that the source populates its internal executionStats.
         exhaustCursor();
 
-        auto explainResult =
-            source()->serialize(verb).getDocument();
+        auto explainResult = source()->serialize(verb).getDocument();
         ASSERT_FALSE(explainResult["$cursor"]["queryPlanner"].missing());
         ASSERT_FALSE(explainResult["$cursor"]["executionStats"].missing());
         ASSERT_FALSE(explainResult["$cursor"]["executionStats"]["allPlansExecution"].missing());
