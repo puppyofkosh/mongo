@@ -123,6 +123,8 @@ void DocumentSourceCursor::loadBatch() {
 
         // ian Question: I'm deliberately avoiding any uasserts before calling cleanupExecutor. Is
         // this necessary??
+
+        // TODO: Remove this
         if (pExpCtx->explain && (state == PlanExecutor::ADVANCED || PlanExecutor::IS_EOF)) {
             // We've reached our limit or exhausted the cursor.
             Status execPlanStatus = Status::OK();
@@ -136,6 +138,9 @@ void DocumentSourceCursor::loadBatch() {
         // must hold a collection lock to destroy '_exec', but we can only assume that our locks are
         // still held if '_exec' did not end in an error. If '_exec' encountered an error during a
         // yield, the locks might be yielded.
+
+        // TODO: Only cleanup the executor if we're not in explain mode
+        
         if (state != PlanExecutor::DEAD && state != PlanExecutor::FAILURE) {
             cleanupExecutor(autoColl);
         }
@@ -212,6 +217,14 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
         _exec->saveState();
         return serializedExplain;
     }
+
+    // Is Dave saying that we use the executor here to get the executionStats?
+    // do we have the collection lock here though?
+
+    // Pull stuff out of the executor here.
+
+    // The executor is gone =(
+    invariant(_exec);
 
     // PlanExecutor has already been run and serialized, so we just return the serialized copy
     // that's already been saved.
@@ -317,6 +330,8 @@ DocumentSourceCursor::DocumentSourceCursor(
     recordPlanSummaryStats();
 
     if (pExpCtx->explain) {
+        // TODO: put comment here saying its safe to access the executor even if we don't have the collection
+        // lock since we're just going to call getStats() on it.
         Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
     }
 

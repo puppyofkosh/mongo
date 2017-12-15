@@ -718,6 +718,8 @@ void Explain::explainStagesPreExec(PlanExecutor* exec,
     // this point, since we have a PlanExecutor.
     auto mps = getMultiPlanStage(exec->getRootStage());
 
+    // TODO: Cache the stats about allPlansExecution since we have the executor now.
+
     // Get stats of the winning plan from the trial period, if the verbosity level is high enough
     // and there was a runoff between multiple plans.
     if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans && mps) {
