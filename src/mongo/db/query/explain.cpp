@@ -709,31 +709,18 @@ void Explain::generateServerInfo(BSONObjBuilder* out) {
 void Explain::explainStagesPreExec(PlanExecutor* exec,
                                    ExplainOptions::Verbosity verbosity,
                                    PreExecutionStats* allStats) {
-    //
-    // Collect plan stats, running the plan if necessary. The stats also give the structure of the
-    // plan tree.
-    //
-
     // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
     // this point, since we have a PlanExecutor.
-    auto mps = getMultiPlanStage(exec->getRootStage());
+    const auto mps = getMultiPlanStage(exec->getRootStage());
 
-    // TODO: Cache the stats about allPlansExecution since we have the executor now.
-
-    // Get stats of the winning plan from the trial period, if the verbosity level is high enough
-    // and there was a runoff between multiple plans.
-    if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans && mps) {
-        allStats->winningStatsTrial = std::move(mps->getStats()->children[mps->bestPlanIdx()]);
-        invariant(allStats->winningStatsTrial.get());
-    }
-
-    // If more than one plan was considered, get the stats from the trial period for the rejected
-    // plans.
+    // Get the stats from the trial period for all the plans.
     if (mps) {
-        auto mpsStats = mps->getStats();
+        const auto mpsStats = mps->getStats();
+        allStats->winningStatsTrial = std::move(mpsStats->children[mps->bestPlanIdx()]);
+
         for (size_t i = 0; i < mpsStats->children.size(); ++i) {
             if (i != static_cast<size_t>(mps->bestPlanIdx())) {
-                allStats->allPlansStats.emplace_back(std::move(mpsStats->children[i]));
+                allStats->rejectedPlansStats.emplace_back(std::move(mpsStats->children[i]));
             }
         }
     }
@@ -759,7 +746,7 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec, collection, winningStats.get(), allStats.allPlansStats, out);
+        generatePlannerInfo(exec, collection, winningStats.get(), allStats.rejectedPlansStats, out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
@@ -788,10 +775,10 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
             // all rejected plans' stats collected during the trial period.
 
             BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
-            for (size_t i = 0; i < allStats.allPlansStats.size(); ++i) {
+            for (size_t i = 0; i < allStats.rejectedPlansStats.size(); ++i) {
                 BSONObjBuilder planBob(allPlansBob.subobjStart());
                 generateExecStats(
-                    allStats.allPlansStats[i].get(), verbosity, &planBob, boost::none);
+                    allStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
                 planBob.doneFast();
             }
             if (mps) {
