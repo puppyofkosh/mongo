@@ -26,6 +26,8 @@
  * it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/pipeline/document_source_cursor.h"
@@ -36,7 +38,9 @@
 #include "mongo/db/query/explain.h"
 #include "mongo/db/query/find_common.h"
 #include "mongo/db/storage/storage_options.h"
+#include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
+
 
 namespace mongo {
 
@@ -64,9 +68,12 @@ DocumentSource::GetNextResult DocumentSourceCursor::getNext() {
 }
 
 void DocumentSourceCursor::loadBatch() {
-    if (!_exec) {
+    log() << "ian: In loadBatch()";
+    if (_done) {
         // No more documents.
-        dispose();
+        if (!pExpCtx->explain) {
+            dispose();
+        }
         return;
     }
 
@@ -121,28 +128,16 @@ void DocumentSourceCursor::loadBatch() {
             }
         }
 
-        // ian Question: I'm deliberately avoiding any uasserts before calling cleanupExecutor. Is
-        // this necessary??
-
-        // TODO: Remove this
-        if (pExpCtx->explain && (state == PlanExecutor::ADVANCED || PlanExecutor::IS_EOF)) {
-            // We've reached our limit or exhausted the cursor.
-            Status execPlanStatus = Status::OK();
-            if (pExpCtx->explain) {
-                _serializedExplain = serializeToExplain(
-                    pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
-            }
-        }
-
-        // If we got here, there won't be any more documents, so destroy our PlanExecutor. Note we
-        // must hold a collection lock to destroy '_exec', but we can only assume that our locks are
-        // still held if '_exec' did not end in an error. If '_exec' encountered an error during a
-        // yield, the locks might be yielded.
-
-        // TODO: Only cleanup the executor if we're not in explain mode
-        
+        // If we got here, there won't be any more documents, so unless we're in explain() and need
+        // to get stats, destroy our PlanExecutor. Note we must hold a collection lock to destroy
+        // '_exec', but we can only assume that our locks are still held if '_exec' did not end in
+        // an error. If '_exec' encountered an error during a yield, the locks might be yielded.
         if (state != PlanExecutor::DEAD && state != PlanExecutor::FAILURE) {
-            cleanupExecutor(autoColl);
+            _done = true;
+            if (!pExpCtx->explain) {
+                // If we're doing an explain, we'll need the PlanExecutor during serialize.
+                cleanupExecutor(autoColl);
+            }
         }
     }
 
@@ -203,13 +198,12 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!explain)
         return Value();
 
+    invariant(_exec);
+
     // When explain is run in QueryPlanner mode we will not execute the aggregation pipeline and
     // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
     // serialized explain here.
     if (*explain == ExplainOptions::Verbosity::kQueryPlanner) {
-        invariant(_serializedExplain.missing());
-        invariant(_exec);
-
         AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
         uassertStatusOK(_exec->restoreState());
         auto serializedExplain =
@@ -217,19 +211,21 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
         _exec->saveState();
         return serializedExplain;
     }
+    // We've reached our limit or exhausted the cursor.
+    // TODO: figure this out about execPlanStatus.
+
+    // TODO: is it ok to take the lock here? We shouldn't need it if we just call getStats
+    // but it would be sketchy not to
+    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
+    Status execPlanStatus = Status::OK();
+    uassertStatusOK(_exec->restoreState());
+    auto serializedExplain = serializeToExplain(
+        pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
+    _exec->saveState();
+    return serializedExplain;
 
     // Is Dave saying that we use the executor here to get the executionStats?
     // do we have the collection lock here though?
-
-    // Pull stuff out of the executor here.
-
-    // The executor is gone =(
-    invariant(_exec);
-
-    // PlanExecutor has already been run and serialized, so we just return the serialized copy
-    // that's already been saved.
-    invariant(!_serializedExplain.missing());
-    return _serializedExplain;
 }
 
 Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain,
