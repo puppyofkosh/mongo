@@ -49,7 +49,7 @@ class Explain {
 public:
     struct PreExecutionStats {
         std::unique_ptr<PlanStageStats> winningStatsTrial;
-        std::vector<std::unique_ptr<PlanStageStats>> allPlansStats;
+        std::vector<std::unique_ptr<PlanStageStats>> rejectedPlansStats;
     };
 
     /**
