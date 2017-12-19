@@ -127,10 +127,8 @@ public:
      */
     static void getSummaryStats(const PlanExecutor& exec, PlanSummaryStats* statsOut);
 
-    static void explainStagesPreExec(PlanExecutor* exec,
-                                     ExplainOptions::Verbosity verbosity,
-                                     PreExecutionStats* allStats);
-
+    static PreExecutionStats collectPreExecutionStats(PlanExecutor* exec,
+                                                      ExplainOptions::Verbosity verbosity);
     static void explainStagesPostExec(PlanExecutor* exec,
                                       const Collection* collection,
                                       ExplainOptions::Verbosity verbosity,

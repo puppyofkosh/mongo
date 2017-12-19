@@ -706,30 +706,32 @@ void Explain::generateServerInfo(BSONObjBuilder* out) {
     serverBob.doneFast();
 }
 
-void Explain::explainStagesPreExec(PlanExecutor* exec,
-                                   ExplainOptions::Verbosity verbosity,
-                                   PreExecutionStats* allStats) {
+Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
+                                                             ExplainOptions::Verbosity verbosity) {
     // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
     // this point, since we have a PlanExecutor.
     const auto mps = getMultiPlanStage(exec->getRootStage());
+    PreExecutionStats allStats;
 
     // Get the stats from the trial period for all the plans.
     if (mps) {
         const auto mpsStats = mps->getStats();
-        allStats->winningStatsTrial = std::move(mpsStats->children[mps->bestPlanIdx()]);
+        allStats.winningStatsTrial = std::move(mpsStats->children[mps->bestPlanIdx()]);
 
         for (size_t i = 0; i < mpsStats->children.size(); ++i) {
             if (i != static_cast<size_t>(mps->bestPlanIdx())) {
-                allStats->rejectedPlansStats.emplace_back(std::move(mpsStats->children[i]));
+                allStats.rejectedPlansStats.emplace_back(std::move(mpsStats->children[i]));
             }
         }
     }
+    return allStats;
 }
 
 void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     const Collection* collection,
                                     ExplainOptions::Verbosity verbosity,
                                     BSONObjBuilder* out,
+                                    // TODO: make this an optional
                                     Status executePlanStatus,
                                     const PreExecutionStats& allStats) {
 
@@ -804,9 +806,11 @@ void Explain::explainStages(PlanExecutor* exec,
                             ExplainOptions::Verbosity verbosity,
                             BSONObjBuilder* out) {
 
-    PreExecutionStats allStats;
 
-    explainStagesPreExec(exec, verbosity, &allStats);
+    // TODO: only do this if we're not using a pipelineproxy stage
+    PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
+
+    auto allStats = collectPreExecutionStats(exec, verbosity);
 
     // If we need execution stats, then run the plan in order to gather the stats.
     Status executePlanStatus = Status::OK();
@@ -820,7 +824,6 @@ void Explain::explainStages(PlanExecutor* exec,
         collection = nullptr;
     }
 
-    PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
     if (pps) {
         *out << "stages" << Value(pps->writeExplainOps(verbosity));
         return;
