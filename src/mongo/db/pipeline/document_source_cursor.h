@@ -201,7 +201,6 @@ private:
     boost::optional<ParsedDeps> _dependencies;
     boost::intrusive_ptr<DocumentSourceLimit> _limit;
     long long _docsAddedToBatches;  // for _limit enforcement
-    bool _done; // whether the cursor has been exhausted.
 
     // The underlying query plan which feeds this pipeline. Must be destroyed while holding the
     // collection lock.
@@ -212,6 +211,7 @@ private:
     PlanSummaryStats _planSummaryStats;
 
     Explain::PreExecutionStats _allStats;
+    std::unique_ptr<PlanStageStats> _executionStats;
 };
 
 }  // namespace mongo

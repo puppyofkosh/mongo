@@ -73,6 +73,11 @@ public:
                               BSONObjBuilder* out);
 
     /**
+     * Get PlanExecutor's winning plan stats tree.
+     */
+    static std::unique_ptr<PlanStageStats> getWinningPlanStatsTree(const PlanExecutor* exec);
+
+    /**
      * Converts the PlanExecutor's winning plan stats tree to BSON and returns to the caller.
      */
     static BSONObj getWinningPlanStats(const PlanExecutor* exec);
@@ -129,6 +134,13 @@ public:
 
     static PreExecutionStats collectPreExecutionStats(PlanExecutor* exec,
                                                       ExplainOptions::Verbosity verbosity);
+
+    static void getExecutionStats(PlanExecutor* exec,
+                                  ExplainOptions::Verbosity verbosity,
+                                  const PlanStageStats* winningExecStats,
+                                  BSONObjBuilder* out,
+                                  Status executePlanStatus,
+                                  const PreExecutionStats& plannerStats);
     static void explainStagesPostExec(PlanExecutor* exec,
                                       const Collection* collection,
                                       ExplainOptions::Verbosity verbosity,
@@ -179,7 +191,7 @@ private:
      *
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      */
-    static void generateExecStats(PlanStageStats* stats,
+    static void generateExecStats(const PlanStageStats* stats,
                                   ExplainOptions::Verbosity verbosity,
                                   BSONObjBuilder* out,
                                   boost::optional<long long> totalTimeMillis);
