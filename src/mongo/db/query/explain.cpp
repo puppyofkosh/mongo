@@ -592,14 +592,21 @@ BSONObj Explain::getWinningPlanStats(const PlanExecutor* exec) {
 }
 
 // static
-void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob) {
+unique_ptr<PlanStageStats> Explain::getWinningPlanStatsTree(const PlanExecutor* exec) {
     MultiPlanStage* mps = getMultiPlanStage(exec->getRootStage());
     unique_ptr<PlanStageStats> winningStats(
         mps ? std::move(mps->getStats()->children[mps->bestPlanIdx()])
             : std::move(exec->getRootStage()->getStats()));
+    return winningStats;
+}
 
+// static
+void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob) {
+    unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
     statsToBSON(*winningStats, ExplainOptions::Verbosity::kExecStats, bob, bob);
 }
+
+// TODO: Write version of this function which returns uniqueptr PlanStageStats
 
 // static
 void Explain::generatePlannerInfo(PlanExecutor* exec,
@@ -658,7 +665,7 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
 }
 
 // static
-void Explain::generateExecStats(PlanStageStats* stats,
+void Explain::generateExecStats(const PlanStageStats* stats,
                                 ExplainOptions::Verbosity verbosity,
                                 BSONObjBuilder* out,
                                 boost::optional<long long> totalTimeMillis) {
@@ -727,6 +734,56 @@ Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
     return allStats;
 }
 
+void Explain::getExecutionStats(PlanExecutor* exec,
+                                ExplainOptions::Verbosity verbosity,
+                                const PlanStageStats* winningExecStats,
+                                BSONObjBuilder* out,
+                                Status executePlanStatus,
+                                const PreExecutionStats& plannerStats) {
+    BSONObjBuilder execBob(out->subobjStart("executionStats"));
+
+    // If there is an execution error while running the query, the error is reported under
+    // the "executionStats" section and the explain as a whole succeeds.
+    execBob.append("executionSuccess", executePlanStatus.isOK());
+    if (!executePlanStatus.isOK()) {
+        execBob.append("errorMessage", executePlanStatus.reason());
+        execBob.append("errorCode", executePlanStatus.code());
+    }
+
+    // Generate exec stats BSON for the winning plan.
+    OperationContext* opCtx = exec->getOpCtx();
+    long long totalTimeMillis =
+        durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
+    generateExecStats(winningExecStats, verbosity, &execBob, totalTimeMillis);
+
+    // Also generate exec stats for all plans, if the verbosity level is high enough.
+    // These stats reflect what happened during the trial period that ranked the plans.
+    if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans) {
+        // If we ranked multiple plans against each other, then add stats collected
+        // from the trial period of the winning plan. The "allPlansExecution" section
+        // will contain an apples-to-apples comparison of the winning plan's stats against
+        // all rejected plans' stats collected during the trial period.
+
+        BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
+        for (size_t i = 0; i < plannerStats.rejectedPlansStats.size(); ++i) {
+            BSONObjBuilder planBob(allPlansBob.subobjStart());
+            generateExecStats(
+                plannerStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
+            planBob.doneFast();
+        }
+        if (plannerStats.winningStatsTrial.get()) {
+            BSONObjBuilder planBob(allPlansBob.subobjStart());
+            generateExecStats(
+                plannerStats.winningStatsTrial.get(), verbosity, &planBob, boost::none);
+            planBob.doneFast();
+        }
+
+        allPlansBob.doneFast();
+    }
+
+    execBob.doneFast();
+}
+
 void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     const Collection* collection,
                                     ExplainOptions::Verbosity verbosity,
@@ -752,49 +809,7 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        BSONObjBuilder execBob(out->subobjStart("executionStats"));
-
-        // If there is an execution error while running the query, the error is reported under
-        // the "executionStats" section and the explain as a whole succeeds.
-        execBob.append("executionSuccess", executePlanStatus.isOK());
-        if (!executePlanStatus.isOK()) {
-            execBob.append("errorMessage", executePlanStatus.reason());
-            execBob.append("errorCode", executePlanStatus.code());
-        }
-
-        // Generate exec stats BSON for the winning plan.
-        OperationContext* opCtx = exec->getOpCtx();
-        long long totalTimeMillis =
-            durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
-        generateExecStats(winningStats.get(), verbosity, &execBob, totalTimeMillis);
-
-        // Also generate exec stats for all plans, if the verbosity level is high enough.
-        // These stats reflect what happened during the trial period that ranked the plans.
-        if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans) {
-            // If we ranked multiple plans against each other, then add stats collected
-            // from the trial period of the winning plan. The "allPlansExecution" section
-            // will contain an apples-to-apples comparison of the winning plan's stats against
-            // all rejected plans' stats collected during the trial period.
-
-            BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
-            for (size_t i = 0; i < allStats.rejectedPlansStats.size(); ++i) {
-                BSONObjBuilder planBob(allPlansBob.subobjStart());
-                generateExecStats(
-                    allStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
-                planBob.doneFast();
-            }
-            if (mps) {
-                invariant(allStats.winningStatsTrial.get());
-                BSONObjBuilder planBob(allPlansBob.subobjStart());
-                generateExecStats(
-                    allStats.winningStatsTrial.get(), verbosity, &planBob, boost::none);
-                planBob.doneFast();
-            }
-
-            allPlansBob.doneFast();
-        }
-
-        execBob.doneFast();
+        getExecutionStats(exec, verbosity, winningStats.get(), out, executePlanStatus, allStats);
     }
 
     generateServerInfo(out);
