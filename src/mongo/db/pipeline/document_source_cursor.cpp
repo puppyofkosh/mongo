@@ -69,11 +69,9 @@ DocumentSource::GetNextResult DocumentSourceCursor::getNext() {
 
 void DocumentSourceCursor::loadBatch() {
     log() << "ian: In loadBatch()";
-    if (_done) {
+    if (!_exec) {
         // No more documents.
-        if (!pExpCtx->explain) {
-            dispose();
-        }
+        dispose();
         return;
     }
 
@@ -128,16 +126,12 @@ void DocumentSourceCursor::loadBatch() {
             }
         }
 
-        // If we got here, there won't be any more documents, so unless we're in explain() and need
-        // to get stats, destroy our PlanExecutor. Note we must hold a collection lock to destroy
-        // '_exec', but we can only assume that our locks are still held if '_exec' did not end in
-        // an error. If '_exec' encountered an error during a yield, the locks might be yielded.
+        // If we got here, there won't be any more documents, so destroy our PlanExecutor. Note we
+        // must hold a collection lock to destroy '_exec', but we can only assume that our locks
+        // are still held if '_exec' did not end in an error. If '_exec' encountered an error
+        // during a yield, the locks might be yielded.
         if (state != PlanExecutor::DEAD && state != PlanExecutor::FAILURE) {
-            _done = true;
-            if (!pExpCtx->explain) {
-                // If we're doing an explain, we'll need the PlanExecutor during serialize.
-                cleanupExecutor(autoColl);
-            }
+            cleanupExecutor(autoColl);
         }
     }
 
@@ -146,14 +140,14 @@ void DocumentSourceCursor::loadBatch() {
         case PlanExecutor::IS_EOF:
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
-            // TODO: if we call cleanupExecutor, serialize will fail. Remove this call and add a test case.
-            cleanupExecutor();
+            log() << "ian: uassert dead";
+            // TODO: This case is never tested
             uasserted(ErrorCodes::QueryPlanKilled,
                       str::stream() << "collection or index disappeared when cursor yielded: "
                                     << WorkingSetCommon::toStatusString(resultObj));
         }
         case PlanExecutor::FAILURE: {
-            cleanupExecutor();
+            log() << "ian: uassert failure";
             uasserted(17285,
                       str::stream() << "cursor encountered an error: "
                                     << WorkingSetCommon::toStatusString(resultObj));
@@ -199,8 +193,6 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!explain)
         return Value();
 
-    invariant(_exec);
-
     // When explain is run in QueryPlanner mode we will not execute the aggregation pipeline and
     // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
     // serialized explain here.
@@ -212,18 +204,37 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
         _exec->saveState();
         return serializedExplain;
     }
+
+    MONGO_UNREACHABLE;
+    // unique_ptr<PlanStageStats> execStatsOwned;
+    // PlanStageStats* execStats = _executionStats.get();
+    // if (!execStats) {
+    //     invariant(_exec);
+    //     // Dump the plannner's execution stats
+    //     execStatsOwned = Explain::getWinningPlanStatsTree(_exec.get());
+    //     execStats = execStatsOwned.get();
+    // }
+
+    // // TODO: this is probably wrong. Remove it and figure out what we should actually do.
+    // AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
+    // uassertStatusOK(_exec->restoreState());
+    // auto serializedExplain =
+    //     serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
+    // _exec->saveState();
+    // return serializedExplain;
+
     // We've reached our limit or exhausted the cursor.
     // TODO: figure this out about execPlanStatus.
 
-    // TODO: is it ok to take the lock here? We shouldn't need it if we just call getStats
-    // but it would be sketchy not to
-    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-    Status execPlanStatus = Status::OK();
-    uassertStatusOK(_exec->restoreState());
-    auto serializedExplain = serializeToExplain(
-        pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
-    _exec->saveState();
-    return serializedExplain;
+    // TODO: need to do something here
+
+    // AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
+    // Status execPlanStatus = Status::OK();
+    // uassertStatusOK(_exec->restoreState());
+    // auto serializedExplain = serializeToExplain(
+    //     pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
+    // _exec->saveState();
+    // return serializedExplain;
 
     // Is Dave saying that we use the executor here to get the executionStats?
     // do we have the collection lock here though?
@@ -240,6 +251,7 @@ Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain
     Explain::explainStagesPostExec(
         _exec.get(), collection, explain, &explainBuilder, executePlanStatus, allStats);
 
+    // TODO: Maybe make this a BSONObjBuilder
     MutableDocument out;
     out["query"] = Value(_query);
 
@@ -257,8 +269,13 @@ Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain
     invariant(explainObj.hasField("queryPlanner"));
     out["queryPlanner"] = Value(explainObj["queryPlanner"]);
     if (explain >= ExplainOptions::Verbosity::kExecStats) {
-        invariant(explainObj.hasField("executionStats"));
-        out["executionStats"] = Value(explainObj["executionStats"]);
+        BSONObjBuilder bob;
+        Explain::getExecutionStats(_exec.get(), explain, _executionStats.get(), &bob, executePlanStatus, allStats);
+        // FIXME: should be simpler if we use BSONObjBuilder instead
+        BSONObj execObj = bob.obj();
+        invariant(execObj.hasField("executionStats"));
+
+        out["executionStats"] = Value(execObj["executionStats"]);
     }
 
     return Value(DOC(getSourceName() << out.freezeToValue()));
@@ -286,7 +303,12 @@ void DocumentSourceCursor::doDispose() {
 }
 
 void DocumentSourceCursor::cleanupExecutor() {
+    // TODO: Save executor stats that we care about here
     invariant(_exec);
+
+    // Save our stats from _exec outside of the lock
+    _executionStats = Explain::getWinningPlanStatsTree(_exec.get());
+    
     auto* opCtx = pExpCtx->opCtx;
     // We need to be careful to not use AutoGetCollection here, since we only need the lock to
     // protect potential access to the Collection's CursorManager, and AutoGetCollection may throw
@@ -304,6 +326,10 @@ void DocumentSourceCursor::cleanupExecutor() {
 
 void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readLock) {
     invariant(_exec);
+
+    // Save our stats from _exec outside of the lock
+    _executionStats = Explain::getWinningPlanStatsTree(_exec.get());
+
     auto cursorManager =
         readLock.getCollection() ? readLock.getCollection()->getCursorManager() : nullptr;
     _exec->dispose(pExpCtx->opCtx, cursorManager);
@@ -313,6 +339,8 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
 DocumentSourceCursor::~DocumentSourceCursor() {
     invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
 }
+
+// TODO: Write test that has a rooted or to test the SubPlanner
 
 DocumentSourceCursor::DocumentSourceCursor(
     Collection* collection,
@@ -325,6 +353,7 @@ DocumentSourceCursor::DocumentSourceCursor(
 
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
+    invariant(!_shouldProduceEmptyDocs);
 
     if (pExpCtx->explain) {
         // TODO: put comment here saying its safe to access the executor even if we don't have the collection
