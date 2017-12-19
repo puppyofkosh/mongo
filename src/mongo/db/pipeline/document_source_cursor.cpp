@@ -146,6 +146,7 @@ void DocumentSourceCursor::loadBatch() {
         case PlanExecutor::IS_EOF:
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
+            // TODO: if we call cleanupExecutor, serialize will fail. Remove this call and add a test case.
             cleanupExecutor();
             uasserted(ErrorCodes::QueryPlanKilled,
                       str::stream() << "collection or index disappeared when cursor yielded: "
@@ -328,7 +329,7 @@ DocumentSourceCursor::DocumentSourceCursor(
     if (pExpCtx->explain) {
         // TODO: put comment here saying its safe to access the executor even if we don't have the collection
         // lock since we're just going to call getStats() on it.
-        Explain::explainStagesPreExec(_exec.get(), pExpCtx->explain.get(), &_allStats);
+        _allStats = Explain::collectPreExecutionStats(_exec.get(), pExpCtx->explain.get());
     }
 
     if (collection) {
