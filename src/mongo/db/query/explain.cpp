@@ -606,8 +606,6 @@ void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob)
     statsToBSON(*winningStats, ExplainOptions::Verbosity::kExecStats, bob, bob);
 }
 
-// TODO: Write version of this function which returns uniqueptr PlanStageStats
-
 // static
 void Explain::generatePlannerInfo(PlanExecutor* exec,
                                   const Collection* collection,
@@ -752,8 +750,7 @@ void Explain::getExecutionStats(PlanExecutor* exec,
 
     // Generate exec stats BSON for the winning plan.
     OperationContext* opCtx = exec->getOpCtx();
-    long long totalTimeMillis =
-        durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
+    long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
     generateExecStats(winningExecStats, verbosity, &execBob, totalTimeMillis);
 
     // Also generate exec stats for all plans, if the verbosity level is high enough.
