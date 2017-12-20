@@ -188,70 +188,26 @@ void DocumentSourceCursor::recordPlanSummaryStats() {
     _planSummaryStats.hasSortStage = hasSortStage;
 }
 
-Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> explain) const {
-    // We never parse a DocumentSourceCursor, so we only serialize for explain.
-    if (!explain)
+Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> verbosity) const {
+    if (!verbosity)
         return Value();
 
-    // When explain is run in QueryPlanner mode we will not execute the aggregation pipeline and
-    // won't populate '_serializedExplain' with the explain plan. We must therefore generate the
-    // serialized explain here.
-    if (*explain == ExplainOptions::Verbosity::kQueryPlanner) {
+    if (!_explainOutput.missing()) {
+        // Just return whatever we serialized already.
+        return _explainOutput;
+    } else {
         AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
         uassertStatusOK(_exec->restoreState());
-        auto serializedExplain =
-            serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
+        Value ret = saveExplainOutput(verbosity.get(), autoColl.getCollection());
         _exec->saveState();
-        return serializedExplain;
+        return ret;
     }
-
-    MONGO_UNREACHABLE;
-    // unique_ptr<PlanStageStats> execStatsOwned;
-    // PlanStageStats* execStats = _executionStats.get();
-    // if (!execStats) {
-    //     invariant(_exec);
-    //     // Dump the plannner's execution stats
-    //     execStatsOwned = Explain::getWinningPlanStatsTree(_exec.get());
-    //     execStats = execStatsOwned.get();
-    // }
-
-    // // TODO: this is probably wrong. Remove it and figure out what we should actually do.
-    // AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-    // uassertStatusOK(_exec->restoreState());
-    // auto serializedExplain =
-    //     serializeToExplain(explain.get(), autoColl.getCollection(), Status::OK(), _allStats);
-    // _exec->saveState();
-    // return serializedExplain;
-
-    // We've reached our limit or exhausted the cursor.
-    // TODO: figure this out about execPlanStatus.
-
-    // TODO: need to do something here
-
-    // AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-    // Status execPlanStatus = Status::OK();
-    // uassertStatusOK(_exec->restoreState());
-    // auto serializedExplain = serializeToExplain(
-    //     pExpCtx->explain.get(), autoColl.getCollection(), execPlanStatus, _allStats);
-    // _exec->saveState();
-    // return serializedExplain;
-
-    // Is Dave saying that we use the executor here to get the executionStats?
-    // do we have the collection lock here though?
 }
 
-Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain,
-                                               Collection* collection,
-                                               Status executePlanStatus,
-                                               const Explain::PreExecutionStats& allStats) const {
+Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosity,
+                                              Collection* collection) const {
+    // We never parse a DocumentSourceCursor, so we only serialize for explain.
 
-    // Get planner-level explain info from the underlying PlanExecutor.
-    invariant(_exec);
-    BSONObjBuilder explainBuilder;
-    Explain::explainStagesPostExec(
-        _exec.get(), collection, explain, &explainBuilder, executePlanStatus, allStats);
-
-    // TODO: Maybe make this a BSONObjBuilder
     MutableDocument out;
     out["query"] = Value(_query);
 
@@ -264,13 +220,26 @@ Value DocumentSourceCursor::serializeToExplain(ExplainOptions::Verbosity explain
     if (!_projection.isEmpty())
         out["fields"] = Value(_projection);
 
-    // Add explain results from the query system into the agg explain output.
-    BSONObj explainObj = explainBuilder.obj();
-    invariant(explainObj.hasField("queryPlanner"));
-    out["queryPlanner"] = Value(explainObj["queryPlanner"]);
-    if (explain >= ExplainOptions::Verbosity::kExecStats) {
+    // Use the trial stats unless we actually ran the query and can get the execution stats
+    std::unique_ptr<PlanStageStats> winningStats = Explain::getWinningPlanStatsTree(_exec.get());
+
+    if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
         BSONObjBuilder bob;
-        Explain::getExecutionStats(_exec.get(), explain, _executionStats.get(), &bob, executePlanStatus, allStats);
+
+        Explain::generatePlannerInfo(
+            _exec.get(), collection, winningStats.get(), _allStats.rejectedPlansStats, &bob);
+        // FIXME: should be simpler if we use BSONObjBuilder instead
+        BSONObj plannerInfoObj = bob.obj();
+        invariant(plannerInfoObj.hasField("queryPlanner"));
+        out["queryPlanner"] = Value(plannerInfoObj["queryPlanner"]);
+    }
+
+    if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
+        BSONObjBuilder bob;
+        // TODO: executePlanStatus should be some legit value
+        auto executePlanStatus = Status::OK();
+        Explain::getExecutionStats(
+            _exec.get(), verbosity, winningStats.get(), &bob, executePlanStatus, _allStats);
         // FIXME: should be simpler if we use BSONObjBuilder instead
         BSONObj execObj = bob.obj();
         invariant(execObj.hasField("executionStats"));
@@ -306,9 +275,6 @@ void DocumentSourceCursor::cleanupExecutor() {
     // TODO: Save executor stats that we care about here
     invariant(_exec);
 
-    // Save our stats from _exec outside of the lock
-    _executionStats = Explain::getWinningPlanStatsTree(_exec.get());
-    
     auto* opCtx = pExpCtx->opCtx;
     // We need to be careful to not use AutoGetCollection here, since we only need the lock to
     // protect potential access to the Collection's CursorManager, and AutoGetCollection may throw
@@ -319,6 +285,12 @@ void DocumentSourceCursor::cleanupExecutor() {
     AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
     Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
     auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
+
+    if (pExpCtx->explain) {
+        // Save explain stats before we destroy _exec.
+        _explainOutput = saveExplainOutput(pExpCtx->explain.get(), collection);
+    }
+
     auto cursorManager = collection ? collection->getCursorManager() : nullptr;
     _exec->dispose(opCtx, cursorManager);
     _exec.reset();
@@ -327,8 +299,10 @@ void DocumentSourceCursor::cleanupExecutor() {
 void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readLock) {
     invariant(_exec);
 
-    // Save our stats from _exec outside of the lock
-    _executionStats = Explain::getWinningPlanStatsTree(_exec.get());
+    if (pExpCtx->explain) {
+        // Save explain stats before we destroy _exec.
+        _explainOutput = saveExplainOutput(pExpCtx->explain.get(), readLock.getCollection());
+    }
 
     auto cursorManager =
         readLock.getCollection() ? readLock.getCollection()->getCursorManager() : nullptr;
@@ -356,7 +330,8 @@ DocumentSourceCursor::DocumentSourceCursor(
     invariant(!_shouldProduceEmptyDocs);
 
     if (pExpCtx->explain) {
-        // TODO: put comment here saying its safe to access the executor even if we don't have the collection
+        // TODO: put comment here saying its safe to access the executor even if we don't have the
+        // collection
         // lock since we're just going to call getStats() on it.
         _allStats = Explain::collectPreExecutionStats(_exec.get(), pExpCtx->explain.get());
     }

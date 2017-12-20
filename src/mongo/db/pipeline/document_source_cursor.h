@@ -186,10 +186,8 @@ private:
 
     void recordPlanSummaryStats();
 
-    Value serializeToExplain(ExplainOptions::Verbosity explain,
-                             Collection* collection,
-                             Status executePlanStatus,
-                             const Explain::PreExecutionStats& allStats) const;
+    Value saveExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
+
 
     std::deque<Document> _currentBatch;
 
@@ -212,6 +210,7 @@ private:
 
     Explain::PreExecutionStats _allStats;
     std::unique_ptr<PlanStageStats> _executionStats;
+    Value _explainOutput;
 };
 
 }  // namespace mongo

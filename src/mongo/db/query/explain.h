@@ -48,6 +48,7 @@ struct PlanSummaryStats;
 class Explain {
 public:
     struct PreExecutionStats {
+        // TODO: Rename some of this
         std::unique_ptr<PlanStageStats> winningStatsTrial;
         std::vector<std::unique_ptr<PlanStageStats>> rejectedPlansStats;
     };
@@ -141,24 +142,6 @@ public:
                                   BSONObjBuilder* out,
                                   Status executePlanStatus,
                                   const PreExecutionStats& plannerStats);
-    static void explainStagesPostExec(PlanExecutor* exec,
-                                      const Collection* collection,
-                                      ExplainOptions::Verbosity verbosity,
-                                      BSONObjBuilder* out,
-                                      Status executePlanStatus,
-                                      const PreExecutionStats& allStats);
-
-private:
-    /**
-     * Private helper that does the heavy-lifting for the public statsToBSON(...) functions
-     * declared above.
-     *
-     * Not used except as a helper to the public statsToBSON(...) functions.
-     */
-    static void statsToBSON(const PlanStageStats& stats,
-                            ExplainOptions::Verbosity verbosity,
-                            BSONObjBuilder* bob,
-                            BSONObjBuilder* topLevelBob);
 
     /**
      * Adds the 'queryPlanner' explain section to the BSON object being built
@@ -177,6 +160,25 @@ private:
         PlanStageStats* winnerStats,
         const std::vector<std::unique_ptr<PlanStageStats>>& rejectedStats,
         BSONObjBuilder* out);
+
+private:
+    static void explainStagesPostExec(PlanExecutor* exec,
+                                      const Collection* collection,
+                                      ExplainOptions::Verbosity verbosity,
+                                      BSONObjBuilder* out,
+                                      Status executePlanStatus,
+                                      const PreExecutionStats& allStats);
+
+    /**
+     * Private helper that does the heavy-lifting for the public statsToBSON(...) functions
+     * declared above.
+     *
+     * Not used except as a helper to the public statsToBSON(...) functions.
+     */
+    static void statsToBSON(const PlanStageStats& stats,
+                            ExplainOptions::Verbosity verbosity,
+                            BSONObjBuilder* bob,
+                            BSONObjBuilder* topLevelBob);
 
     /**
      * Generates the execution stats section for the stats tree 'stats',
