@@ -208,43 +208,31 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosity,
                                               Collection* collection) const {
     // TODO: make sure we test this with a rooted or query.
-    MutableDocument out;
-    out["query"] = Value(_query);
+    BSONObjBuilder builder;
+    builder.append("query", _query);
 
     if (!_sort.isEmpty())
-        out["sort"] = Value(_sort);
+        builder.append("sort", _sort);
 
     if (_limit)
-        out["limit"] = Value(_limit->getLimit());
+        builder.append("limit", _limit->getLimit());
 
     if (!_projection.isEmpty())
-        out["fields"] = Value(_projection);
+        builder.append("fields", _projection);
 
     std::unique_ptr<PlanStageStats> winningStats = Explain::getWinningPlanStatsTree(_exec.get());
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        BSONObjBuilder bob;
-
         Explain::generatePlannerInfo(
-            _exec.get(), collection, winningStats.get(), _allStats.rejectedPlansStats, &bob);
-        // FIXME: should be simpler if we use BSONObjBuilder instead
-        BSONObj plannerInfoObj = bob.obj();
-        invariant(plannerInfoObj.hasField("queryPlanner"));
-        out["queryPlanner"] = Value(plannerInfoObj["queryPlanner"]);
+            _exec.get(), collection, winningStats.get(), _allStats.rejectedPlansStats, &builder);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        BSONObjBuilder bob;
         Explain::generateExecStatsForAllPlans(
-            _exec.get(), verbosity, winningStats.get(), &bob, _execStatus, _allStats);
-        // FIXME: should be simpler if we use BSONObjBuilder instead
-        BSONObj execObj = bob.obj();
-        invariant(execObj.hasField("executionStats"));
-
-        out["executionStats"] = Value(execObj["executionStats"]);
+            _exec.get(), verbosity, winningStats.get(), &builder, _execStatus, _allStats);
     }
 
-    return Value(DOC(getSourceName() << out.freezeToValue()));
+    return Value(DOC(getSourceName() << builder.obj()));
 }
 
 void DocumentSourceCursor::detachFromOperationContext() {
