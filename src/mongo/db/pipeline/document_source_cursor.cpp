@@ -138,23 +138,23 @@ void DocumentSourceCursor::loadBatch() {
     switch (state) {
         case PlanExecutor::ADVANCED:
         case PlanExecutor::IS_EOF:
+            // _execStatus is already OK by default, so not resetting it here.
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
-            log() << "ian: uassert dead";
-            // TODO: This case is never tested
-            uasserted(ErrorCodes::QueryPlanKilled,
-                      str::stream() << "collection or index disappeared when cursor yielded: "
-                                    << WorkingSetCommon::toStatusString(resultObj));
+            // TODO: check if this is covered in any test.
+            _execStatus = Status(ErrorCodes::QueryPlanKilled,
+                                 str::stream() << "collection or index disappeared when cursor yielded: "
+                                 << WorkingSetCommon::toStatusString(resultObj));
         }
         case PlanExecutor::FAILURE: {
-            log() << "ian: uassert failure";
-            uasserted(17285,
-                      str::stream() << "cursor encountered an error: "
-                                    << WorkingSetCommon::toStatusString(resultObj));
+            _execStatus = Status(ErrorCodes::Error(17285),
+                                 str::stream() << "cursor encountered an error: "
+                                 << WorkingSetCommon::toStatusString(resultObj));
         }
         default:
             MONGO_UNREACHABLE;
     }
+    uassertStatusOK(_execStatus);
 }
 
 Pipeline::SourceContainer::iterator DocumentSourceCursor::doOptimizeAt(
@@ -235,10 +235,8 @@ Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosit
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
         BSONObjBuilder bob;
-        // TODO: executePlanStatus should be some legit value
-        auto executePlanStatus = Status::OK();
         Explain::generateExecStatsForAllPlans(
-            _exec.get(), verbosity, winningStats.get(), &bob, executePlanStatus, _allStats);
+            _exec.get(), verbosity, winningStats.get(), &bob, _execStatus, _allStats);
         // FIXME: should be simpler if we use BSONObjBuilder instead
         BSONObj execObj = bob.obj();
         invariant(execObj.hasField("executionStats"));

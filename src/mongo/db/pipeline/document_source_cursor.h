@@ -204,6 +204,11 @@ private:
     // collection lock.
     std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> _exec;
 
+    // Status of the underlying executor, _exec. Used for explain queries if _exec produces an
+    // error. Since _exec may not finish running (if there is a limit, for example), we store OK as
+    // the default.
+    Status _execStatus = Status::OK();
+
     BSONObjSet _outputSorts;
     std::string _planSummary;
     PlanSummaryStats _planSummaryStats;
