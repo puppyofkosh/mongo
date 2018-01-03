@@ -132,7 +132,7 @@ PipelineProxyStage* getPipelineProxyStage(PlanStage* root) {
  *
  * This is used for getting the total number of keys examined by a plan. We need
  * to collect a 'totalKeysExamined' metric for a regular explain (in which case this
- * gets called from Explain::generateExecStats()) or for the slow query log / profiler
+ * gets called from Explain::generateExecStatsForRun()) or for the slow query log / profiler
  * (in which case this gets called from Explain::getSummaryStats()).
  */
 size_t getKeysExamined(StageType type, const SpecificStats* specific) {
@@ -159,7 +159,7 @@ size_t getKeysExamined(StageType type, const SpecificStats* specific) {
  *
  * This is used for getting the total number of documents examined by a plan. We need
  * to collect a 'totalDocsExamined' metric for a regular explain (in which case this
- * gets called from Explain::generateExecStats()) or for the slow query log / profiler
+ * gets called from Explain::generateExecStatsForRun()) or for the slow query log / profiler
  * (in which case this gets called from Explain::getSummaryStats()).
  */
 size_t getDocsExamined(StageType type, const SpecificStats* specific) {
@@ -663,10 +663,10 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
 }
 
 // static
-void Explain::generateExecStats(const PlanStageStats* stats,
-                                ExplainOptions::Verbosity verbosity,
-                                BSONObjBuilder* out,
-                                boost::optional<long long> totalTimeMillis) {
+void Explain::generateExecStatsForRun(const PlanStageStats* stats,
+                                      ExplainOptions::Verbosity verbosity,
+                                      BSONObjBuilder* out,
+                                      boost::optional<long long> totalTimeMillis) {
     out->appendNumber("nReturned", stats->common.advanced);
 
     // Time elapsed could might be either precise or approximate.
@@ -732,12 +732,12 @@ Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
     return allStats;
 }
 
-void Explain::getExecutionStats(PlanExecutor* exec,
-                                ExplainOptions::Verbosity verbosity,
-                                const PlanStageStats* winningExecStats,
-                                BSONObjBuilder* out,
-                                Status executePlanStatus,
-                                const PreExecutionStats& plannerStats) {
+void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
+                                           ExplainOptions::Verbosity verbosity,
+                                           const PlanStageStats* winningExecStats,
+                                           BSONObjBuilder* out,
+                                           Status executePlanStatus,
+                                           const PreExecutionStats& plannerStats) {
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
@@ -751,7 +751,7 @@ void Explain::getExecutionStats(PlanExecutor* exec,
     // Generate exec stats BSON for the winning plan.
     OperationContext* opCtx = exec->getOpCtx();
     long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
-    generateExecStats(winningExecStats, verbosity, &execBob, totalTimeMillis);
+    generateExecStatsForRun(winningExecStats, verbosity, &execBob, totalTimeMillis);
 
     // Also generate exec stats for all plans, if the verbosity level is high enough.
     // These stats reflect what happened during the trial period that ranked the plans.
@@ -764,13 +764,13 @@ void Explain::getExecutionStats(PlanExecutor* exec,
         BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
         for (size_t i = 0; i < plannerStats.rejectedPlansStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStats(
+            generateExecStatsForRun(
                 plannerStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
         if (plannerStats.winningStatsTrial.get()) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStats(
+            generateExecStatsForRun(
                 plannerStats.winningStatsTrial.get(), verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
@@ -806,7 +806,8 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        getExecutionStats(exec, verbosity, winningStats.get(), out, executePlanStatus, allStats);
+        generateExecStatsForAllPlans(exec, verbosity, winningStats.get(), out, executePlanStatus,
+                                     allStats);
     }
 
     generateServerInfo(out);
@@ -817,12 +818,15 @@ void Explain::explainStages(PlanExecutor* exec,
                             const Collection* collection,
                             ExplainOptions::Verbosity verbosity,
                             BSONObjBuilder* out) {
-
-
-    // TODO: only do this if we're not using a pipelineproxy stage
     PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
 
-    auto allStats = collectPreExecutionStats(exec, verbosity);
+    boost::optional<Explain::PreExecutionStats> preExecStats = boost::none;
+    if (pps) {
+        // Don't collect pre execution stats here, since it has been done in the
+        // DocumentSourceCursor's constructor.
+    } else {
+        preExecStats = collectPreExecutionStats(exec, verbosity);
+    }
 
     // If we need execution stats, then run the plan in order to gather the stats.
     Status executePlanStatus = Status::OK();
@@ -838,10 +842,10 @@ void Explain::explainStages(PlanExecutor* exec,
 
     if (pps) {
         *out << "stages" << Value(pps->writeExplainOps(verbosity));
-        return;
+    } else {
+        invariant(preExecStats);
+        explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, preExecStats.get());
     }
-
-    explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, allStats);
 }
 
 // static

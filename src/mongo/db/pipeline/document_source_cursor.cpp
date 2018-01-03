@@ -189,6 +189,7 @@ void DocumentSourceCursor::recordPlanSummaryStats() {
 }
 
 Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity> verbosity) const {
+    // We never parse a DocumentSourceCursor, so we only serialize for explain.
     if (!verbosity)
         return Value();
 
@@ -206,8 +207,7 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 
 Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosity,
                                               Collection* collection) const {
-    // We never parse a DocumentSourceCursor, so we only serialize for explain.
-
+    // TODO: make sure we test this with a rooted or query.
     MutableDocument out;
     out["query"] = Value(_query);
 
@@ -220,7 +220,6 @@ Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosit
     if (!_projection.isEmpty())
         out["fields"] = Value(_projection);
 
-    // Use the trial stats unless we actually ran the query and can get the execution stats
     std::unique_ptr<PlanStageStats> winningStats = Explain::getWinningPlanStatsTree(_exec.get());
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
@@ -238,7 +237,7 @@ Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosit
         BSONObjBuilder bob;
         // TODO: executePlanStatus should be some legit value
         auto executePlanStatus = Status::OK();
-        Explain::getExecutionStats(
+        Explain::generateExecStatsForAllPlans(
             _exec.get(), verbosity, winningStats.get(), &bob, executePlanStatus, _allStats);
         // FIXME: should be simpler if we use BSONObjBuilder instead
         BSONObj execObj = bob.obj();

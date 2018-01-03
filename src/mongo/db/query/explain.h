@@ -136,12 +136,12 @@ public:
     static PreExecutionStats collectPreExecutionStats(PlanExecutor* exec,
                                                       ExplainOptions::Verbosity verbosity);
 
-    static void getExecutionStats(PlanExecutor* exec,
-                                  ExplainOptions::Verbosity verbosity,
-                                  const PlanStageStats* winningExecStats,
-                                  BSONObjBuilder* out,
-                                  Status executePlanStatus,
-                                  const PreExecutionStats& plannerStats);
+    static void generateExecStatsForAllPlans(PlanExecutor* exec,
+                                             ExplainOptions::Verbosity verbosity,
+                                             const PlanStageStats* winningExecStats,
+                                             BSONObjBuilder* out,
+                                             Status executePlanStatus,
+                                             const PreExecutionStats& plannerStats);
 
     /**
      * Adds the 'queryPlanner' explain section to the BSON object being built
@@ -193,10 +193,10 @@ private:
      *
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      */
-    static void generateExecStats(const PlanStageStats* stats,
-                                  ExplainOptions::Verbosity verbosity,
-                                  BSONObjBuilder* out,
-                                  boost::optional<long long> totalTimeMillis);
+    static void generateExecStatsForRun(const PlanStageStats* stats,
+                                        ExplainOptions::Verbosity verbosity,
+                                        BSONObjBuilder* out,
+                                        boost::optional<long long> totalTimeMillis);
 
     /**
      * Adds the 'serverInfo' explain section to the BSON object being build
