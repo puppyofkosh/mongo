@@ -259,7 +259,6 @@ void DocumentSourceCursor::doDispose() {
 }
 
 void DocumentSourceCursor::cleanupExecutor() {
-    // TODO: Save executor stats that we care about here
     invariant(_exec);
 
     auto* opCtx = pExpCtx->opCtx;
@@ -274,7 +273,7 @@ void DocumentSourceCursor::cleanupExecutor() {
     auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
 
     if (pExpCtx->explain) {
-        // Save explain stats before we destroy _exec.
+        // Before we destroy the executor, save copies of the fields we need for explain.
         saveExecFieldsForExplain();
     }
 
@@ -287,6 +286,7 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
     invariant(_exec);
 
     if (pExpCtx->explain) {
+        // Before we destroy the executor, save copies of the fields we need for explain.
         saveExecFieldsForExplain();
     }
 
@@ -333,9 +333,8 @@ DocumentSourceCursor::DocumentSourceCursor(
     invariant(!_shouldProduceEmptyDocs);
 
     if (pExpCtx->explain) {
-        // TODO: put comment here saying its safe to access the executor even if we don't have the
-        // collection
-        // lock since we're just going to call getStats() on it.
+        // It's safe to access the executor even if we don't have the collection lock since we're
+        // just going to call getStats() on it.
         _allStats = Explain::collectPreExecutionStats(_exec.get(), pExpCtx->explain.get());
     }
 
