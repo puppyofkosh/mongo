@@ -607,21 +607,21 @@ void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob)
 }
 
 // static
-void Explain::generatePlannerInfo(CanonicalQuery* query,
+void Explain::generatePlannerInfo(const NamespaceString& nss,
+                                  CanonicalQuery* query,
                                   const Collection* collection,
                                   PlanStageStats* winnerStats,
                                   const vector<unique_ptr<PlanStageStats>>& rejectedStats,
                                   BSONObjBuilder* out) {
-    invariant(query);
     BSONObjBuilder plannerBob(out->subobjStart("queryPlanner"));
 
     plannerBob.append("plannerVersion", QueryPlanner::kPlannerVersion);
-    plannerBob.append("namespace", query->nss().ns());
+    plannerBob.append("namespace", nss.ns());
 
     // Find whether there is an index filter set for the query shape. The 'indexFilterSet'
     // field will always be false in the case of EOF or idhack plans.
     bool indexFilterSet = false;
-    if (collection) {
+    if (collection && query) {
         const CollectionInfoCache* infoCache = collection->infoCache();
         const QuerySettings* querySettings = infoCache->getQuerySettings();
         PlanCacheKey planCacheKey = infoCache->getPlanCache()->computeKey(*query);
@@ -792,7 +792,8 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec->getCanonicalQuery(),
+        generatePlannerInfo(exec->nss(),
+                            exec->getCanonicalQuery(),
                             collection,
                             winningStats.get(),
                             allStats.rejectedPlansStats,

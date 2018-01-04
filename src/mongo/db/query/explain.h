@@ -155,6 +155,7 @@ public:
      * @param rejectedStats -- an array of stats trees, one per rejected plan
      */
     static void generatePlannerInfo(
+        const NamespaceString& nss,
         CanonicalQuery* query,
         const Collection* collection,
         PlanStageStats* winnerStats,
