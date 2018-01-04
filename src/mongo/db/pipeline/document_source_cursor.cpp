@@ -210,7 +210,6 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
     invariant(_winningStats);
     invariant(_canonicalQuery);
 
-    // TODO: make sure we test this with a rooted or query.
     BSONObjBuilder builder;
     builder.append("query", _query);
 
@@ -318,8 +317,6 @@ void DocumentSourceCursor::saveExecFieldsForExplain() const {
 DocumentSourceCursor::~DocumentSourceCursor() {
     invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
 }
-
-// TODO: Write test that has a rooted or to test the SubPlanner
 
 DocumentSourceCursor::DocumentSourceCursor(
     Collection* collection,
