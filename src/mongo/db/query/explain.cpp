@@ -607,26 +607,25 @@ void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob)
 }
 
 // static
-void Explain::generatePlannerInfo(PlanExecutor* exec,
+void Explain::generatePlannerInfo(CanonicalQuery* query,
                                   const Collection* collection,
                                   PlanStageStats* winnerStats,
                                   const vector<unique_ptr<PlanStageStats>>& rejectedStats,
                                   BSONObjBuilder* out) {
-    CanonicalQuery* query = exec->getCanonicalQuery();
-
+    invariant(query);
     BSONObjBuilder plannerBob(out->subobjStart("queryPlanner"));
 
     plannerBob.append("plannerVersion", QueryPlanner::kPlannerVersion);
-    plannerBob.append("namespace", exec->nss().ns());
+    plannerBob.append("namespace", query->nss().ns());
 
     // Find whether there is an index filter set for the query shape. The 'indexFilterSet'
     // field will always be false in the case of EOF or idhack plans.
     bool indexFilterSet = false;
-    if (collection && exec->getCanonicalQuery()) {
+    if (collection) {
         const CollectionInfoCache* infoCache = collection->infoCache();
         const QuerySettings* querySettings = infoCache->getQuerySettings();
         PlanCacheKey planCacheKey =
-            infoCache->getPlanCache()->computeKey(*exec->getCanonicalQuery());
+            infoCache->getPlanCache()->computeKey(*query);
         if (auto allowedIndicesFilter = querySettings->getAllowedIndicesFilter(planCacheKey)) {
             // Found an index filter set on the query shape.
             indexFilterSet = true;
@@ -732,7 +731,7 @@ Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
     return allStats;
 }
 
-void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
+void Explain::generateExecStatsForAllPlans(OperationContext* opCtx,
                                            ExplainOptions::Verbosity verbosity,
                                            const PlanStageStats* winningExecStats,
                                            BSONObjBuilder* out,
@@ -749,7 +748,6 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
     }
 
     // Generate exec stats BSON for the winning plan.
-    OperationContext* opCtx = exec->getOpCtx();
     long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
     generateExecStatsForRun(winningExecStats, verbosity, &execBob, totalTimeMillis);
 
@@ -802,12 +800,13 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec, collection, winningStats.get(), allStats.rejectedPlansStats, out);
+        generatePlannerInfo(exec->getCanonicalQuery(), collection, winningStats.get(),
+                            allStats.rejectedPlansStats, out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsForAllPlans(exec, verbosity, winningStats.get(), out, executePlanStatus,
-                                     allStats);
+        generateExecStatsForAllPlans(exec->getOpCtx(), verbosity, winningStats.get(),
+                                     out, executePlanStatus, allStats);
     }
 
     generateServerInfo(out);
