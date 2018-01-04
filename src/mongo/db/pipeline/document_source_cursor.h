@@ -186,7 +186,12 @@ private:
 
     void recordPlanSummaryStats();
 
-    Value saveExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
+    Value generateExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
+
+    /**
+     * Save info from _exec that we will need for explain() before destroying _exec.
+     */
+    void saveExecFieldsForExplain() const;
 
 
     std::deque<Document> _currentBatch;
@@ -214,8 +219,15 @@ private:
     PlanSummaryStats _planSummaryStats;
 
     Explain::PreExecutionStats _allStats;
-    std::unique_ptr<PlanStageStats> _executionStats;
-    Value _explainOutput;
+
+    // Stuff from _exec which we save for explain before _exec is destroyed.
+    // FIXME: maybe someone won't like the fact that I use mutable but it doesn't seem too
+    // inappropriate here.
+    // Mutable because this may be called from saveExecFieldsForExplain which may be called
+    // from serialize.
+    // It would be easy to change these fields be non-mutable.
+    mutable std::unique_ptr<CanonicalQuery> _canonicalQuery;
+    mutable std::unique_ptr<PlanStageStats> _winningStats;
 };
 
 }  // namespace mongo

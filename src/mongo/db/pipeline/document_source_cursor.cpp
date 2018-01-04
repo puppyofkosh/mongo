@@ -142,14 +142,15 @@ void DocumentSourceCursor::loadBatch() {
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
             // TODO: check if this is covered in any test.
-            _execStatus = Status(ErrorCodes::QueryPlanKilled,
-                                 str::stream() << "collection or index disappeared when cursor yielded: "
-                                 << WorkingSetCommon::toStatusString(resultObj));
+            _execStatus =
+                Status(ErrorCodes::QueryPlanKilled,
+                       str::stream() << "collection or index disappeared when cursor yielded: "
+                                     << WorkingSetCommon::toStatusString(resultObj));
         }
         case PlanExecutor::FAILURE: {
             _execStatus = Status(ErrorCodes::Error(17285),
                                  str::stream() << "cursor encountered an error: "
-                                 << WorkingSetCommon::toStatusString(resultObj));
+                                               << WorkingSetCommon::toStatusString(resultObj));
         }
         default:
             MONGO_UNREACHABLE;
@@ -193,20 +194,22 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!verbosity)
         return Value();
 
-    if (!_explainOutput.missing()) {
-        // Just return whatever we serialized already.
-        return _explainOutput;
-    } else {
-        AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-        uassertStatusOK(_exec->restoreState());
-        Value ret = saveExplainOutput(verbosity.get(), autoColl.getCollection());
-        _exec->saveState();
-        return ret;
+    if (!_canonicalQuery || !_winningStats) {
+        // We haven't saved the fields we need from exec yet.
+        saveExecFieldsForExplain();
     }
+    // Need this lock since we may try to access the collection's info cache
+    // when generating planner info.
+    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _canonicalQuery->nss());
+    Value ret = generateExplainOutput(verbosity.get(), autoColl.getCollection());
+    return ret;
 }
 
-Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosity,
-                                              Collection* collection) const {
+Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verbosity,
+                                                  Collection* collection) const {
+    invariant(_winningStats);
+    invariant(_canonicalQuery);
+
     // TODO: make sure we test this with a rooted or query.
     BSONObjBuilder builder;
     builder.append("query", _query);
@@ -220,16 +223,17 @@ Value DocumentSourceCursor::saveExplainOutput(ExplainOptions::Verbosity verbosit
     if (!_projection.isEmpty())
         builder.append("fields", _projection);
 
-    std::unique_ptr<PlanStageStats> winningStats = Explain::getWinningPlanStatsTree(_exec.get());
-
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(
-            _exec.get(), collection, winningStats.get(), _allStats.rejectedPlansStats, &builder);
+        Explain::generatePlannerInfo(_canonicalQuery.get(),
+                                     collection,
+                                     _winningStats.get(),
+                                     _allStats.rejectedPlansStats,
+                                     &builder);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
         Explain::generateExecStatsForAllPlans(
-            _exec.get(), verbosity, winningStats.get(), &builder, _execStatus, _allStats);
+            pExpCtx->opCtx, verbosity, _winningStats.get(), &builder, _execStatus, _allStats);
     }
 
     return Value(DOC(getSourceName() << builder.obj()));
@@ -273,7 +277,7 @@ void DocumentSourceCursor::cleanupExecutor() {
 
     if (pExpCtx->explain) {
         // Save explain stats before we destroy _exec.
-        _explainOutput = saveExplainOutput(pExpCtx->explain.get(), collection);
+        saveExecFieldsForExplain();
     }
 
     auto cursorManager = collection ? collection->getCursorManager() : nullptr;
@@ -285,14 +289,30 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
     invariant(_exec);
 
     if (pExpCtx->explain) {
-        // Save explain stats before we destroy _exec.
-        _explainOutput = saveExplainOutput(pExpCtx->explain.get(), readLock.getCollection());
+        saveExecFieldsForExplain();
     }
 
     auto cursorManager =
         readLock.getCollection() ? readLock.getCollection()->getCursorManager() : nullptr;
     _exec->dispose(pExpCtx->opCtx, cursorManager);
     _exec.reset();
+}
+
+void DocumentSourceCursor::saveExecFieldsForExplain() const {
+    // Save a copy of exec's CanonicalQuery before we destroy it.
+    // FIXME: we could try to "steal" (std::move) _exec's CanonicalQuery to avoid copying
+    // but since this is explain() I don't really care about avoiding a copy
+    const auto cq = _exec->getCanonicalQuery();
+    auto statusWithCQ = CanonicalQuery::canonicalize(pExpCtx->opCtx, *cq, cq->root());
+
+    // This should always succeed since we're re-canonicalizing the root itself (which has
+    // already been canonicalized).
+    invariant(statusWithCQ.isOK());
+
+    _canonicalQuery = std::move(statusWithCQ.getValue());
+
+    // Save a copy of the winning plan's execution stats.
+    _winningStats = Explain::getWinningPlanStatsTree(_exec.get());
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
