@@ -49,7 +49,7 @@ class Explain {
 public:
     struct PreExecutionStats {
         // TODO: Rename some of this
-        std::unique_ptr<PlanStageStats> winningStatsTrial;
+        std::unique_ptr<PlanStageStats> winningPlanTrialStats;
         std::vector<std::unique_ptr<PlanStageStats>> rejectedPlansStats;
     };
 

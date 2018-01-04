@@ -624,8 +624,7 @@ void Explain::generatePlannerInfo(CanonicalQuery* query,
     if (collection) {
         const CollectionInfoCache* infoCache = collection->infoCache();
         const QuerySettings* querySettings = infoCache->getQuerySettings();
-        PlanCacheKey planCacheKey =
-            infoCache->getPlanCache()->computeKey(*query);
+        PlanCacheKey planCacheKey = infoCache->getPlanCache()->computeKey(*query);
         if (auto allowedIndicesFilter = querySettings->getAllowedIndicesFilter(planCacheKey)) {
             // Found an index filter set on the query shape.
             indexFilterSet = true;
@@ -720,7 +719,7 @@ Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
     // Get the stats from the trial period for all the plans.
     if (mps) {
         const auto mpsStats = mps->getStats();
-        allStats.winningStatsTrial = std::move(mpsStats->children[mps->bestPlanIdx()]);
+        allStats.winningPlanTrialStats = std::move(mpsStats->children[mps->bestPlanIdx()]);
 
         for (size_t i = 0; i < mpsStats->children.size(); ++i) {
             if (i != static_cast<size_t>(mps->bestPlanIdx())) {
@@ -766,10 +765,10 @@ void Explain::generateExecStatsForAllPlans(OperationContext* opCtx,
                 plannerStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
-        if (plannerStats.winningStatsTrial.get()) {
+        if (plannerStats.winningPlanTrialStats.get()) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
             generateExecStatsForRun(
-                plannerStats.winningStatsTrial.get(), verbosity, &planBob, boost::none);
+                plannerStats.winningPlanTrialStats.get(), verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
 
@@ -786,27 +785,23 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     // TODO: make this an optional
                                     Status executePlanStatus,
                                     const PreExecutionStats& allStats) {
-
-    auto mps = getMultiPlanStage(exec->getRootStage());
-
-    // Get stats for the winning plan. If there is only a single candidate plan, it is considered
-    // the winner.
-    unique_ptr<PlanStageStats> winningStats(
-        mps ? std::move(mps->getStats()->children[mps->bestPlanIdx()])
-            : std::move(exec->getStats()));
+    unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
 
     //
     // Use the stats trees to produce explain BSON.
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec->getCanonicalQuery(), collection, winningStats.get(),
-                            allStats.rejectedPlansStats, out);
+        generatePlannerInfo(exec->getCanonicalQuery(),
+                            collection,
+                            winningStats.get(),
+                            allStats.rejectedPlansStats,
+                            out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsForAllPlans(exec->getOpCtx(), verbosity, winningStats.get(),
-                                     out, executePlanStatus, allStats);
+        generateExecStatsForAllPlans(
+            exec->getOpCtx(), verbosity, winningStats.get(), out, executePlanStatus, allStats);
     }
 
     generateServerInfo(out);
@@ -843,7 +838,8 @@ void Explain::explainStages(PlanExecutor* exec,
         *out << "stages" << Value(pps->writeExplainOps(verbosity));
     } else {
         invariant(preExecStats);
-        explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, preExecStats.get());
+        explainStagesPostExec(
+            exec, collection, verbosity, out, executePlanStatus, preExecStats.get());
     }
 }
 
