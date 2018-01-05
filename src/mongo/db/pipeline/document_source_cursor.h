@@ -228,6 +228,10 @@ private:
     // It would be easy to change these fields be non-mutable.
     mutable std::unique_ptr<CanonicalQuery> _canonicalQuery;
     mutable std::unique_ptr<PlanStageStats> _winningStats;
+    mutable NamespaceString _nss;
+
+    // Keeps track of whether or not the above fields have been initialized.
+    mutable bool _execFieldsSaved = false;
 };
 
 }  // namespace mongo
