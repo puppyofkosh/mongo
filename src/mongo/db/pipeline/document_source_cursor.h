@@ -220,12 +220,9 @@ private:
 
     Explain::PreExecutionStats _allStats;
 
-    // Stuff from _exec which we save for explain before _exec is destroyed.
-    // FIXME: maybe someone won't like the fact that I use mutable but it doesn't seem too
-    // inappropriate here.
+    // Fields from _exec which we save for explain before _exec is destroyed.
     // Mutable because this may be called from saveExecFieldsForExplain which may be called
     // from serialize.
-    // It would be easy to change these fields be non-mutable.
     mutable std::unique_ptr<CanonicalQuery> _canonicalQuery;
     mutable std::unique_ptr<PlanStageStats> _winningStats;
     mutable NamespaceString _nss;

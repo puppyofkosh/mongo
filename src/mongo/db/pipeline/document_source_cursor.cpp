@@ -68,7 +68,6 @@ DocumentSource::GetNextResult DocumentSourceCursor::getNext() {
 }
 
 void DocumentSourceCursor::loadBatch() {
-    log() << "ian: In loadBatch()";
     if (!_exec) {
         // No more documents.
         dispose();
@@ -304,8 +303,6 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
 
 void DocumentSourceCursor::saveExecFieldsForExplain() const {
     // Save a copy of exec's CanonicalQuery before we destroy it.
-    // FIXME: we could try to "steal" (std::move) _exec's CanonicalQuery to avoid copying
-    // but since this is explain() I don't really care about avoiding a copy
     const auto cq = _exec->getCanonicalQuery();
     if (cq) {
         auto statusWithCQ = CanonicalQuery::canonicalize(pExpCtx->opCtx, *cq, cq->root());
@@ -326,7 +323,7 @@ void DocumentSourceCursor::saveExecFieldsForExplain() const {
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
-    invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
+ invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
 }
 
 DocumentSourceCursor::DocumentSourceCursor(
@@ -340,7 +337,6 @@ DocumentSourceCursor::DocumentSourceCursor(
 
     _planSummary = Explain::getPlanSummary(_exec.get());
     recordPlanSummaryStats();
-    invariant(!_shouldProduceEmptyDocs);
 
     if (pExpCtx->explain) {
         // It's safe to access the executor even if we don't have the collection lock since we're

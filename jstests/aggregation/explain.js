@@ -1,5 +1,5 @@
 // Tests the behavior of explain() when used with the aggregation
-// pipeline.
+// pipeline.  Explain() should not read or modify the plan cache.
 (function() {
     "use strict";
 
@@ -24,4 +24,5 @@
     // Now there's an entry in the cache, make sure explain() doesn't use it.
     result = coll.explain().aggregate([{$match: {x: 1, y: 1}}]);
     assert.eq(null, getAggPlanStage(result, "CACHED_PLAN"));
+
 })();
