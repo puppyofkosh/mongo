@@ -323,7 +323,7 @@ void DocumentSourceCursor::saveExecFieldsForExplain() const {
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
- invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
+    invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
 }
 
 DocumentSourceCursor::DocumentSourceCursor(
