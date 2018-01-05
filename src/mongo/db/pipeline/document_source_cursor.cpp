@@ -146,11 +146,13 @@ void DocumentSourceCursor::loadBatch() {
                 Status(ErrorCodes::QueryPlanKilled,
                        str::stream() << "collection or index disappeared when cursor yielded: "
                                      << WorkingSetCommon::toStatusString(resultObj));
+            break;
         }
         case PlanExecutor::FAILURE: {
             _execStatus = Status(ErrorCodes::Error(17285),
                                  str::stream() << "cursor encountered an error: "
                                                << WorkingSetCommon::toStatusString(resultObj));
+            break;
         }
         default:
             MONGO_UNREACHABLE;
