@@ -196,13 +196,13 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!verbosity)
         return Value();
 
-    if (!_canonicalQuery || !_winningStats) {
+    if (!_execFieldsSaved) {
         // We haven't saved the fields we need from exec yet.
         saveExecFieldsForExplain();
     }
     // Need this lock since we may try to access the collection's info cache
     // when generating planner info.
-    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _canonicalQuery->nss());
+    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _nss);
     Value ret = generateExplainOutput(verbosity.get(), autoColl.getCollection());
     return ret;
 }
@@ -210,7 +210,9 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verbosity,
                                                   Collection* collection) const {
     invariant(_winningStats);
-    invariant(_canonicalQuery);
+    // _canonicalQuery may be null.
+    invariant(_execFieldsSaved);
+
 
     BSONObjBuilder builder;
     builder.append("query", _query);
@@ -225,7 +227,7 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
         builder.append("fields", _projection);
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(_canonicalQuery->nss(),
+        Explain::generatePlannerInfo(_nss,
                                      _canonicalQuery.get(),
                                      collection,
                                      _winningStats.get(),
@@ -305,16 +307,22 @@ void DocumentSourceCursor::saveExecFieldsForExplain() const {
     // FIXME: we could try to "steal" (std::move) _exec's CanonicalQuery to avoid copying
     // but since this is explain() I don't really care about avoiding a copy
     const auto cq = _exec->getCanonicalQuery();
-    auto statusWithCQ = CanonicalQuery::canonicalize(pExpCtx->opCtx, *cq, cq->root());
+    if (cq) {
+        auto statusWithCQ = CanonicalQuery::canonicalize(pExpCtx->opCtx, *cq, cq->root());
 
-    // This should always succeed since we're re-canonicalizing the root itself (which has
-    // already been canonicalized).
-    invariant(statusWithCQ.isOK());
-
-    _canonicalQuery = std::move(statusWithCQ.getValue());
+        // This should always succeed since we're re-canonicalizing the root itself (which has
+        // already been canonicalized).
+        invariant(statusWithCQ.isOK());
+        _canonicalQuery = std::move(statusWithCQ.getValue());
+    }
 
     // Save a copy of the winning plan's execution stats.
     _winningStats = Explain::getWinningPlanStatsTree(_exec.get());
+
+    // Save the namespace which this query ran on
+    _nss = _exec->nss();
+
+    _execFieldsSaved = true;
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
