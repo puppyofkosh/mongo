@@ -331,6 +331,7 @@ ClusterQueryResult AsyncResultsMerger::_nextReadyUnsorted(WithLock) {
 }
 
 Status AsyncResultsMerger::_askForNextBatch(WithLock, size_t remoteIndex) {
+    log() << "Asking for next batch from remote " << remoteIndex;
     auto& remote = _remotes[remoteIndex];
 
     invariant(!remote.cbHandle.isValid());
@@ -493,6 +494,12 @@ void AsyncResultsMerger::updateRemoteMetadata(RemoteCursorData* remote,
 void AsyncResultsMerger::_handleBatchResponse(WithLock lk,
                                               CbData const& cbData,
                                               size_t remoteIndex) {
+    log() << "Received batch response";
+    log() << "Reponse status is " << cbData.response;
+    log() << "Reponse status is " << cbData.response.status;
+    log() << "Reponse status is " << cbData.response.status.code();
+    //invariant(!_ianDestroyed);
+
     // Got a response from remote, so indicate we are no longer waiting for one.
     _remotes[remoteIndex].cbHandle = executor::TaskExecutor::CallbackHandle();
 
@@ -511,7 +518,11 @@ void AsyncResultsMerger::_handleBatchResponse(WithLock lk,
 }
 
 void AsyncResultsMerger::_cleanUpKilledBatch(WithLock lk) {
+    log() << "Cleaning up killed batch";
     invariant(_lifecycleState == kKillStarted);
+
+    // TODO I think here we should check if any of the other callbacks haven't been cancelled yet.
+    // If so, just signal the _killCursorsScheduledEvent and set our cycleState to complete.
 
     // If we're killed and we're not waiting on any more batches to come back, then we are ready
     // to kill the cursors on the remote hosts and clean up this cursor. Schedule the killCursors
@@ -643,6 +654,7 @@ bool AsyncResultsMerger::_haveOutstandingBatchRequests(WithLock) {
 }
 
 void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx) {
+    log() << "Scheduling killCursors on remotes";
     invariant(_lifecycleState == kKillStarted);
     invariant(_killCursorsScheduledEvent.isValid());
 
@@ -662,7 +674,9 @@ void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx)
 }
 
 executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* opCtx) {
+    log() << "In kill()";
     stdx::lock_guard<stdx::mutex> lk(_mutex);
+    invariant(!_ianDestroyed);
     if (_killCursorsScheduledEvent.isValid()) {
         invariant(_lifecycleState != kAlive);
         return _killCursorsScheduledEvent;
@@ -674,10 +688,16 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* o
     // killCursors command to run on all the remote shards.
     auto statusWithEvent = _executor->makeEvent();
     if (ErrorCodes::isShutdownError(statusWithEvent.getStatus().code())) {
+        log() << "kill: Task exec is shutting down";
         // The underlying task executor is shutting down.
         if (!_haveOutstandingBatchRequests(lk)) {
+            log() << "kill: No outstanding batches";
             _lifecycleState = kKillComplete;
         }
+
+        // TODO: Discuss. There's a bug here.
+
+        _ianDestroyed = true;
         return executor::TaskExecutor::EventHandle();
     }
     fassertStatusOK(28716, statusWithEvent);
@@ -686,10 +706,17 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* o
     // If we're not waiting for responses from remotes, we can schedule killCursors commands on the
     // remotes now. Otherwise, we have to wait until all responses are back because a cursor that
     // is active (pinned) on a remote cannot be killed through killCursors.
+    log() << "Kill: calling _scheduleKillCursors unconditionally";
+    _scheduleKillCursors(lk, opCtx);
+    _lifecycleState = kKillComplete;
+
+    // Don't report that it's safe to
+    // My idea
     if (!_haveOutstandingBatchRequests(lk)) {
-        _scheduleKillCursors(lk, opCtx);
-        _lifecycleState = kKillComplete;
         _executor->signalEvent(_killCursorsScheduledEvent);
+    } else {
+        // Cancel all of our callbacks.
+        // Once all of the callbacks have been complete, then we can signal the event.
     }
 
     return _killCursorsScheduledEvent;

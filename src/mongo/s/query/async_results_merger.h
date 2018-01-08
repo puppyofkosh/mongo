@@ -426,6 +426,8 @@ private:
     // Signaled when all outstanding batch request callbacks have run, and all killCursors commands
     // have been scheduled. This means that the ARM is safe to delete.
     executor::TaskExecutor::EventHandle _killCursorsScheduledEvent;
+
+    bool _ianDestroyed = 0;
 };
 
 }  // namespace mongo
