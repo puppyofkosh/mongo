@@ -74,6 +74,13 @@ public:
                               BSONObjBuilder* out);
 
     /**
+     * TODO add a comment
+     **/
+    static void explainPipelineExecutor(PlanExecutor* exec,
+                                        ExplainOptions::Verbosity verbosity,
+                                        BSONObjBuilder* out);
+
+    /**
      * Get PlanExecutor's winning plan stats tree.
      */
     static std::unique_ptr<PlanStageStats> getWinningPlanStatsTree(const PlanExecutor* exec);
@@ -160,6 +167,9 @@ public:
         BSONObjBuilder* out);
 
 private:
+    /**
+     * TODO: add comment (or remove this function)
+     **/
     static void explainStagesPostExec(PlanExecutor* exec,
                                       const Collection* collection,
                                       ExplainOptions::Verbosity verbosity,
