@@ -136,7 +136,7 @@ public:
     static PreExecutionStats collectPreExecutionStats(PlanExecutor* exec,
                                                       ExplainOptions::Verbosity verbosity);
 
-    static void generateExecStatsForAllPlans(OperationContext* opCtx,
+    static void generateExecStatsForAllPlans(PlanExecutor* exec,
                                              ExplainOptions::Verbosity verbosity,
                                              const PlanStageStats* winningExecStats,
                                              BSONObjBuilder* out,
@@ -155,7 +155,7 @@ public:
      * @param rejectedStats -- an array of stats trees, one per rejected plan
      */
     static void generatePlannerInfo(
-        CanonicalQuery* query,
+        PlanExecutor* exec,
         const Collection* collection,
         PlanStageStats* winnerStats,
         const std::vector<std::unique_ptr<PlanStageStats>>& rejectedStats,
