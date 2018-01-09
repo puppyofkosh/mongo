@@ -224,8 +224,7 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
         builder.append("fields", _projection);
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(_canonicalQuery->nss(),
-                                     _canonicalQuery.get(),
+        Explain::generatePlannerInfo(_canonicalQuery.get(),
                                      collection,
                                      _winningStats.get(),
                                      _allStats.rejectedPlansStats,
