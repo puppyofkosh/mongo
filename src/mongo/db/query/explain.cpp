@@ -609,7 +609,6 @@ void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob)
 // static
 void Explain::generatePlannerInfo(PlanExecutor* exec,
                                   const Collection* collection,
-                                  PlanStageStats* winnerStats,
                                   const vector<unique_ptr<PlanStageStats>>& rejectedStats,
                                   BSONObjBuilder* out) {
     CanonicalQuery* query = exec->getCanonicalQuery();
@@ -648,7 +647,8 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
     }
 
     BSONObjBuilder winningPlanBob(plannerBob.subobjStart("winningPlan"));
-    statsToBSON(*winnerStats, &winningPlanBob, ExplainOptions::Verbosity::kQueryPlanner);
+    const auto winnerStats = getWinningPlanStatsTree(exec);
+    statsToBSON(*winnerStats.get(), &winningPlanBob, ExplainOptions::Verbosity::kQueryPlanner);
     winningPlanBob.doneFast();
 
     // Genenerate array of rejected plans.
@@ -734,7 +734,6 @@ Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
 
 void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
                                            ExplainOptions::Verbosity verbosity,
-                                           const PlanStageStats* winningExecStats,
                                            BSONObjBuilder* out,
                                            Status executePlanStatus,
                                            const PreExecutionStats& plannerStats) {
@@ -751,7 +750,8 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
     // Generate exec stats BSON for the winning plan.
     OperationContext* opCtx = exec->getOpCtx();
     long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
-    generateExecStatsForRun(winningExecStats, verbosity, &execBob, totalTimeMillis);
+    const auto winningExecStats = getWinningPlanStatsTree(exec);
+    generateExecStatsForRun(winningExecStats.get(), verbosity, &execBob, totalTimeMillis);
 
     // Also generate exec stats for all plans, if the verbosity level is high enough.
     // These stats reflect what happened during the trial period that ranked the plans.
@@ -795,16 +795,18 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec->getCanonicalQuery(),
+        generatePlannerInfo(exec,
                             collection,
-                            winningStats.get(),
                             allStats.rejectedPlansStats,
                             out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsForAllPlans(
-            exec->getOpCtx(), verbosity, winningStats.get(), out, executePlanStatus, allStats);
+        generateExecStatsForAllPlans(exec,
+                                     verbosity,
+                                     out,
+                                     executePlanStatus,
+                                     allStats);
     }
 
     generateServerInfo(out);

@@ -68,7 +68,7 @@ DocumentSource::GetNextResult DocumentSourceCursor::getNext() {
 }
 
 void DocumentSourceCursor::loadBatch() {
-    if (!_exec) {
+    if (!_exec || _exec->isDisposed()) {
         // No more documents.
         dispose();
         return;
@@ -195,21 +195,18 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!verbosity)
         return Value();
 
-    if (!_canonicalQuery || !_winningStats) {
-        // We haven't saved the fields we need from exec yet.
-        saveExecFieldsForExplain();
-    }
+
     // Need this lock since we may try to access the collection's info cache
     // when generating planner info.
-    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _canonicalQuery->nss());
+    // TODO: Fix this per dave's comment
+    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
     Value ret = generateExplainOutput(verbosity.get(), autoColl.getCollection());
     return ret;
 }
 
 Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verbosity,
                                                   Collection* collection) const {
-    invariant(_winningStats);
-    invariant(_canonicalQuery);
+    invariant(_exec);
 
     BSONObjBuilder builder;
     builder.append("query", _query);
@@ -224,16 +221,18 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
         builder.append("fields", _projection);
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(_canonicalQuery.get(),
+        Explain::generatePlannerInfo(_exec.get(),
                                      collection,
-                                     _winningStats.get(),
                                      _allStats.rejectedPlansStats,
                                      &builder);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        Explain::generateExecStatsForAllPlans(
-            pExpCtx->opCtx, verbosity, _winningStats.get(), &builder, _execStatus, _allStats);
+        Explain::generateExecStatsForAllPlans(_exec.get(),
+                                              verbosity,
+                                              &builder,
+                                              _execStatus,
+                                              _allStats);
     }
 
     return Value(DOC(getSourceName() << builder.obj()));
@@ -253,7 +252,7 @@ void DocumentSourceCursor::reattachToOperationContext(OperationContext* opCtx) {
 
 void DocumentSourceCursor::doDispose() {
     _currentBatch.clear();
-    if (!_exec) {
+    if (!_exec || _exec->isDisposed()) {
         // We've already properly disposed of our PlanExecutor.
         return;
     }
@@ -273,48 +272,35 @@ void DocumentSourceCursor::cleanupExecutor() {
     AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
     Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
     auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
-
-    if (pExpCtx->explain) {
-        // Before we destroy the executor, save copies of the fields we need for explain.
-        saveExecFieldsForExplain();
-    }
-
     auto cursorManager = collection ? collection->getCursorManager() : nullptr;
     _exec->dispose(opCtx, cursorManager);
-    _exec.reset();
+
+    // Not freeing _exec if we're in explain mode since it will be used in serialize().
+    if (!pExpCtx->explain) {
+        _exec.reset();
+    }
 }
 
 void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readLock) {
     invariant(_exec);
-
-    if (pExpCtx->explain) {
-        // Before we destroy the executor, save copies of the fields we need for explain.
-        saveExecFieldsForExplain();
-    }
-
     auto cursorManager =
         readLock.getCollection() ? readLock.getCollection()->getCursorManager() : nullptr;
     _exec->dispose(pExpCtx->opCtx, cursorManager);
-    _exec.reset();
-}
 
-void DocumentSourceCursor::saveExecFieldsForExplain() const {
-    // Save a copy of exec's CanonicalQuery before we destroy it.
-    const auto cq = _exec->getCanonicalQuery();
-    auto statusWithCQ = CanonicalQuery::canonicalize(pExpCtx->opCtx, *cq, cq->root());
-
-    // This should always succeed since we're re-canonicalizing the root itself (which has
-    // already been canonicalized).
-    invariant(statusWithCQ.isOK());
-
-    _canonicalQuery = std::move(statusWithCQ.getValue());
-
-    // Save a copy of the winning plan's execution stats.
-    _winningStats = Explain::getWinningPlanStatsTree(_exec.get());
+    // Not freeing _exec if we're in explain mode since it will be used in serialize().
+    if (!pExpCtx->explain) {
+        _exec.reset();
+    }
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
-    invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
+    if (pExpCtx->explain) {
+        invariant(_exec->isDisposed()); // _exec should have at least been disposed.
+
+        // _exec's destructor will destroy the underlying PlanExecutor.
+    } else {
+        invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
+    }
 }
 
 DocumentSourceCursor::DocumentSourceCursor(

@@ -188,11 +188,6 @@ private:
 
     Value generateExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
 
-    /**
-     * Save info from _exec that we will need for explain() before destroying _exec.
-     */
-    void saveExecFieldsForExplain() const;
-
 
     std::deque<Document> _currentBatch;
 
@@ -219,12 +214,6 @@ private:
     PlanSummaryStats _planSummaryStats;
 
     Explain::PreExecutionStats _allStats;
-
-    // Fields from _exec which we save for explain before _exec is destroyed.
-    // Mutable because this may be called from saveExecFieldsForExplain which may be called
-    // from serialize.
-    mutable std::unique_ptr<CanonicalQuery> _canonicalQuery;
-    mutable std::unique_ptr<PlanStageStats> _winningStats;
 };
 
 }  // namespace mongo

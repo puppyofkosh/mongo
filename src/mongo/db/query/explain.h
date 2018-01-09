@@ -138,7 +138,6 @@ public:
 
     static void generateExecStatsForAllPlans(PlanExecutor* exec,
                                              ExplainOptions::Verbosity verbosity,
-                                             const PlanStageStats* winningExecStats,
                                              BSONObjBuilder* out,
                                              Status executePlanStatus,
                                              const PreExecutionStats& plannerStats);
@@ -157,7 +156,6 @@ public:
     static void generatePlannerInfo(
         PlanExecutor* exec,
         const Collection* collection,
-        PlanStageStats* winnerStats,
         const std::vector<std::unique_ptr<PlanStageStats>>& rejectedStats,
         BSONObjBuilder* out);
 
