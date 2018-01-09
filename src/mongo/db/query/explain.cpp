@@ -813,39 +813,43 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
 }
 
 // static
+void Explain::explainPipelineExecutor(PlanExecutor* exec,
+                                      ExplainOptions::Verbosity verbosity,
+                                      BSONObjBuilder* out) {
+    PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
+    invariant(pps);
+
+    // If we need execution stats, this runs the plan in order to gather the stats.
+    if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
+        // Discards the status, as it will be checked in the underlying DocumentSources.
+        exec->executePlan();
+    }
+
+    *out << "stages" << Value(pps->writeExplainOps(verbosity));
+}
+
+// static
 void Explain::explainStages(PlanExecutor* exec,
                             const Collection* collection,
                             ExplainOptions::Verbosity verbosity,
                             BSONObjBuilder* out) {
-    PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
+    Explain::PreExecutionStats preExecStats = collectPreExecutionStats(exec, verbosity);
 
-    boost::optional<Explain::PreExecutionStats> preExecStats = boost::none;
-    if (pps) {
-        // Don't collect pre execution stats here, since it has been done in the
-        // DocumentSourceCursor's constructor.
-    } else {
-        preExecStats = collectPreExecutionStats(exec, verbosity);
-    }
+    // TODO: this could be an optional
+    auto executePlanStatus = Status::OK();
 
     // If we need execution stats, then run the plan in order to gather the stats.
-    Status executePlanStatus = Status::OK();
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
         executePlanStatus = exec->executePlan();
+
+        // If executing the query failed because it was killed, then the collection may no longer be
+        // valid. We indicate this by setting our collection pointer to null.
+        if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
+            collection = nullptr;
+        }
     }
 
-    // If executing the query failed because it was killed, then the collection may no longer be
-    // valid. We indicate this by setting our collection pointer to null.
-    if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
-        collection = nullptr;
-    }
-
-    if (pps) {
-        *out << "stages" << Value(pps->writeExplainOps(verbosity));
-    } else {
-        invariant(preExecStats);
-        explainStagesPostExec(
-            exec, collection, verbosity, out, executePlanStatus, preExecStats.get());
-    }
+    explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, preExecStats);
 }
 
 // static

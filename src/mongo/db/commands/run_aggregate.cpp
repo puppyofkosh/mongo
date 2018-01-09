@@ -535,8 +535,8 @@ Status runAggregate(OperationContext* opCtx,
 
     // If both explain and cursor are specified, explain wins.
     if (expCtx->explain) {
-        Explain::explainStages(
-            pin.getCursor()->getExecutor(), nullptr, *(expCtx->explain), &result);
+        Explain::explainPipelineExecutor(
+            pin.getCursor()->getExecutor(), *(expCtx->explain), &result);
     } else {
         // Cursor must be specified, if explain is not.
         const bool keepCursor =
