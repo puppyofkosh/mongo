@@ -450,6 +450,10 @@ public:
         return *_killReason;
     }
 
+    bool isDisposed() const {
+        return _currentState == kDisposed;
+    }
+
     /**
      * If the last oplog timestamp is being tracked for this PlanExecutor, return it.
      * Otherwise return a null timestamp.
