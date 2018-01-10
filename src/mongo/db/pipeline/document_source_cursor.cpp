@@ -195,12 +195,10 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!verbosity)
         return Value();
 
-
     // Need this lock since we may try to access the collection's info cache
     // when generating planner info.
-    // TODO: Fix this per dave's comment
-    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-    Value ret = generateExplainOutput(verbosity.get(), autoColl.getCollection());
+    auto collection = lockCollectionIfNotView(_exec->nss());
+    Value ret = generateExplainOutput(verbosity.get(), collection);
     return ret;
 }
 
@@ -256,18 +254,15 @@ void DocumentSourceCursor::doDispose() {
 void DocumentSourceCursor::cleanupExecutor() {
     invariant(_exec);
 
-    auto* opCtx = pExpCtx->opCtx;
     // We need to be careful to not use AutoGetCollection here, since we only need the lock to
     // protect potential access to the Collection's CursorManager, and AutoGetCollection may throw
     // if this namespace has since turned into a view. Using Database::getCollection() will simply
     // return nullptr if the collection has since turned into a view. In this case, '_exec' will
     // already have been marked as killed when the collection was dropped, and we won't need to
     // access the CursorManager to properly dispose of it.
-    AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
-    Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
-    auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
+    auto collection = lockCollectionIfNotView(_exec->nss());
     auto cursorManager = collection ? collection->getCursorManager() : nullptr;
-    _exec->dispose(opCtx, cursorManager);
+    _exec->dispose(pExpCtx->opCtx, cursorManager);
 
     // Not freeing _exec if we're in explain mode since it will be used in serialize().
     if (!pExpCtx->explain) {
@@ -285,6 +280,17 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
     if (!pExpCtx->explain) {
         _exec.reset();
     }
+}
+
+// TODO: Kind of a terrible name. I just don't want this code duplicated.
+Collection* DocumentSourceCursor::lockCollectionIfNotView(const NamespaceString& nss) const {
+    auto opCtx = pExpCtx->opCtx;
+    AutoGetDb dbLock(opCtx, nss.db(), MODE_IS);
+    Lock::CollectionLock collLock(opCtx->lockState(), nss.ns(), MODE_IS);
+    if (dbLock.getDb()) {
+        return dbLock.getDb()->getCollection(opCtx, nss);
+    }
+    return nullptr;
 }
 
 DocumentSourceCursor::~DocumentSourceCursor() {
