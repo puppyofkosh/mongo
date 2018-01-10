@@ -125,7 +125,6 @@ void DocumentSourceCursor::loadBatch() {
             }
         }
 
-
         // If we got here, there won't be any more documents, so destroy our PlanExecutor. Note we
         // must hold a collection lock to destroy '_exec', but we can only assume that our locks are
         // still held if '_exec' did not end in an error. If '_exec' encountered an error during a
