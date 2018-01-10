@@ -665,8 +665,8 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
 // static
 void Explain::generateExecStatsForRun(const PlanStageStats* stats,
                                       ExplainOptions::Verbosity verbosity,
-                                      BSONObjBuilder* out,
-                                      boost::optional<long long> totalTimeMillis) {
+                                      boost::optional<long long> totalTimeMillis,
+                                      BSONObjBuilder* out) {
     out->appendNumber("nReturned", stats->common.advanced);
 
     // Time elapsed could might be either precise or approximate.
@@ -745,11 +745,12 @@ std::vector<std::unique_ptr<PlanStageStats>> Explain::getRejectedPlansTrialStats
     return res;
 }
 
-void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
-                                           ExplainOptions::Verbosity verbosity,
-                                           BSONObjBuilder* out,
-                                           Status executePlanStatus,
-                                           PlanStageStats* winningPlanTrialStats) {
+// static
+void Explain::generateExecStatsSubobj(PlanExecutor* exec,
+                                      ExplainOptions::Verbosity verbosity,
+                                      Status executePlanStatus,
+                                      PlanStageStats* winningPlanTrialStats,
+                                      BSONObjBuilder* out) {
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
@@ -764,7 +765,7 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
     OperationContext* opCtx = exec->getOpCtx();
     long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
     const auto winningExecStats = getWinningPlanStatsTree(exec);
-    generateExecStatsForRun(winningExecStats.get(), verbosity, &execBob, totalTimeMillis);
+    generateExecStatsForRun(winningExecStats.get(), verbosity, totalTimeMillis, &execBob);
 
     // Also generate exec stats for all plans, if the verbosity level is high enough.
     // These stats reflect what happened during the trial period that ranked the plans.
@@ -779,12 +780,12 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
         const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
         for (size_t i = 0; i < rejectedStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(rejectedStats[i].get(), verbosity, &planBob, boost::none);
+            generateExecStatsForRun(rejectedStats[i].get(), verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
         if (winningPlanTrialStats) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(winningPlanTrialStats, verbosity, &planBob, boost::none);
+            generateExecStatsForRun(winningPlanTrialStats, verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
 
@@ -797,10 +798,10 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
 void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     const Collection* collection,
                                     ExplainOptions::Verbosity verbosity,
-                                    BSONObjBuilder* out,
                                     // TODO: make this an optional
                                     Status executePlanStatus,
-                                    PlanStageStats* winningPlanTrialStats) {
+                                    PlanStageStats* winningPlanTrialStats,
+                                    BSONObjBuilder* out) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
 
     //
@@ -812,8 +813,7 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsForAllPlans(
-            exec, verbosity, out, executePlanStatus, winningPlanTrialStats);
+        generateExecStatsSubobj(exec, verbosity, executePlanStatus, winningPlanTrialStats, out);
     }
 
     generateServerInfo(out);
@@ -857,7 +857,7 @@ void Explain::explainStages(PlanExecutor* exec,
     }
 
     explainStagesPostExec(
-        exec, collection, verbosity, out, executePlanStatus, winningPlanTrialStats.get());
+        exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
 }
 
 // static

@@ -140,13 +140,19 @@ public:
      */
     static void getSummaryStats(const PlanExecutor& exec, PlanSummaryStats* statsOut);
 
+    /**
+     * TODO: Add comment
+     **/
     static std::unique_ptr<PlanStageStats> getWinningPlanTrialStats(PlanExecutor* exec);
 
-    static void generateExecStatsForAllPlans(PlanExecutor* exec,
-                                             ExplainOptions::Verbosity verbosity,
-                                             BSONObjBuilder* out,
-                                             Status executePlanStatus,
-                                             PlanStageStats* winningPlanTrialStats);
+    /**
+     * TODO: Add comment
+     **/
+    static void generateExecStatsSubobj(PlanExecutor* exec,
+                                        ExplainOptions::Verbosity verbosity,
+                                        Status executePlanStatus,
+                                        PlanStageStats* winningPlanTrialStats,
+                                        BSONObjBuilder* out);
 
     /**
      * Adds the 'queryPlanner' explain section to the BSON object being built
@@ -172,9 +178,9 @@ private:
     static void explainStagesPostExec(PlanExecutor* exec,
                                       const Collection* collection,
                                       ExplainOptions::Verbosity verbosity,
-                                      BSONObjBuilder* out,
                                       Status executePlanStatus,
-                                      PlanStageStats* winningPlanTrialStats);
+                                      PlanStageStats* winningPlanTrialStats,
+                                      BSONObjBuilder* out);
 
     /**
      * Private helper that does the heavy-lifting for the public statsToBSON(...) functions
@@ -202,8 +208,8 @@ private:
      */
     static void generateExecStatsForRun(const PlanStageStats* stats,
                                         ExplainOptions::Verbosity verbosity,
-                                        BSONObjBuilder* out,
-                                        boost::optional<long long> totalTimeMillis);
+                                        boost::optional<long long> totalTimeMillis,
+                                        BSONObjBuilder* out);
 
     /**
      * Adds the 'serverInfo' explain section to the BSON object being build
