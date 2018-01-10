@@ -217,14 +217,8 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
     if (!_projection.isEmpty())
         builder.append("fields", _projection);
 
-    if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(_exec.get(), collection, &builder);
-    }
-
-    if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        Explain::generateExecStatsSubobj(
-            _exec.get(), verbosity, _execStatus, _winningPlanTrialStats.get(), &builder);
-    }
+    Explain::explainStagesPostExec(_exec.get(), collection, verbosity, _execStatus,
+                                   _winningPlanTrialStats.get(), &builder);
 
     return Value(DOC(getSourceName() << builder.obj()));
 }
