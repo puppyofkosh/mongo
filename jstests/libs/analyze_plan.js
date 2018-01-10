@@ -173,13 +173,12 @@ function getAggPlanStage(root, stage) {
  * subdocuments of $cursor. Asserts that agg explain structure matches expected format.
  */
 function getAggPipelineCursorStage(root) {
-    // ian TODO look at this
     let results = [];
 
     if (root.hasOwnProperty("stages")) {
         assert(root.stages.constructor === Array, tojson(root));
         assert(root.stages[0].hasOwnProperty("$cursor"), tojson(root));
-        results = results.concat(root.stages[0].$cursor);
+        results.push(root.stages[0].$cursor);
     }
 
     if (root.hasOwnProperty("shards")) {
