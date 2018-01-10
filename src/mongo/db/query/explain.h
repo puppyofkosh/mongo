@@ -140,14 +140,13 @@ public:
      */
     static void getSummaryStats(const PlanExecutor& exec, PlanSummaryStats* statsOut);
 
-    static PreExecutionStats collectPreExecutionStats(PlanExecutor* exec,
-                                                      ExplainOptions::Verbosity verbosity);
+    static std::unique_ptr<PlanStageStats> getWinningPlanTrialStats(PlanExecutor* exec);
 
     static void generateExecStatsForAllPlans(PlanExecutor* exec,
                                              ExplainOptions::Verbosity verbosity,
                                              BSONObjBuilder* out,
                                              Status executePlanStatus,
-                                             const PreExecutionStats& plannerStats);
+                                             PlanStageStats* winningPlanTrialStats);
 
     /**
      * Adds the 'queryPlanner' explain section to the BSON object being built
@@ -160,13 +159,13 @@ public:
      * @param winnerStats -- the stats tree for the winning plan.
      * @param rejectedStats -- an array of stats trees, one per rejected plan
      */
-    static void generatePlannerInfo(
-        PlanExecutor* exec,
-        const Collection* collection,
-        const std::vector<std::unique_ptr<PlanStageStats>>& rejectedStats,
-        BSONObjBuilder* out);
+    static void generatePlannerInfo(PlanExecutor* exec,
+                                    const Collection* collection,
+                                    BSONObjBuilder* out);
 
 private:
+    static std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(
+        PlanExecutor* exec);
     /**
      * TODO: add comment (or remove this function)
      **/
@@ -175,7 +174,7 @@ private:
                                       ExplainOptions::Verbosity verbosity,
                                       BSONObjBuilder* out,
                                       Status executePlanStatus,
-                                      const PreExecutionStats& allStats);
+                                      PlanStageStats* winningPlanTrialStats);
 
     /**
      * Private helper that does the heavy-lifting for the public statsToBSON(...) functions

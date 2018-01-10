@@ -221,18 +221,12 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
         builder.append("fields", _projection);
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        Explain::generatePlannerInfo(_exec.get(),
-                                     collection,
-                                     _allStats.rejectedPlansStats,
-                                     &builder);
+        Explain::generatePlannerInfo(_exec.get(), collection, &builder);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        Explain::generateExecStatsForAllPlans(_exec.get(),
-                                              verbosity,
-                                              &builder,
-                                              _execStatus,
-                                              _allStats);
+        Explain::generateExecStatsForAllPlans(
+            _exec.get(), verbosity, &builder, _execStatus, _winningPlanTrialStats.get());
     }
 
     return Value(DOC(getSourceName() << builder.obj()));
@@ -295,7 +289,7 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
 
 DocumentSourceCursor::~DocumentSourceCursor() {
     if (pExpCtx->explain) {
-        invariant(_exec->isDisposed()); // _exec should have at least been disposed.
+        invariant(_exec->isDisposed());  // _exec should have at least been disposed.
 
         // _exec's destructor will destroy the underlying PlanExecutor.
     } else {
@@ -318,7 +312,7 @@ DocumentSourceCursor::DocumentSourceCursor(
     if (pExpCtx->explain) {
         // It's safe to access the executor even if we don't have the collection lock since we're
         // just going to call getStats() on it.
-        _allStats = Explain::collectPreExecutionStats(_exec.get(), pExpCtx->explain.get());
+        _winningPlanTrialStats = Explain::getWinningPlanTrialStats(_exec.get());
     }
 
     if (collection) {

@@ -609,7 +609,6 @@ void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob)
 // static
 void Explain::generatePlannerInfo(PlanExecutor* exec,
                                   const Collection* collection,
-                                  const vector<unique_ptr<PlanStageStats>>& rejectedStats,
                                   BSONObjBuilder* out) {
     CanonicalQuery* query = exec->getCanonicalQuery();
 
@@ -652,6 +651,7 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
     winningPlanBob.doneFast();
 
     // Genenerate array of rejected plans.
+    const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
     BSONArrayBuilder allPlansBob(plannerBob.subarrayStart("rejectedPlans"));
     for (size_t i = 0; i < rejectedStats.size(); i++) {
         BSONObjBuilder childBob(allPlansBob.subobjStart());
@@ -711,32 +711,45 @@ void Explain::generateServerInfo(BSONObjBuilder* out) {
     serverBob.doneFast();
 }
 
-Explain::PreExecutionStats Explain::collectPreExecutionStats(PlanExecutor* exec,
-                                                             ExplainOptions::Verbosity verbosity) {
+std::unique_ptr<PlanStageStats> Explain::getWinningPlanTrialStats(PlanExecutor* exec) {
     // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
     // this point, since we have a PlanExecutor.
     const auto mps = getMultiPlanStage(exec->getRootStage());
     PreExecutionStats allStats;
 
+    if (mps) {
+        const auto mpsStats = mps->getStats();
+        return std::move(mpsStats->children[mps->bestPlanIdx()]);
+    }
+
+    return nullptr;
+}
+
+std::vector<std::unique_ptr<PlanStageStats>> Explain::getRejectedPlansTrialStats(
+    PlanExecutor* exec) {
+    // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
+    // this point, since we have a PlanExecutor.
+    const auto mps = getMultiPlanStage(exec->getRootStage());
+    std::vector<std::unique_ptr<PlanStageStats>> res;
+
     // Get the stats from the trial period for all the plans.
     if (mps) {
         const auto mpsStats = mps->getStats();
-        allStats.winningPlanTrialStats = std::move(mpsStats->children[mps->bestPlanIdx()]);
-
         for (size_t i = 0; i < mpsStats->children.size(); ++i) {
             if (i != static_cast<size_t>(mps->bestPlanIdx())) {
-                allStats.rejectedPlansStats.emplace_back(std::move(mpsStats->children[i]));
+                res.emplace_back(std::move(mpsStats->children[i]));
             }
         }
     }
-    return allStats;
+
+    return res;
 }
 
 void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
                                            ExplainOptions::Verbosity verbosity,
                                            BSONObjBuilder* out,
                                            Status executePlanStatus,
-                                           const PreExecutionStats& plannerStats) {
+                                           PlanStageStats* winningPlanTrialStats) {
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
@@ -762,16 +775,16 @@ void Explain::generateExecStatsForAllPlans(PlanExecutor* exec,
         // all rejected plans' stats collected during the trial period.
 
         BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
-        for (size_t i = 0; i < plannerStats.rejectedPlansStats.size(); ++i) {
+
+        const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
+        for (size_t i = 0; i < rejectedStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(
-                plannerStats.rejectedPlansStats[i].get(), verbosity, &planBob, boost::none);
+            generateExecStatsForRun(rejectedStats[i].get(), verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
-        if (plannerStats.winningPlanTrialStats.get()) {
+        if (winningPlanTrialStats) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(
-                plannerStats.winningPlanTrialStats.get(), verbosity, &planBob, boost::none);
+            generateExecStatsForRun(winningPlanTrialStats, verbosity, &planBob, boost::none);
             planBob.doneFast();
         }
 
@@ -787,7 +800,7 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     BSONObjBuilder* out,
                                     // TODO: make this an optional
                                     Status executePlanStatus,
-                                    const PreExecutionStats& allStats) {
+                                    PlanStageStats* winningPlanTrialStats) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
 
     //
@@ -795,18 +808,12 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     //
 
     if (verbosity >= ExplainOptions::Verbosity::kQueryPlanner) {
-        generatePlannerInfo(exec,
-                            collection,
-                            allStats.rejectedPlansStats,
-                            out);
+        generatePlannerInfo(exec, collection, out);
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsForAllPlans(exec,
-                                     verbosity,
-                                     out,
-                                     executePlanStatus,
-                                     allStats);
+        generateExecStatsForAllPlans(
+            exec, verbosity, out, executePlanStatus, winningPlanTrialStats);
     }
 
     generateServerInfo(out);
@@ -833,7 +840,7 @@ void Explain::explainStages(PlanExecutor* exec,
                             const Collection* collection,
                             ExplainOptions::Verbosity verbosity,
                             BSONObjBuilder* out) {
-    Explain::PreExecutionStats preExecStats = collectPreExecutionStats(exec, verbosity);
+    std::unique_ptr<PlanStageStats> winningPlanTrialStats = Explain::getWinningPlanTrialStats(exec);
 
     // TODO: this could be an optional
     auto executePlanStatus = Status::OK();
@@ -849,7 +856,8 @@ void Explain::explainStages(PlanExecutor* exec,
         }
     }
 
-    explainStagesPostExec(exec, collection, verbosity, out, executePlanStatus, preExecStats);
+    explainStagesPostExec(
+        exec, collection, verbosity, out, executePlanStatus, winningPlanTrialStats.get());
 }
 
 // static
