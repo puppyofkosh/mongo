@@ -715,7 +715,6 @@ std::unique_ptr<PlanStageStats> Explain::getWinningPlanTrialStats(PlanExecutor* 
     // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
     // this point, since we have a PlanExecutor.
     const auto mps = getMultiPlanStage(exec->getRootStage());
-    PreExecutionStats allStats;
 
     if (mps) {
         const auto mpsStats = mps->getStats();
