@@ -47,12 +47,6 @@ struct PlanSummaryStats;
  */
 class Explain {
 public:
-    struct PreExecutionStats {
-        // TODO: Rename some of this
-        std::unique_ptr<PlanStageStats> winningPlanTrialStats;
-        std::vector<std::unique_ptr<PlanStageStats>> rejectedPlansStats;
-    };
-
     /**
      * Get explain BSON for the execution stages contained by 'exec'. Use this function if you
      * have a PlanExecutor and want to convert it into a human readable explain format. Any
