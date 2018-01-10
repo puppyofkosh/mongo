@@ -797,8 +797,7 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
 void Explain::explainStagesPostExec(PlanExecutor* exec,
                                     const Collection* collection,
                                     ExplainOptions::Verbosity verbosity,
-                                    // TODO: make this an optional
-                                    Status executePlanStatus,
+                                    boost::optional<Status> executePlanStatus,
                                     PlanStageStats* winningPlanTrialStats,
                                     BSONObjBuilder* out) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
@@ -812,7 +811,8 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        generateExecStatsSubobj(exec, verbosity, executePlanStatus, winningPlanTrialStats, out);
+        invariant(executePlanStatus);
+        generateExecStatsSubobj(exec, verbosity, *executePlanStatus, winningPlanTrialStats, out);
     }
 }
 
@@ -847,22 +847,23 @@ void Explain::explainStages(PlanExecutor* exec,
                             BSONObjBuilder* out) {
     std::unique_ptr<PlanStageStats> winningPlanTrialStats = Explain::getWinningPlanTrialStats(exec);
 
-    // TODO: this could be an optional
-    auto executePlanStatus = Status::OK();
+    boost::optional<Status> executePlanStatusOpt;
 
     // If we need execution stats, then run the plan in order to gather the stats.
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        executePlanStatus = exec->executePlan();
+        auto executePlanStatus = exec->executePlan();
 
         // If executing the query failed because it was killed, then the collection may no longer be
         // valid. We indicate this by setting our collection pointer to null.
         if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
             collection = nullptr;
         }
+
+        executePlanStatusOpt = executePlanStatus;
     }
 
     explainStagesPostExec(
-        exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
+        exec, collection, verbosity, executePlanStatusOpt, winningPlanTrialStats.get(), out);
 
     generateServerInfo(out);
 }

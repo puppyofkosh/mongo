@@ -72,7 +72,7 @@ public:
     static void explainStagesPostExec(PlanExecutor* exec,
                                       const Collection* collection,
                                       ExplainOptions::Verbosity verbosity,
-                                      Status executePlanStatus,
+                                      boost::optional<Status> executePlanStatus,
                                       PlanStageStats* winningPlanTrialStats,
                                       BSONObjBuilder* out);
 
