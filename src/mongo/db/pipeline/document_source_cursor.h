@@ -187,8 +187,6 @@ private:
 
     Value generateExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
 
-    Collection* lockCollectionIfNotView(const NamespaceString& nss) const;
-
     std::deque<Document> _currentBatch;
 
     // BSONObj members must outlive _projection and cursor.
