@@ -213,7 +213,7 @@ private:
     std::string _planSummary;
     PlanSummaryStats _planSummaryStats;
 
-    Explain::PreExecutionStats _allStats;
+    std::unique_ptr<PlanStageStats> _winningPlanTrialStats;
 };
 
 }  // namespace mongo
