@@ -815,8 +815,6 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
         generateExecStatsSubobj(exec, verbosity, executePlanStatus, winningPlanTrialStats, out);
     }
-
-    generateServerInfo(out);
 }
 
 // static
@@ -858,6 +856,8 @@ void Explain::explainStages(PlanExecutor* exec,
 
     explainStagesPostExec(
         exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
+
+    generateServerInfo(out);
 }
 
 // static

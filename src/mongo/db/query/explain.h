@@ -72,6 +72,15 @@ public:
                               const Collection* collection,
                               ExplainOptions::Verbosity verbosity,
                               BSONObjBuilder* out);
+    /**
+     * TODO: add comment (or remove this function)
+     **/
+    static void explainStagesPostExec(PlanExecutor* exec,
+                                      const Collection* collection,
+                                      ExplainOptions::Verbosity verbosity,
+                                      Status executePlanStatus,
+                                      PlanStageStats* winningPlanTrialStats,
+                                      BSONObjBuilder* out);
 
     /**
      * TODO add a comment
@@ -172,15 +181,6 @@ public:
 private:
     static std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(
         PlanExecutor* exec);
-    /**
-     * TODO: add comment (or remove this function)
-     **/
-    static void explainStagesPostExec(PlanExecutor* exec,
-                                      const Collection* collection,
-                                      ExplainOptions::Verbosity verbosity,
-                                      Status executePlanStatus,
-                                      PlanStageStats* winningPlanTrialStats,
-                                      BSONObjBuilder* out);
 
     /**
      * Private helper that does the heavy-lifting for the public statsToBSON(...) functions
