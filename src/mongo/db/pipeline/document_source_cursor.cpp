@@ -197,9 +197,11 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 
     // Need this lock since we may try to access the collection's info cache
     // when generating planner info.
-    // TODO: Fix this per dave's comment
-    AutoGetCollectionForRead autoColl(pExpCtx->opCtx, _exec->nss());
-    Value ret = generateExplainOutput(verbosity.get(), autoColl.getCollection());
+    auto opCtx = pExpCtx->opCtx;
+    AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
+    Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
+    auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
+    Value ret = generateExplainOutput(verbosity.get(), collection);
     return ret;
 }
 
