@@ -820,13 +820,21 @@ void Explain::explainStagesPostExec(PlanExecutor* exec,
 void Explain::explainPipelineExecutor(PlanExecutor* exec,
                                       ExplainOptions::Verbosity verbosity,
                                       BSONObjBuilder* out) {
+    invariant(out);
+
     PipelineProxyStage* pps = getPipelineProxyStage(exec->getRootStage());
-    invariant(pps);
+    invariant(pps, "Expected exec's root stage to be a PipelineProxyStage");
 
     // If we need execution stats, this runs the plan in order to gather the stats.
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        // Discards the status, as it will be checked in the underlying DocumentSources.
-        exec->executePlan();
+        auto executePlanStatus = exec->executePlan();
+
+        // TODO: maybe call "outerExecutionSuccess"??
+        out->append("executionSuccess", executePlanStatus.isOK());
+        if (!executePlanStatus.isOK()) {
+            out->append("errorMessage", executePlanStatus.reason());
+            out->append("errorCode", executePlanStatus.code());
+        }
     }
 
     *out << "stages" << Value(pps->writeExplainOps(verbosity));
