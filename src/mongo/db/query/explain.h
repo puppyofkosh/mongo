@@ -154,6 +154,10 @@ public:
      **/
     static std::unique_ptr<PlanStageStats> getWinningPlanTrialStats(PlanExecutor* exec);
 
+private:
+    static std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(
+        PlanExecutor* exec);
+
     /**
      * TODO: Add comment
      **/
@@ -177,10 +181,6 @@ public:
     static void generatePlannerInfo(PlanExecutor* exec,
                                     const Collection* collection,
                                     BSONObjBuilder* out);
-
-private:
-    static std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(
-        PlanExecutor* exec);
 
     /**
      * Private helper that does the heavy-lifting for the public statsToBSON(...) functions
