@@ -38,7 +38,6 @@
 #include "mongo/db/query/plan_executor.h"
 #include "mongo/db/query/plan_summary_stats.h"
 
-
 namespace mongo {
 
 /**
@@ -189,7 +188,6 @@ private:
     Value generateExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
 
     Collection* lockCollectionIfNotView(const NamespaceString& nss) const;
-
 
     std::deque<Document> _currentBatch;
 
