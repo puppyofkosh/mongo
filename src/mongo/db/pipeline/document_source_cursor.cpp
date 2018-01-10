@@ -70,7 +70,6 @@ DocumentSource::GetNextResult DocumentSourceCursor::getNext() {
 void DocumentSourceCursor::loadBatch() {
     if (!_exec || _exec->isDisposed()) {
         // No more documents.
-        dispose();
         return;
     }
 
