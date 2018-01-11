@@ -25,18 +25,20 @@
             } else {
                 // if it's "executionStats" or "allPlansExecution".
                 if (multiPlanner) {
-                    assert.lte(result.executionStats.nReturned, MULTIPLANNER_LIMIT,
+                    assert.lte(result.executionStats.nReturned,
+                               MULTIPLANNER_LIMIT,
                                tojson(results));
-                    assert.lte(result.executionStats.totalKeysExamined, MULTIPLANNER_LIMIT,
+                    assert.lte(result.executionStats.totalKeysExamined,
+                               MULTIPLANNER_LIMIT,
                                tojson(results));
-                    assert.lte(result.executionStats.totalDocsExamined, MULTIPLANNER_LIMIT,
+                    assert.lte(result.executionStats.totalDocsExamined,
+                               MULTIPLANNER_LIMIT,
                                tojson(results));
                 } else {
                     assert.eq(result.executionStats.nReturned, LIMIT, tojson(results));
                     assert.eq(result.executionStats.totalKeysExamined, LIMIT, tojson(results));
                     assert.eq(result.executionStats.totalDocsExamined, LIMIT, tojson(results));
                 }
-
             }
         }
     }

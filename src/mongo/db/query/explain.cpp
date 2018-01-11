@@ -868,7 +868,7 @@ void Explain::explainStages(PlanExecutor* exec,
         executePlanStatusOpt = executePlanStatus;
     }
 
-    explainStagesPostExec(
+    addPlanExecStats(
         exec, collection, verbosity, executePlanStatusOpt, winningPlanTrialStats.get(), out);
 
     generateServerInfo(out);
