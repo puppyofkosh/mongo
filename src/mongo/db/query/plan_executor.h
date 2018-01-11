@@ -269,7 +269,7 @@ public:
      * Generates a tree of stats objects with a separate lifetime from the execution
      * stage tree wrapped by this PlanExecutor.
      *
-     * This is OK even if we were killed. The caller is not required to hold the collection lock.
+     * This is OK even if we don't hold the collection lock or were killed.
      */
     std::unique_ptr<PlanStageStats> getStats() const;
 

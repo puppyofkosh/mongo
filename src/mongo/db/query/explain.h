@@ -69,8 +69,8 @@ public:
     /**
      * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to out.
      *
-     * collection may be null.
-     * winningPlanTrialStats may be null.
+     * collection may be nullptr.
+     * winningPlanTrialStats may be nullptr.
      * executePlanStatus may be boost::none if verbosity < kExecStats.
      **/
     static void addPlanExecStats(PlanExecutor* exec,
@@ -172,7 +172,12 @@ private:
         PlanExecutor* exec);
 
     /**
-     * TODO: Add comment
+     * Adds the "executionStats" field to out. Assumes PlanExecutor::executePlan() has been called
+     * and that verbosity >= kExecStats.
+     *
+     * If verbosity >= kExecAllPlans, it will include the "allPlansExecution" array.
+     *
+     * winningPlanTrialStats may be nullptr.
      **/
     static void generateExecStatsSubobj(PlanExecutor* exec,
                                         ExplainOptions::Verbosity verbosity,
