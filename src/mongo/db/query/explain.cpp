@@ -827,7 +827,13 @@ void Explain::explainPipelineExecutor(PlanExecutor* exec,
 
     // If we need execution stats, this runs the plan in order to gather the stats.
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        auto executePlanStatus = exec->executePlan();
+        Status executePlanStatus = Status::OK();
+
+        try {
+            executePlanStatus = exec->executePlan();
+        } catch (const DBException& e) {
+            executePlanStatus = e.toStatus();
+        }
 
         // TODO: maybe call "outerExecutionSuccess"??
         out->append("executionSuccess", executePlanStatus.isOK());
