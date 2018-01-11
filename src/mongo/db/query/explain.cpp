@@ -94,7 +94,7 @@ void flattenExecTree(const PlanStage* root, vector<const PlanStage*>* flattened)
 }
 
 /**
- * Get a pointer to the MultiPlanStage inside the stage tree rooted at 'root'.
+ * Gets a pointer to the MultiPlanStage inside the stage tree rooted at 'root'.
  * Returns nullptr if there is no MPS.
  */
 MultiPlanStage* getMultiPlanStage(PlanStage* root) {
@@ -115,7 +115,7 @@ MultiPlanStage* getMultiPlanStage(PlanStage* root) {
 }
 
 /**
- * Get a pointer to the PipelineProxyStage if it is the root of the tree.
+ * Gets a pointer to the PipelineProxyStage if it is the root of the tree.
  * Returns nullptr if there is no PPS that is root.
  */
 PipelineProxyStage* getPipelineProxyStage(PlanStage* root) {
