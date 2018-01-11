@@ -794,12 +794,12 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
     execBob.doneFast();
 }
 
-void Explain::explainStagesPostExec(PlanExecutor* exec,
-                                    const Collection* collection,
-                                    ExplainOptions::Verbosity verbosity,
-                                    boost::optional<Status> executePlanStatus,
-                                    PlanStageStats* winningPlanTrialStats,
-                                    BSONObjBuilder* out) {
+void Explain::addPlanExecStats(PlanExecutor* exec,
+                               const Collection* collection,
+                               ExplainOptions::Verbosity verbosity,
+                               boost::optional<Status> executePlanStatus,
+                               PlanStageStats* winningPlanTrialStats,
+                               BSONObjBuilder* out) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
 
     //

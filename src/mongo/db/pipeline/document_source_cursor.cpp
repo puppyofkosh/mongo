@@ -217,8 +217,8 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
     if (!_projection.isEmpty())
         builder.append("fields", _projection);
 
-    Explain::explainStagesPostExec(_exec.get(), collection, verbosity, _execStatus,
-                                   _winningPlanTrialStats.get(), &builder);
+    Explain::addPlanExecStats(_exec.get(), collection, verbosity, _execStatus,
+                              _winningPlanTrialStats.get(), &builder);
 
     return Value(DOC(getSourceName() << builder.obj()));
 }
