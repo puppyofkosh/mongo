@@ -12,6 +12,9 @@
     const LIMIT = 10;
 
     function checkResults(results, verbosity, multiPlanner) {
+        if (verbosity !== "queryPlanner") {
+            assert(results.executionSuccess);
+        }
         var cursorSubdocs = getAggPipelineCursorStage(results);
         for (let elem in cursorSubdocs) {
             let result = cursorSubdocs[elem];
