@@ -38,7 +38,6 @@
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/util/scopeguard.h"
 
-
 namespace mongo {
 
 using boost::intrusive_ptr;
@@ -217,8 +216,8 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
     if (!_projection.isEmpty())
         builder.append("fields", _projection);
 
-    Explain::addPlanExecStats(_exec.get(), collection, verbosity, _execStatus,
-                              _winningPlanTrialStats.get(), &builder);
+    Explain::addPlanExecStats(
+        _exec.get(), collection, verbosity, _execStatus, _winningPlanTrialStats.get(), &builder);
 
     return Value(DOC(getSourceName() << builder.obj()));
 }

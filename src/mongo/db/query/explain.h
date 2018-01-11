@@ -67,7 +67,11 @@ public:
                               ExplainOptions::Verbosity verbosity,
                               BSONObjBuilder* out);
     /**
-     * TODO: add comment (or remove this function)
+     * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to out.
+     *
+     * collection may be null.
+     * winningPlanTrialStats may be null.
+     * executePlanStatus may be boost::none if verbosity < kExecStats.
      **/
     static void addPlanExecStats(PlanExecutor* exec,
                                  const Collection* collection,
@@ -77,7 +81,19 @@ public:
                                  BSONObjBuilder* out);
 
     /**
-     * TODO add a comment
+     *
+     * Get explain BSON for the document sources contained by 'exec'. Use this function if you
+     * have a PlanExecutor whose root is a PipelineProxyStage and want to turn it into a human
+     * readable explain format.
+     *
+     * The explain information is generated with the level of detail specified by 'verbosity'.
+     *
+     * Does not take ownership of its arguments.
+     *
+     * If verbosity >= kExecStats, whether or not the execution was successful will be stored in
+     * "executionSuccess". If there is an error, the message will be stored in "errorMessage" and
+     * the code will be stored in "errorCode".
+     *
      **/
     static void explainPipelineExecutor(PlanExecutor* exec,
                                         ExplainOptions::Verbosity verbosity,
@@ -144,7 +160,10 @@ public:
     static void getSummaryStats(const PlanExecutor& exec, PlanSummaryStats* statsOut);
 
     /**
-     * TODO: Add comment
+     * If exec's root stage is a MultiPlanStage, returns the stats for the trial period of of the
+     * winning plan. Otherwise, returns nullptr.
+     *
+     * Must be called _before_ calling PlanExecutor::executePlan().
      **/
     static std::unique_ptr<PlanStageStats> getWinningPlanTrialStats(PlanExecutor* exec);
 
