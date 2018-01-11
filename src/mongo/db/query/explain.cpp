@@ -750,6 +750,7 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
                                       Status executePlanStatus,
                                       PlanStageStats* winningPlanTrialStats,
                                       BSONObjBuilder* out) {
+    invariant(verbosity >= kExecStats);
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
@@ -835,7 +836,6 @@ void Explain::explainPipelineExecutor(PlanExecutor* exec,
             executePlanStatus = e.toStatus();
         }
 
-        // TODO: maybe call "outerExecutionSuccess"??
         out->append("executionSuccess", executePlanStatus.isOK());
         if (!executePlanStatus.isOK()) {
             out->append("errorMessage", executePlanStatus.reason());
