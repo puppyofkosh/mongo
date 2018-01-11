@@ -69,12 +69,12 @@ public:
     /**
      * TODO: add comment (or remove this function)
      **/
-    static void explainStagesPostExec(PlanExecutor* exec,
-                                      const Collection* collection,
-                                      ExplainOptions::Verbosity verbosity,
-                                      boost::optional<Status> executePlanStatus,
-                                      PlanStageStats* winningPlanTrialStats,
-                                      BSONObjBuilder* out);
+    static void addPlanExecStats(PlanExecutor* exec,
+                                 const Collection* collection,
+                                 ExplainOptions::Verbosity verbosity,
+                                 boost::optional<Status> executePlanStatus,
+                                 PlanStageStats* winningPlanTrialStats,
+                                 BSONObjBuilder* out);
 
     /**
      * TODO add a comment
