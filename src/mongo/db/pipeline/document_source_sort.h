@@ -38,7 +38,7 @@ namespace mongo {
 
 class DocumentSourceSort final : public DocumentSource, public SplittableDocumentSource {
 public:
-    static const uint64_t kMaxMemoryUsageBytes = 100 * 1024 * 1024;
+    static const uint64_t kMaxMemoryUsageBytes = 1024 * 1024;
     static constexpr StringData kStageName = "$sort"_sd;
 
     enum class SortKeySerialization {

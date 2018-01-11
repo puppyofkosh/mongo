@@ -139,7 +139,6 @@ void DocumentSourceCursor::loadBatch() {
             // _execStatus is already OK by default, so not resetting it here.
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
-            // TODO: check if this is covered in any test.
             _execStatus =
                 Status(ErrorCodes::QueryPlanKilled,
                        str::stream() << "collection or index disappeared when cursor yielded: "
