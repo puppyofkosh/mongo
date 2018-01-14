@@ -682,7 +682,7 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* o
         return _batchRequestCbsCompleteEvent;
     }
 
-    invariant(_lifecycleState != kKillComplete);
+    invariant(_lifecycleState == kAlive);
     _lifecycleState = kKillStarted;
 
     // Make '_batchRequestCbsCompleteEvent', which we will signal as soon as all of our callbacks
