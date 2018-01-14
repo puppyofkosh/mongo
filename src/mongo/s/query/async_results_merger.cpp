@@ -676,7 +676,6 @@ void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx)
 executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* opCtx) {
     log() << "In kill()";
     stdx::unique_lock<stdx::mutex> lk(_mutex);
-    invariant(!_ianDestroyed);
 
     if (_batchRequestCbsCompleteEvent.isValid()) {
         invariant(_lifecycleState != kAlive);
@@ -705,7 +704,6 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* o
         _batchRequestCbsCompleteCv.wait(lk,
                                         [this, &lk] { return !_haveOutstandingBatchRequests(lk); });
 
-        _ianDestroyed = true;
         return executor::TaskExecutor::EventHandle();
     }
     fassertStatusOK(28716, statusWithEvent);

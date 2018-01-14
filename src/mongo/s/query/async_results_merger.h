@@ -431,8 +431,6 @@ private:
     // The CV is used when the TaskExecutor is shutting down and we can no longer signal
     // events.
     std::condition_variable _batchRequestCbsCompleteCv;
-
-    bool _ianDestroyed = 0;
 };
 
 }  // namespace mongo
