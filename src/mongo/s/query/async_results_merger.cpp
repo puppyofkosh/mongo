@@ -663,7 +663,18 @@ void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx)
     }
 }
 
-executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* opCtx) {
+void AsyncResultsMerger::kill(OperationContext* opCtx) {
+    log() << "kill()";
+    auto ev = killAsync(opCtx);
+
+    // Wait for the event while we don't hold the lock
+    if (ev.isValid()) {
+        log() << "Waiting on event";
+        _executor->waitForEvent(ev);
+    }
+}
+
+executor::TaskExecutor::EventHandle AsyncResultsMerger::killAsync(OperationContext* opCtx) {
     stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     if (_batchRequestCbsCompleteEvent.isValid()) {

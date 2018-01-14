@@ -201,9 +201,15 @@ public:
      * currently attached. This is so that a killing thread may call this method with its own
      * operation context.
      */
-    executor::TaskExecutor::EventHandle kill(OperationContext* opCtx);
+    void kill(OperationContext* opCtx);
 
 private:
+
+    /**
+     * TODO: add comment
+     **/
+    executor::TaskExecutor::EventHandle killAsync(OperationContext* opCtx);
+
     /**
      * We instantiate one of these per remote host. It contains the buffer of results we've
      * retrieved from the host but not yet returned, as well as the cursor id, and any error

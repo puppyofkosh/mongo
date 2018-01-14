@@ -111,12 +111,7 @@ StatusWith<EventHandle> RouterStageMerge::getNextEvent() {
 }
 
 void RouterStageMerge::kill(OperationContext* opCtx) {
-    auto killEvent = _arm.kill(opCtx);
-    if (!killEvent) {
-        // Mongos is shutting down.
-        return;
-    }
-    _executor->waitForEvent(killEvent);
+    _arm.kill(opCtx);
 }
 
 bool RouterStageMerge::remotesExhausted() {

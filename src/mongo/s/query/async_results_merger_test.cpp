@@ -100,6 +100,9 @@ public:
         // deliver blackholed responses to the AsyncResultsMerger, and the AsyncResultsMerger's
         // callback may still access _params.
         _params.reset();
+
+        // Make sure none of the tests forgot to join with a background thread.
+        invariant(!_bgNetworkThread);
     }
 
 protected:
@@ -217,8 +220,31 @@ protected:
         net->exitNetwork();
     }
 
+    void startBgNetworkThread() {
+        _done = false;
+        invariant(!_bgNetworkThread);
+
+        _bgNetworkThread = stdx::thread([this] {
+            executor::NetworkInterfaceMock* net = network();
+            while (!_done) {
+                net->enterNetwork();
+                net->runReadyNetworkOperations();
+                net->exitNetwork();
+            }
+        });
+    }
+
+    void joinBgNetworkThread() {
+        invariant(_bgNetworkThread);
+        _done = true;
+        _bgNetworkThread->join();
+        _bgNetworkThread = boost::none;
+    }
+
     const NamespaceString _nss;
     std::unique_ptr<ClusterClientCursorParams> _params;
+    boost::optional<stdx::thread> _bgNetworkThread;
+    std::atomic<bool> _done;
 
     std::unique_ptr<AsyncResultsMerger> arm;
 };
@@ -620,8 +646,7 @@ TEST_F(AsyncResultsMergerTest, SortedButNoSortKey) {
     ASSERT_EQ(statusWithNext.getStatus().code(), ErrorCodes::InternalError);
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, HasFirstBatch) {
@@ -806,11 +831,12 @@ TEST_F(AsyncResultsMergerTest, StreamResultsFromOneShardIfOtherDoesntRespond) {
     ASSERT_TRUE(arm->ready());
     ASSERT_BSONOBJ_EQ(fromjson("{_id: 8}"), *unittest::assertGet(arm->nextReady()).getResult());
 
-    // Kill cursor before deleting it, as the second remote cursor has not been exhausted. We don't
-    // wait on 'killEvent' here, as the blackholed request's callback will only run on shutdown of
-    // the network interface.
-    auto killEvent = arm->kill(operationContext());
-    ASSERT_TRUE(killEvent.isValid());
+    // Kill cursor before deleting it, as the second remote cursor has not been exhausted. Do this
+    // while running a background network thread so that the canceled callback is scheduled to run
+    // by the executor while kill() waits for it to finish.
+    startBgNetworkThread();
+    arm->kill(operationContext());
+    joinBgNetworkThread();
 }
 
 TEST_F(AsyncResultsMergerTest, ErrorOnMismatchedCursorIds) {
@@ -833,8 +859,7 @@ TEST_F(AsyncResultsMergerTest, ErrorOnMismatchedCursorIds) {
     ASSERT(!arm->nextReady().isOK());
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, BadResponseReceivedFromShard) {
@@ -863,8 +888,7 @@ TEST_F(AsyncResultsMergerTest, BadResponseReceivedFromShard) {
     ASSERT(!statusWithNext.isOK());
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, ErrorReceivedFromShard) {
@@ -896,8 +920,7 @@ TEST_F(AsyncResultsMergerTest, ErrorReceivedFromShard) {
     ASSERT_EQ(statusWithNext.getStatus().reason(), "bad thing happened");
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, ErrorCantScheduleEventBeforeLastSignaled) {
@@ -926,8 +949,7 @@ TEST_F(AsyncResultsMergerTest, ErrorCantScheduleEventBeforeLastSignaled) {
     ASSERT_TRUE(unittest::assertGet(arm->nextReady()).isEOF());
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, NextEventAfterTaskExecutorShutdown) {
@@ -937,8 +959,7 @@ TEST_F(AsyncResultsMergerTest, NextEventAfterTaskExecutorShutdown) {
 
     executor()->shutdown();
     ASSERT_EQ(ErrorCodes::ShutdownInProgress, arm->nextEvent().getStatus());
-    auto killEvent = arm->kill(operationContext());
-    ASSERT_FALSE(killEvent.isValid());
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, KillAfterTaskExecutorShutdownWithOutstandingBatches) {
@@ -954,8 +975,7 @@ TEST_F(AsyncResultsMergerTest, KillAfterTaskExecutorShutdownWithOutstandingBatch
 
     // Executor shuts down before a response is received.
     executor()->shutdown();
-    auto killEvent = arm->kill(operationContext());
-    ASSERT_FALSE(killEvent.isValid());
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, KillNoBatchesRequested) {
@@ -964,14 +984,12 @@ TEST_F(AsyncResultsMergerTest, KillNoBatchesRequested) {
     makeCursorFromExistingCursors(std::move(cursors));
 
     ASSERT_FALSE(arm->ready());
-    auto killedEvent = arm->kill(operationContext());
+    arm->kill(operationContext());
 
     // Killed cursors are considered ready, but return an error when you try to receive the next
     // doc.
     ASSERT_TRUE(arm->ready());
     ASSERT_NOT_OK(arm->nextReady().getStatus());
-
-    executor()->waitForEvent(killedEvent);
 }
 
 TEST_F(AsyncResultsMergerTest, KillAllBatchesReceived) {
@@ -996,10 +1014,9 @@ TEST_F(AsyncResultsMergerTest, KillAllBatchesReceived) {
                              CursorResponse::ResponseType::SubsequentResponse);
 
     // Kill should be able to return right away if there are no pending batches.
-    auto killedEvent = arm->kill(operationContext());
+    arm->kill(operationContext());
     ASSERT_TRUE(arm->ready());
     ASSERT_NOT_OK(arm->nextReady().getStatus());
-    executor()->waitForEvent(killedEvent);
 }
 
 TEST_F(AsyncResultsMergerTest, KillTwoOutstandingBatches) {
@@ -1019,15 +1036,18 @@ TEST_F(AsyncResultsMergerTest, KillTwoOutstandingBatches) {
     scheduleNetworkResponses(std::move(responses),
                              CursorResponse::ResponseType::SubsequentResponse);
 
-    // Kill event will only be signalled once the callbacks for the pending batches have run.
-    auto killedEvent = arm->kill(operationContext());
+    // Start a thread in the background that will look for the canceled callbacks
+    // and schedule the executor thread to run them.
+    startBgNetworkThread();
 
-    // Run the callbacks which were canceled.
-    runReadyCallbacks();
+    // Kill will cancel the two outstanding callbacks and then wait for them to be run.
+    arm->kill(operationContext());
+
+    // No need for the background thread anymore
+    joinBgNetworkThread();
 
     // Ensure that we properly signal those waiting for more results to be ready.
     executor()->waitForEvent(readyEvent);
-    executor()->waitForEvent(killedEvent);
 }
 
 TEST_F(AsyncResultsMergerTest, NextEventErrorsAfterKill) {
@@ -1045,24 +1065,18 @@ TEST_F(AsyncResultsMergerTest, NextEventErrorsAfterKill) {
     scheduleNetworkResponses(std::move(responses),
                              CursorResponse::ResponseType::SubsequentResponse);
 
-    auto killedEvent = arm->kill(operationContext());
+    arm->kill(operationContext());
 
     // Attempting to schedule more network operations on a killed arm is an error.
     ASSERT_NOT_OK(arm->nextEvent().getStatus());
-
-    executor()->waitForEvent(killedEvent);
 }
 
 TEST_F(AsyncResultsMergerTest, KillCalledTwice) {
     std::vector<ClusterClientCursorParams::RemoteCursor> cursors;
     cursors.emplace_back(kTestShardIds[0], kTestShardHosts[0], CursorResponse(_nss, 1, {}));
     makeCursorFromExistingCursors(std::move(cursors));
-    auto killedEvent1 = arm->kill(operationContext());
-    ASSERT(killedEvent1.isValid());
-    auto killedEvent2 = arm->kill(operationContext());
-    ASSERT(killedEvent2.isValid());
-    executor()->waitForEvent(killedEvent1);
-    executor()->waitForEvent(killedEvent2);
+    arm->kill(operationContext());
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, TailableBasic) {
@@ -1110,8 +1124,7 @@ TEST_F(AsyncResultsMergerTest, TailableBasic) {
     ASSERT_TRUE(unittest::assertGet(arm->nextReady()).isEOF());
     ASSERT_FALSE(arm->remotesExhausted());
 
-    auto killedEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killedEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, TailableEmptyBatch) {
@@ -1138,8 +1151,7 @@ TEST_F(AsyncResultsMergerTest, TailableEmptyBatch) {
     ASSERT_TRUE(unittest::assertGet(arm->nextReady()).isEOF());
     ASSERT_FALSE(arm->remotesExhausted());
 
-    auto killedEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killedEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, TailableExhaustedCursor) {
@@ -1396,8 +1408,7 @@ TEST_F(AsyncResultsMergerTest, ReturnsErrorOnRetriableError) {
     ASSERT_EQ(statusWithNext.getStatus().reason(), "host unreachable");
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, GetMoreRequestIncludesMaxTimeMS) {
@@ -1605,8 +1616,8 @@ TEST_F(AsyncResultsMergerTest, SortedTailableCursorNotReadyIfOneRemoteHasLowerOp
     responses.emplace_back(_nss, CursorId(0), std::vector<BSONObj>{});
     scheduleNetworkResponses(std::move(responses),
                              CursorResponse::ResponseType::SubsequentResponse);
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, SortedTailableCursorNewShardOrderedAfterExisting) {
@@ -1762,8 +1773,7 @@ TEST_F(AsyncResultsMergerTest, GetMoreRequestWithoutTailableCantHaveMaxTime) {
     makeCursorFromExistingCursors(std::move(cursors), findCmd);
 
     ASSERT_NOT_OK(arm->setAwaitDataTimeout(Milliseconds(789)));
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, GetMoreRequestWithoutAwaitDataCantHaveMaxTime) {
@@ -1773,8 +1783,8 @@ TEST_F(AsyncResultsMergerTest, GetMoreRequestWithoutAwaitDataCantHaveMaxTime) {
     makeCursorFromExistingCursors(std::move(cursors), findCmd);
 
     ASSERT_NOT_OK(arm->setAwaitDataTimeout(Milliseconds(789)));
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, ShardCanErrorInBetweenReadyAndNextEvent) {
@@ -1790,8 +1800,7 @@ TEST_F(AsyncResultsMergerTest, ShardCanErrorInBetweenReadyAndNextEvent) {
     ASSERT_EQ(ErrorCodes::BadValue, arm->nextEvent().getStatus());
 
     // Required to kill the 'arm' on error before destruction.
-    auto killEvent = arm->kill(operationContext());
-    executor()->waitForEvent(killEvent);
+    arm->kill(operationContext());
 }
 
 TEST_F(AsyncResultsMergerTest, KillShouldNotWaitForRemoteCommandsBeforeSchedulingKillCursors) {
@@ -1810,19 +1819,20 @@ TEST_F(AsyncResultsMergerTest, KillShouldNotWaitForRemoteCommandsBeforeSchedulin
     ASSERT_FALSE(arm->ready());
     ASSERT_FALSE(arm->remotesExhausted());
 
-    // Kill the ARM while a batch is still outstanding. The callback for the outstanding batch
-    // should be canceled.
-    auto killEvent = arm->kill(operationContext());
+    startBgNetworkThread();
 
-    // Let the callback run now that it's been canceled.
-    runReadyCallbacks();
+    // Kill the ARM while a batch is still outstanding. The callback for the outstanding batch
+    // should be canceled, and kill() will return once it has been invoked.
+    arm->kill(operationContext());
+
+    joinBgNetworkThread();
 
     // Since the cursor has not returned any results and still has a pending remote
     // request, the ARM should not attempt to kill the cursor.
     ASSERT_FALSE(arm->remotesExhausted());
 
+    // The last callback should have flagged ready event
     executor()->waitForEvent(readyEvent);
-    executor()->waitForEvent(killEvent);
 }
 
 }  // namespace

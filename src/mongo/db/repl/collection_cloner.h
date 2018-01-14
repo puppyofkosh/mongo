@@ -307,9 +307,6 @@ private:
     // (R) The cursor parameters used by the 'AsyncResultsMerger'.
     std::unique_ptr<ClusterClientCursorParams> _clusterClientCursorParams;
 
-    // (M) The event handle for the 'kill' event of the 'AsyncResultsMerger'.
-    executor::TaskExecutor::EventHandle _killArmHandle;
-
     // (M) Scheduler used to establish the initial cursor or set of cursors.
     std::unique_ptr<RemoteCommandRetryScheduler> _establishCollectionCursorsScheduler;
 

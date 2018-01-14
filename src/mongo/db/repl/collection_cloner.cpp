@@ -250,7 +250,7 @@ void CollectionCloner::shutdown() {
 void CollectionCloner::_cancelRemainingWork_inlock() {
     if (_arm) {
         Client::initThreadIfNotAlready();
-        _killArmHandle = _arm->kill(cc().getOperationContext());
+        _arm->kill(cc().getOperationContext());
     }
     _countScheduler.shutdown();
     _listIndexesFetcher.shutdown();
@@ -271,9 +271,6 @@ CollectionCloner::Stats CollectionCloner::getStats() const {
 
 void CollectionCloner::join() {
     stdx::unique_lock<stdx::mutex> lk(_mutex);
-    if (_killArmHandle) {
-        _executor->waitForEvent(_killArmHandle);
-    }
     _condition.wait(lk, [this]() { return !_isActive_inlock(); });
 }
 
