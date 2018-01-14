@@ -185,6 +185,7 @@ public:
     void addNewShardCursors(const std::vector<ClusterClientCursorParams::RemoteCursor>& newCursors);
 
     /**
+     * TODO: This comment is now inaccurate! Update!
      * Starts shutting down this ARM by canceling all pending requests. Returns a handle to an event
      * that is signaled when this ARM is safe to destroy.
      * If there are no pending requests, schedules killCursors and signals the event immediately.
@@ -287,7 +288,7 @@ private:
         const bool _compareWholeSortKey;
     };
 
-    enum LifecycleState { kAlive, kKillStarted, kKillComplete };
+    enum LifecycleState { kAlive, kKillStarted, kWaitingForCallbacks, kKillComplete };
 
     /**
      * Parses the find or getMore command response object to a CursorResponse.
@@ -423,9 +424,13 @@ private:
 
     LifecycleState _lifecycleState = kAlive;
 
-    // Signaled when all outstanding batch request callbacks have run, and all killCursors commands
-    // have been scheduled. This means that the ARM is safe to delete.
-    executor::TaskExecutor::EventHandle _killCursorsScheduledEvent;
+    // Signaled when all outstanding batch request callbacks have run after kill() has been
+    // called. This means that the ARM is safe to delete.
+    executor::TaskExecutor::EventHandle _batchRequestCbsCompleteEvent;
+
+    // The CV is used when the TaskExecutor is shutting down and we can no longer signal
+    // events.
+    std::condition_variable _batchRequestCbsCompleteCv;
 
     bool _ianDestroyed = 0;
 };

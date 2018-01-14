@@ -358,6 +358,7 @@ Status AsyncResultsMerger::_askForNextBatch(WithLock, size_t remoteIndex) {
 
     auto callbackStatus =
         _executor->scheduleRemoteCommand(request, [this, remoteIndex](auto const& cbData) {
+            log() << "In callback for _handleBatchResponse";
             stdx::lock_guard<stdx::mutex> lk(this->_mutex);
             this->_handleBatchResponse(lk, cbData, remoteIndex);
         });
@@ -494,18 +495,18 @@ void AsyncResultsMerger::updateRemoteMetadata(RemoteCursorData* remote,
 void AsyncResultsMerger::_handleBatchResponse(WithLock lk,
                                               CbData const& cbData,
                                               size_t remoteIndex) {
-    log() << "Received batch response";
-    log() << "Reponse status is " << cbData.response;
+    log() << "Received batch response for node " << remoteIndex;
     log() << "Reponse status is " << cbData.response.status;
-    log() << "Reponse status is " << cbData.response.status.code();
-    //invariant(!_ianDestroyed);
 
     // Got a response from remote, so indicate we are no longer waiting for one.
     _remotes[remoteIndex].cbHandle = executor::TaskExecutor::CallbackHandle();
 
     //  On shutdown, there is no need to process the response.
     if (_lifecycleState != kAlive) {
+        // FIXME: How is this not a race? What if the thread waiting on _currentEvent calls ready()
+        // or nextReady() _after_ the ARM is freed??
         _signalCurrentEventIfReady(lk);  // First, wake up anyone waiting on '_currentEvent'.
+
         _cleanUpKilledBatch(lk);
         return;
     }
@@ -519,24 +520,25 @@ void AsyncResultsMerger::_handleBatchResponse(WithLock lk,
 
 void AsyncResultsMerger::_cleanUpKilledBatch(WithLock lk) {
     log() << "Cleaning up killed batch";
-    invariant(_lifecycleState == kKillStarted);
+    invariant(_lifecycleState == kWaitingForCallbacks);
 
-    // TODO I think here we should check if any of the other callbacks haven't been cancelled yet.
-    // If so, just signal the _killCursorsScheduledEvent and set our cycleState to complete.
-
-    // If we're killed and we're not waiting on any more batches to come back, then we are ready
-    // to kill the cursors on the remote hosts and clean up this cursor. Schedule the killCursors
-    // command and signal that this cursor is now safe to destroy.  We must not touch this object
-    // again after dropping the lock, because 'this' could become invalid immediately.
+    // If this is the last callback to run, then we are ready to free the ARM. We signal the
+    // _batchRequestCbsCompleteEvent, which the thread in kill() is waiting on.
     if (!_haveOutstandingBatchRequests(lk)) {
+        log() << "no outstanding batch requests";
         // If the event handle is invalid, then the executor is in the middle of shutting down,
         // and we can't schedule any more work for it to complete.
-        if (_killCursorsScheduledEvent.isValid()) {
-            _scheduleKillCursors(lk, _opCtx);
-            _executor->signalEvent(_killCursorsScheduledEvent);
+        if (_batchRequestCbsCompleteEvent.isValid()) {
+            _executor->signalEvent(_batchRequestCbsCompleteEvent);
+        } else {
+            // We fall back to the condition variable.
+            // TODO: Should be notify all if we allow multiple calls to kill()
+            _batchRequestCbsCompleteCv.notify_one();
         }
 
         _lifecycleState = kKillComplete;
+    } else {
+        log() << "Still have outstanding batch requests";
     }
 }
 
@@ -656,11 +658,9 @@ bool AsyncResultsMerger::_haveOutstandingBatchRequests(WithLock) {
 void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx) {
     log() << "Scheduling killCursors on remotes";
     invariant(_lifecycleState == kKillStarted);
-    invariant(_killCursorsScheduledEvent.isValid());
+    invariant(_batchRequestCbsCompleteEvent.isValid());
 
     for (const auto& remote : _remotes) {
-        invariant(!remote.cbHandle.isValid());
-
         if (remote.status.isOK() && remote.cursorId && !remote.exhausted()) {
             BSONObj cmdObj = KillCursorsRequest(_params->nsString, {remote.cursorId}).toBSON();
 
@@ -675,17 +675,19 @@ void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx)
 
 executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* opCtx) {
     log() << "In kill()";
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
     invariant(!_ianDestroyed);
-    if (_killCursorsScheduledEvent.isValid()) {
+
+    if (_batchRequestCbsCompleteEvent.isValid()) {
         invariant(_lifecycleState != kAlive);
-        return _killCursorsScheduledEvent;
+        return _batchRequestCbsCompleteEvent;
     }
 
+    invariant(_lifecycleState != kKillComplete);
     _lifecycleState = kKillStarted;
 
-    // Make '_killCursorsScheduledEvent', which we will signal as soon as we have scheduled a
-    // killCursors command to run on all the remote shards.
+    // Make '_batchRequestCbsCompleteEvent', which we will signal as soon as all of our callbacks
+    // have finished running.
     auto statusWithEvent = _executor->makeEvent();
     if (ErrorCodes::isShutdownError(statusWithEvent.getStatus().code())) {
         log() << "kill: Task exec is shutting down";
@@ -693,33 +695,43 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::kill(OperationContext* o
         if (!_haveOutstandingBatchRequests(lk)) {
             log() << "kill: No outstanding batches";
             _lifecycleState = kKillComplete;
+            return executor::TaskExecutor::EventHandle();
         }
 
-        // TODO: Discuss. There's a bug here.
+        // As part of shutdown, the executor will cancel all of its callbacks. Wait for these
+        // callbacks to complete before returning an empty event handle, indicating the ARM
+        // is safe to destroy.
+        _lifecycleState = kWaitingForCallbacks;
+        _batchRequestCbsCompleteCv.wait(lk,
+                                        [this, &lk] { return !_haveOutstandingBatchRequests(lk); });
 
         _ianDestroyed = true;
         return executor::TaskExecutor::EventHandle();
     }
     fassertStatusOK(28716, statusWithEvent);
-    _killCursorsScheduledEvent = statusWithEvent.getValue();
+    _batchRequestCbsCompleteEvent = statusWithEvent.getValue();
 
-    // If we're not waiting for responses from remotes, we can schedule killCursors commands on the
-    // remotes now. Otherwise, we have to wait until all responses are back because a cursor that
-    // is active (pinned) on a remote cannot be killed through killCursors.
     log() << "Kill: calling _scheduleKillCursors unconditionally";
     _scheduleKillCursors(lk, opCtx);
-    _lifecycleState = kKillComplete;
 
-    // Don't report that it's safe to
-    // My idea
     if (!_haveOutstandingBatchRequests(lk)) {
-        _executor->signalEvent(_killCursorsScheduledEvent);
+        log() << "No outstanding batch requests";
+        _lifecycleState = kKillComplete;
+        // Signal the event right now, as there's nothing to wait for.
+        _executor->signalEvent(_batchRequestCbsCompleteEvent);
     } else {
-        // Cancel all of our callbacks.
-        // Once all of the callbacks have been complete, then we can signal the event.
-    }
+        log() << "Canceling callbacks";
+        _lifecycleState = kWaitingForCallbacks;
 
-    return _killCursorsScheduledEvent;
+        // Cancel all of our callbacks. Once they all complete, the event will be signaled.
+        for (const auto& remote : _remotes) {
+            if (remote.cbHandle.isValid()) {
+                _executor->cancel(remote.cbHandle);
+                log() << "Canceled a cb";
+            }
+        }
+    }
+    return _batchRequestCbsCompleteEvent;
 }
 
 //
