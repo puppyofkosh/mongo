@@ -357,6 +357,7 @@ Status AsyncResultsMerger::_askForNextBatch(WithLock, size_t remoteIndex) {
 
     auto callbackStatus =
         _executor->scheduleRemoteCommand(request, [this, remoteIndex](auto const& cbData) {
+                log() << "In cb";
             stdx::lock_guard<stdx::mutex> lk(this->_mutex);
             this->_handleBatchResponse(lk, cbData, remoteIndex);
         });
@@ -522,8 +523,10 @@ void AsyncResultsMerger::_cleanUpKilledBatch(WithLock lk) {
         // If the event handle is invalid, then the executor is in the middle of shutting down,
         // and we can't schedule any more work for it to complete.
         if (_batchRequestCbsCompleteEvent.isValid()) {
+            log() << "Flagging signal.";
             _executor->signalEvent(_batchRequestCbsCompleteEvent);
         } else {
+            log() << "notify() on cond var";
             // We fall back to the condition variable.
             // TODO: Should be notify all if we allow multiple calls to kill()
             _batchRequestCbsCompleteCv.notify_one();
@@ -672,12 +675,14 @@ void AsyncResultsMerger::kill(OperationContext* opCtx) {
         log() << "Waiting on event";
         _executor->waitForEvent(ev);
     }
+    log() << "kill() finished";
 }
 
 executor::TaskExecutor::EventHandle AsyncResultsMerger::killAsync(OperationContext* opCtx) {
     stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     if (_batchRequestCbsCompleteEvent.isValid()) {
+        log() << "Merger already killed-returning duplicate event";
         invariant(_lifecycleState != kAlive);
         return _batchRequestCbsCompleteEvent;
     }
@@ -689,6 +694,7 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::killAsync(OperationConte
     // have finished running.
     auto statusWithEvent = _executor->makeEvent();
     if (ErrorCodes::isShutdownError(statusWithEvent.getStatus().code())) {
+        log() << "Executor shutting down";
         // The underlying task executor is shutting down.
         if (!_haveOutstandingBatchRequests(lk)) {
             _lifecycleState = kKillComplete;
@@ -714,11 +720,13 @@ executor::TaskExecutor::EventHandle AsyncResultsMerger::killAsync(OperationConte
         // Signal the event right now, as there's nothing to wait for.
         _executor->signalEvent(_batchRequestCbsCompleteEvent);
     } else {
+        log() << "Have outstanding requests";
         _lifecycleState = kWaitingForCallbacks;
 
         // Cancel all of our callbacks. Once they all complete, the event will be signaled.
         for (const auto& remote : _remotes) {
             if (remote.cbHandle.isValid()) {
+                log() << "Canceling request";
                 _executor->cancel(remote.cbHandle);
             }
         }

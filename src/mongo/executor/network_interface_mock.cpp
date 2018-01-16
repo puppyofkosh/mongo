@@ -243,6 +243,7 @@ bool NetworkInterfaceMock::inShutdown() const {
 }
 
 void NetworkInterfaceMock::enterNetwork() {
+    log() << "Entering net";
     stdx::unique_lock<stdx::mutex> lk(_mutex);
     while (!_isNetworkThreadRunnable_inlock()) {
         _shouldWakeNetworkCondition.wait(lk);

@@ -9,3 +9,8 @@ source buildscripts/gdb/mongo_printers.py
 
 # Load the mongodb lock analysis
 source buildscripts/gdb/mongo_lock.py
+
+handle SIGINT stop
+
+break mongo::repl::CollectionCloner::shutdown
+break mongo::AsyncResultsMerger::kill

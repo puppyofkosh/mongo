@@ -250,6 +250,7 @@ void CollectionCloner::shutdown() {
 void CollectionCloner::_cancelRemainingWork_inlock() {
     if (_arm) {
         Client::initThreadIfNotAlready();
+        //_killArmHandle = _arm->killAsync(cc().getOperationContext());
         _arm->kill(cc().getOperationContext());
     }
     _countScheduler.shutdown();

@@ -203,12 +203,12 @@ public:
      */
     void kill(OperationContext* opCtx);
 
-private:
-
     /**
      * TODO: add comment
      **/
     executor::TaskExecutor::EventHandle killAsync(OperationContext* opCtx);
+private:
+
 
     /**
      * We instantiate one of these per remote host. It contains the buffer of results we've
