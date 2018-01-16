@@ -1,5 +1,6 @@
 // Tests the behavior of explain() when used with the aggregation
 // pipeline and limits.
+// @tags: [do_not_wrap_aggregations_in_facets]
 (function() {
     "use strict";
 
