@@ -750,7 +750,7 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
                                       Status executePlanStatus,
                                       PlanStageStats* winningPlanTrialStats,
                                       BSONObjBuilder* out) {
-    invariant(verbosity >= kExecStats);
+    invariant(verbosity >= ExplainOptions::Verbosity::kExecStats);
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
