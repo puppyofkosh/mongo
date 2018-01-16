@@ -1,0 +1,108 @@
+Executor thread backtrace:
+
+
+#0  mongo::AsyncResultsMerger::kill (this=0x7ffff7f3f3a0, opCtx=0x0)
+    at src/mongo/s/query/async_results_merger.cpp:669
+#1  0x0000555556863c85 in mongo::repl::CollectionCloner::_cancelRemainingWork_inlock (this=0x7ffff61d8020)
+    at src/mongo/db/repl/collection_cloner.cpp:254
+#2  0x00005555568667bd in mongo::repl::CollectionCloner::<lambda()>::operator()(void) const (
+    __closure=0x7ffff63789d0) at src/mongo/db/repl/collection_cloner.cpp:662
+#3  0x000055555686d5b0 in std::_Function_handler<void(), mongo::repl::CollectionCloner::_establishCollectionCursorsCallback(const RemoteCommandCallbackArgs&, mongo::repl::CollectionCloner::EstablishCursorsCommand)::<lambda()> >::_M_invoke(const std::_Any_data &) (__functor=...) at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1871
+#4  0x0000555556879d82 in std::function<void ()>::operator()() const (this=0x7ffff63789d0)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:2267
+#5  0x0000555556876f6a in mongo::repl::CallbackCompletionGuard<mongo::Status>::_setResultAndCancelRemainingWork_inlock (this=0x7ffff63789d0, Traceback (most recent call last):
+  File "buildscripts/gdb/mongo_printers.py", line 49, in to_string
+    location = info['location']
+gdb.error: There is no member or method named location.
+result=
+) at src/mongo/db/repl/callback_completion_guard.h:146
+#6  0x0000555556873ca7 in mongo::repl::CallbackCompletionGuard<mongo::Status>::setResultAndCancelRemainingWork_inlock (this=0x7ffff63789d0, lock=..., Traceback (most recent call last):
+  File "buildscripts/gdb/mongo_printers.py", line 49, in to_string
+    location = info['location']
+gdb.error: There is no member or method named location.
+result=
+) at src/mongo/db/repl/callback_completion_guard.h:127
+#7  0x000055555686797e in mongo::repl::CollectionCloner::<lambda(std::shared_ptr<mongo::repl::CallbackCompletionGuard<mongo::Status> >, mongo::Status)>::operator()(std::shared_ptr<mongo::repl::CallbackCompletionGuard<mongo::Status> >, mongo::Status) const (__closure=0x7ffff60a88d0, guard=..., Traceback (most recent call last):
+  File "buildscripts/gdb/mongo_printers.py", line 49, in to_string
+    location = info['location']
+gdb.error: There is no member or method named location.
+status=
+) at src/mongo/db/repl/collection_cloner.cpp:740
+#8  0x00005555568680a7 in mongo::repl::CollectionCloner::_handleARMResultsCallback (this=0x7ffff61d8020, 
+    cbd=..., onCompletionGuard=...) at src/mongo/db/repl/collection_cloner.cpp:790
+#9  0x000055555686762a in mongo::repl::CollectionCloner::<lambda(const mongo::executor::TaskExecutor::CallbackArgs&)>::operator()(const mongo::executor::TaskExecutor::CallbackArgs &) const (__closure=0x7ffff6376650, cbd=...)
+    at src/mongo/db/repl/collection_cloner.cpp:729
+#10 0x000055555686b837 in std::_Function_handler<void(const mongo::executor::TaskExecutor::CallbackArgs&), mongo::repl::CollectionCloner::_scheduleNextARMResultsCallback(std::shared_ptr<mongo::repl::CallbackCompletionGuard<mongo::Status> >)::<lambda(const mongo::executor::TaskExecutor::CallbackArgs&)> >::_M_invoke(const std::_Any_data &, const mongo::executor::TaskExecutor::CallbackArgs &) (__functor=..., __args#0=...)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1871
+#11 0x00005555568555f1 in std::function<void (mongo::executor::TaskExecutor::CallbackArgs const&)>::operator()(mongo::executor::TaskExecutor::CallbackArgs const&) const (this=0x7ffff60a8b50, __args#0=...)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:2267
+#12 0x0000555556d1dc71 in mongo::executor::ThreadPoolTaskExecutor::runCallback (this=0x7ffff7f1ea20, 
+    cbStateArg=...) at src/mongo/executor/thread_pool_task_executor.cpp:570
+#13 0x0000555556d1d58a in mongo::executor::ThreadPoolTaskExecutor::<lambda()>::operator()(void) const (
+    __closure=0x7ffff63f0e70) at src/mongo/executor/thread_pool_task_executor.cpp:546
+#14 0x0000555556d1ebeb in std::_Function_handler<void(), mongo::executor::ThreadPoolTaskExecutor::scheduleIntoPool_inlock(mongo::executor::ThreadPoolTaskExecutor::WorkQueue*, const iterator&, const iterator&, std::unique_lock<std::mutex>)::<lambda()> >::_M_invoke(const std::_Any_data &) (__functor=...)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1871
+#15 0x0000555556879d82 in std::function<void ()>::operator()() const (this=0x7ffff60a8c50)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:2267
+#16 0x0000555556cba86d in mongo::executor::ThreadPoolMock::consumeTasks (this=0x7ffff639ce60, lk=0x7ffff60a8d00)
+    at src/mongo/executor/thread_pool_mock.cpp:124
+#17 0x0000555556cba073 in mongo::executor::ThreadPoolMock::<lambda()>::operator()(void) const (
+    __closure=0x7ffff637b2e8) at src/mongo/executor/thread_pool_mock.cpp:70
+#18 0x0000555556cbbbe8 in std::_Bind_simple<mongo::executor::ThreadPoolMock::startup()::<lambda()>()>::_M_invoke<>(std::_Index_tuple<>) (this=0x7ffff637b2e8) at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1531
+#19 0x0000555556cbbb3e in std::_Bind_simple<mongo::executor::ThreadPoolMock::startup()::<lambda()>()>::operator()(void) (this=0x7ffff637b2e8) at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1520
+#20 0x0000555556cbbace in std::thread::_Impl<std::_Bind_simple<mongo::executor::ThreadPoolMock::startup()::<lambda()>()> >::_M_run(void) (this=0x7ffff637b2d0) at /opt/mongodbtoolchain/v2/include/c++/5.4.0/thread:115
+#21 0x00005555574ddc40 in std::execute_native_thread_routine (__p=<optimized out>)
+    at ../../../../../gcc-5.4.0/libstdc++-v3/src/c++11/thread.cc:84
+#22 0x00007ffff707b6ba in start_thread () from /lib/x86_64-linux-gnu/libpthread.so.0
+#23 0x00007ffff6db13dd in clone () from /lib/x86_64-linux-gnu/libc.so.6
+
+main thread:
+
+#0  0x00007ffff7081360 in pthread_cond_wait@@GLIBC_2.3.2 () from /lib/x86_64-linux-gnu/libpthread.so.0
+#1  0x00005555574dabac in __gthread_cond_wait (__mutex=<optimized out>, __cond=<optimized out>)
+    at /data/mci/c5d8f4120437056d97d16d15cf65c6ac/toolchain-builder/build-gcc-v2.sh-qR3/x86_64-mongodb-linux/libstdc++-v3/include/x86_64-mongodb-linux/bits/gthr-default.h:864
+#2  std::condition_variable::wait (this=<optimized out>, __lock=...)
+    at ../../../../../gcc-5.4.0/libstdc++-v3/src/c++11/condition_variable.cc:53
+#3  0x0000555556caf521 in mongo::executor::NetworkInterfaceMock::_runReadyNetworkOperations_inlock (
+    this=0x7ffff637ac20, lk=0x7fffffffc780) at src/mongo/executor/network_interface_mock.cpp:572
+#4  0x0000555556cadce0 in mongo::executor::NetworkInterfaceMock::runReadyNetworkOperations (this=0x7ffff637ac20)
+    at src/mongo/executor/network_interface_mock.cpp:418
+#5  0x0000555556c64019 in mongo::repl::BaseClonerTest::finishProcessingNetworkResponse (this=0x7fffffffd110)
+    at src/mongo/db/repl/base_cloner_test_fixture.cpp:193
+#6  0x0000555556c63fa7 in mongo::repl::BaseClonerTest::processNetworkResponse (this=0x7fffffffd110, 
+    obj=owned BSONObj 87 bytes @ 0x7ffff639c1a8 = {...}) at src/mongo/db/repl/base_cloner_test_fixture.cpp:183
+#7  0x0000555556837036 in (anonymous namespace)::UnitTest__ParallelCollectionClonerTest__InsertDocumentsScheduleDbWorkFailedWithMultipleCursors::_doTest (this=0x7fffffffd110) at src/mongo/db/repl/collection_cloner_test.cpp:2076
+#8  0x0000555556c92f59 in mongo::unittest::Test::run (this=0x7fffffffd110) at src/mongo/unittest/unittest.cpp:175
+#9  0x0000555556847282 in mongo::unittest::Suite::runTestObject<(anonymous namespace)::UnitTest__ParallelCollectionClonerTest__InsertDocumentsScheduleDbWorkFailedWithMultipleCursors> () at src/mongo/unittest/unittest.h:422
+#10 0x000055555685ba92 in std::_Function_handler<void (), void (*)()>::_M_invoke(std::_Any_data const&) (
+    __functor=...) at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:1871
+#11 0x0000555556879d82 in std::function<void ()>::operator()() const (this=0x7ffff7f278c0)
+    at /opt/mongodbtoolchain/v2/include/c++/5.4.0/functional:2267
+#12 0x0000555556c96626 in mongo::unittest::TestHolder::run (this=0x7ffff7f278a0)
+    at src/mongo/unittest/unittest.h:263
+#13 0x0000555556c94006 in mongo::unittest::Suite::run (this=0x7ffff7f26f20, filter=..., runsPerTest=1)
+    at src/mongo/unittest/unittest.cpp:295
+#14 0x0000555556c94a81 in mongo::unittest::Suite::run (suites=..., filter=..., runsPerTest=1)
+    at src/mongo/unittest/unittest.cpp:356
+#15 0x000055555685e5be in main (argc=3, argv=0x7fffffffe518, envp=0x7fffffffe538)
+    at src/mongo/unittest/unittest_main.cpp:93
+
+
+To reproduce:
+Run collection_cloner_test with collection_cloner using a "blocking" version of kill.
+
+
+
+To run:
+ninja build/unittests/collection_cloner_test
+.build/unittests/collection_cloner_test
+
+
+
+The problem:
+CollectionCloner calls kill() from its callback (see executor thread callback).
+kill() will cancel the callbacks and then wait for them to complete. This is problematic
+because the canceled callbacks also need to run in the executor thread. Since CollectionCloner's callback
+is already in the executor thread, and blocked, we have a deadlock.
+
+To fix, we'd need more than one executor thread, or preferably, to call arm->kill() from outside a callback.
