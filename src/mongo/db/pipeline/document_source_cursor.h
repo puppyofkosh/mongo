@@ -34,7 +34,7 @@
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/document_source_limit.h"
-#include "mongo/db/query/explain.h"
+#include "mongo/db/query/explain_options.h"
 #include "mongo/db/query/plan_executor.h"
 #include "mongo/db/query/plan_summary_stats.h"
 
@@ -185,7 +185,7 @@ private:
 
     void recordPlanSummaryStats();
 
-    Value generateExplainOutput(ExplainOptions::Verbosity verbosity, Collection* collection) const;
+    Value generateExplainOutput(ExplainOptions::Verbosity, Collection*) const;
 
     std::deque<Document> _currentBatch;
 
@@ -211,6 +211,9 @@ private:
     std::string _planSummary;
     PlanSummaryStats _planSummaryStats;
 
+    // Used only for explain() queries. Stores the stats of the winning plan when _exec's root
+    // stage is a MultiPlanStage. When the query is executed (with exec->executePlan()), it will
+    // wipe out its own copy of the winning plan's statistics, so they need to be saved here.
     std::unique_ptr<PlanStageStats> _winningPlanTrialStats;
 };
 
