@@ -149,7 +149,6 @@ void DocumentSourceCursor::loadBatch() {
         default:
             MONGO_UNREACHABLE;
     }
-    uassertStatusOK(_execStatus);
 }
 
 Pipeline::SourceContainer::iterator DocumentSourceCursor::doOptimizeAt(
@@ -188,19 +187,6 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!verbosity)
         return Value();
 
-
-    // Need this lock since we may try to access the collection's info cache
-    // when generating planner info.
-    auto opCtx = pExpCtx->opCtx;
-    AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
-    Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
-    auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
-    Value ret = generateExplainOutput(verbosity.get(), collection);
-    return ret;
-}
-
-Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verbosity,
-                                                  Collection* collection) const {
     invariant(_exec);
 
     BSONObjBuilder builder;
@@ -215,8 +201,19 @@ Value DocumentSourceCursor::generateExplainOutput(ExplainOptions::Verbosity verb
     if (!_projection.isEmpty())
         builder.append("fields", _projection);
 
-    Explain::addPlanExecStats(
-        _exec.get(), collection, verbosity, _execStatus, _winningPlanTrialStats.get(), &builder);
+    // Need this lock since we may try to access the collection's info cache when generating
+    // planner info.
+    auto opCtx = pExpCtx->opCtx;
+    AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
+    Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
+    auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
+
+    Explain::addPlanExecStats(_exec.get(),
+                              collection,
+                              verbosity.get(),
+                              _execStatus,
+                              _winningPlanTrialStats.get(),
+                              &builder);
 
     return Value(DOC(getSourceName() << builder.obj()));
 }

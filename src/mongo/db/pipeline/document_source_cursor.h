@@ -185,8 +185,6 @@ private:
 
     void recordPlanSummaryStats();
 
-    Value generateExplainOutput(ExplainOptions::Verbosity, Collection*) const;
-
     std::deque<Document> _currentBatch;
 
     // BSONObj members must outlive _projection and cursor.
