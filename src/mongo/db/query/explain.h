@@ -72,10 +72,11 @@ public:
      * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to 'out'.
      *
      * 'exec' is the stage tree for the operation being explained.
-     * 'collection' may be nullptr. If it isn't the caller should hold an IS lock on it.
+     * 'collection' is the relevant collection. It may be nullptr, but if not the caller should hold
+     * an IS lock on it.
      * 'verbosity' is the verbosity level of the explain.
-     * 'executePlanStatus' is the status returned after executing the query (if the query was
-     * executed).
+     * 'executePlanStatus' is the status returned after executing the query (Status::OK if the query
+     * wasn't executed).
      * 'winningPlanTrialStats' is the stats of the winning plan during the trial period. May be
      * nullptr.
      * 'out' is the builder for the explain output.
@@ -170,8 +171,8 @@ private:
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      *
      * 'exec' is the stage tree for the operation being explained.
-     * 'collection' is the collection used in the operation. If it isn't nullptr, the
-     * caller should hold an IS lock on it.
+     * 'collection' is the collection used in the operation. If it isn't nullptr, the caller should
+     * hold an IS lock on it.
      * 'out' is a builder for the explain output.
      */
     static void generatePlannerInfo(PlanExecutor* exec,
