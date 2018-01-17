@@ -306,8 +306,7 @@ TEST_F(DocumentSourceCursorTest, SerializationQueryPlannerExplainLevel) {
     source()->dispose();
 }
 
-TEST_F(DocumentSourceCursorTest, SerializationExecStatsExplainLevel)
-{
+TEST_F(DocumentSourceCursorTest, SerializationExecStatsExplainLevel) {
     auto verb = ExplainOptions::Verbosity::kExecStats;
     createSource();
     ctx()->explain = verb;
@@ -323,8 +322,7 @@ TEST_F(DocumentSourceCursorTest, SerializationExecStatsExplainLevel)
     source()->dispose();
 }
 
-TEST_F(DocumentSourceCursorTest, SerializationExecAllPlansExplainLevel)
-{
+TEST_F(DocumentSourceCursorTest, SerializationExecAllPlansExplainLevel) {
     auto verb = ExplainOptions::Verbosity::kExecAllPlans;
     createSource();
     ctx()->explain = verb;

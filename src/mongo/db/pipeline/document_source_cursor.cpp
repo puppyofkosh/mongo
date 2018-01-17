@@ -211,11 +211,11 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 
     BSONObjBuilder explainStats;
     Explain::explainStages(_exec.get(),
-                          collection,
-                          verbosity.get(),
-                          _execStatus,
-                          _winningPlanTrialStats.get(),
-                          &explainStats);
+                           collection,
+                           verbosity.get(),
+                           _execStatus,
+                           _winningPlanTrialStats.get(),
+                           &explainStats);
 
     BSONObj obj = explainStats.obj();
     invariant(obj.hasField("queryPlanner"));

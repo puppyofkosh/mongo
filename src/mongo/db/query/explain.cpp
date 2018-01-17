@@ -280,7 +280,7 @@ std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(PlanExec
 unique_ptr<PlanStageStats> getWinningPlanStatsTree(const PlanExecutor* exec) {
     MultiPlanStage* mps = getMultiPlanStage(exec->getRootStage());
     return mps ? std::move(mps->getStats()->children[mps->bestPlanIdx()])
-        : std::move(exec->getRootStage()->getStats());
+               : std::move(exec->getRootStage()->getStats());
 }
 
 }  // namespace
@@ -687,9 +687,9 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
 
 // static
 void Explain::generateSinglePlanExecutionInfo(const PlanStageStats* stats,
-                                      ExplainOptions::Verbosity verbosity,
-                                      boost::optional<long long> totalTimeMillis,
-                                      BSONObjBuilder* out) {
+                                              ExplainOptions::Verbosity verbosity,
+                                              boost::optional<long long> totalTimeMillis,
+                                              BSONObjBuilder* out) {
     out->appendNumber("nReturned", stats->common.advanced);
 
     // Time elapsed could might be either precise or approximate.
@@ -749,10 +749,10 @@ std::unique_ptr<PlanStageStats> Explain::getWinningPlanTrialStats(PlanExecutor* 
 
 // static
 void Explain::generateExecutionInfo(PlanExecutor* exec,
-                                      ExplainOptions::Verbosity verbosity,
-                                      Status executePlanStatus,
-                                      PlanStageStats* winningPlanTrialStats,
-                                      BSONObjBuilder* out) {
+                                    ExplainOptions::Verbosity verbosity,
+                                    Status executePlanStatus,
+                                    PlanStageStats* winningPlanTrialStats,
+                                    BSONObjBuilder* out) {
     invariant(verbosity >= ExplainOptions::Verbosity::kExecStats);
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
@@ -782,14 +782,16 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
 
         if (winningPlanTrialStats) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateSinglePlanExecutionInfo(winningPlanTrialStats, verbosity, boost::none, &planBob);
+            generateSinglePlanExecutionInfo(
+                winningPlanTrialStats, verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
 
         const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
         for (size_t i = 0; i < rejectedStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateSinglePlanExecutionInfo(rejectedStats[i].get(), verbosity, boost::none, &planBob);
+            generateSinglePlanExecutionInfo(
+                rejectedStats[i].get(), verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
 
@@ -858,8 +860,7 @@ void Explain::explainStages(PlanExecutor* exec,
         }
     }
 
-    explainStages(
-        exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
+    explainStages(exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
 
     generateServerInfo(out);
 }
