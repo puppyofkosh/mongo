@@ -149,6 +149,7 @@ void DocumentSourceCursor::loadBatch() {
         default:
             MONGO_UNREACHABLE;
     }
+    uassertStatusOK(_execStatus);
 }
 
 Pipeline::SourceContainer::iterator DocumentSourceCursor::doOptimizeAt(
