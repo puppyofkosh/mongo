@@ -59,7 +59,7 @@ public:
      *
      * Does not take ownership of its arguments.
      *
-     * If collection is not nullptr, the caller should hold an IS lock on it.
+     * If 'collection' is not nullptr, the caller should hold an IS lock on it.
      *
      * If there is an error during the execution of the query, the error message and code are
      * added to the "executionStats" section of the explain.
@@ -69,38 +69,35 @@ public:
                               ExplainOptions::Verbosity verbosity,
                               BSONObjBuilder* out);
     /**
-     * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to out.
+     * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to 'out'.
      *
-     * collection may be nullptr. If it isn't the caller should hold an IS lock on it.
-     * winningPlanTrialStats may be nullptr.
-     * executePlanStatus may be boost::none if verbosity < kExecStats.
+     * 'exec' is the stage tree for the operation being explained.
+     * 'collection' may be nullptr. If it isn't the caller should hold an IS lock on it.
+     * 'verbosity' is the verbosity level of the explain.
+     * 'executePlanStatus' is the status returned after executing the query (if the query was
+     * executed).
+     * 'winningPlanTrialStats' is the stats of the winning plan during the trial period. May be
+     * nullptr.
+     * 'out' is the builder for the explain output.
      **/
-    static void addPlanExecStats(PlanExecutor* exec,
-                                 const Collection* collection,
-                                 ExplainOptions::Verbosity verbosity,
-                                 boost::optional<Status> executePlanStatus,
-                                 PlanStageStats* winningPlanTrialStats,
-                                 BSONObjBuilder* out);
+    static void explainStages(PlanExecutor* exec,
+                              const Collection* collection,
+                              ExplainOptions::Verbosity verbosity,
+                              boost::optional<Status> executePlanStatus,
+                              PlanStageStats* winningPlanTrialStats,
+                              BSONObjBuilder* out);
 
     /**
-     *
-     * Get explain BSON for the document sources contained by 'exec'. Use this function if you
+     * Gets explain BSON for the document sources contained by 'exec'. Use this function if you
      * have a PlanExecutor whose root is a PipelineProxyStage and want to turn it into a human
      * readable explain format.
      *
      * The explain information is generated with the level of detail specified by 'verbosity'.
      *
-     * Does not take ownership of its arguments.
-     *
      **/
     static void explainPipelineExecutor(PlanExecutor* exec,
                                         ExplainOptions::Verbosity verbosity,
                                         BSONObjBuilder* out);
-
-    /**
-     * Get PlanExecutor's winning plan stats tree.
-     */
-    static std::unique_ptr<PlanStageStats> getWinningPlanStatsTree(const PlanExecutor* exec);
 
     /**
      * Converts the PlanExecutor's winning plan stats tree to BSON and returns to the caller.
@@ -161,40 +158,21 @@ public:
      * If exec's root stage is a MultiPlanStage, returns the stats for the trial period of of the
      * winning plan. Otherwise, returns nullptr.
      *
-     * Must be called _before_ calling PlanExecutor::executePlan().
+     * Must be called _before_ calling PlanExecutor::executePlan() or PlanExecutor::getNext().
      **/
     static std::unique_ptr<PlanStageStats> getWinningPlanTrialStats(PlanExecutor* exec);
 
 private:
-    static std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(
-        PlanExecutor* exec);
-
-    /**
-     * Adds the "executionStats" field to out. Assumes PlanExecutor::executePlan() has been called
-     * and that verbosity >= kExecStats.
-     *
-     * If verbosity >= kExecAllPlans, it will include the "allPlansExecution" array.
-     *
-     * winningPlanTrialStats may be nullptr.
-     **/
-    static void generateExecStatsSubobj(PlanExecutor* exec,
-                                        ExplainOptions::Verbosity verbosity,
-                                        Status executePlanStatus,
-                                        PlanStageStats* winningPlanTrialStats,
-                                        BSONObjBuilder* out);
-
     /**
      * Adds the 'queryPlanner' explain section to the BSON object being built
      * by 'out'.
      *
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      *
-     * If collection isn't nullptr the caller should hold an IS lock on it.
-     *
-     * @param exec -- the stage tree for the operation being explained.
-     * @param collection -- the collection used in the operation.
-     * @param winnerStats -- the stats tree for the winning plan.
-     * @param rejectedStats -- an array of stats trees, one per rejected plan
+     * 'exec' is the stage tree for the operation being explained.
+     * 'collection' is the collection used in the operation. If it isn't nullptr, the
+     * caller should hold an IS lock on it.
+     * 'out' is a builder for the explain output. 
      */
     static void generatePlannerInfo(PlanExecutor* exec,
                                     const Collection* collection,
@@ -212,6 +190,21 @@ private:
                             BSONObjBuilder* topLevelBob);
 
     /**
+     * Adds the "executionStats" field to out. Assumes PlanExecutor::executePlan() has been called
+     * and that verbosity >= kExecStats.
+     *
+     * If verbosity >= kExecAllPlans, it will include the "allPlansExecution" array.
+     *
+     * 'execPlanStatus' is the value returned after executing the query.
+     * 'winningPlanTrialStats' may be nullptr.
+     **/
+    static void generateExecutionInfo(PlanExecutor* exec,
+                                      ExplainOptions::Verbosity verbosity,
+                                      Status executePlanStatus,
+                                      PlanStageStats* winningPlanTrialStats,
+                                      BSONObjBuilder* out);
+
+    /**
      * Generates the execution stats section for the stats tree 'stats',
      * adding the resulting BSON to 'out'.
      *
@@ -222,12 +215,12 @@ private:
      *
      * Stats are generated at the verbosity specified by 'verbosity'.
      *
-     * This is a helper for generating explain BSON. It is used by explainStages(...).
+     * This is a helper for generating explain BSON. It is used by generateExecutionInfo().
      */
-    static void generateExecStatsForRun(const PlanStageStats* stats,
-                                        ExplainOptions::Verbosity verbosity,
-                                        boost::optional<long long> totalTimeMillis,
-                                        BSONObjBuilder* out);
+    static void generateSinglePlanExecutionInfo(const PlanStageStats* stats,
+                                                ExplainOptions::Verbosity verbosity,
+                                                boost::optional<long long> totalTimeMillis,
+                                                BSONObjBuilder* out);
 
     /**
      * Adds the 'serverInfo' explain section to the BSON object being build
