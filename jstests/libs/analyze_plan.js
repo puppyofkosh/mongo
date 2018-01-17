@@ -169,30 +169,6 @@ function getAggPlanStage(root, stage) {
 }
 
 /**
- * Given the root stage of agg explain's JSON representation of a query plan ('root'), returns all
- * subdocuments of $cursor. Asserts that agg explain structure matches expected format.
- */
-function getAggPipelineCursorStage(root) {
-    let results = [];
-
-    if (root.hasOwnProperty("stages")) {
-        assert(root.stages.constructor === Array, tojson(root));
-        assert(root.stages[0].hasOwnProperty("$cursor"), tojson(root));
-        results.push(root.stages[0].$cursor);
-    }
-
-    if (root.hasOwnProperty("shards")) {
-        for (let elem in root.shards) {
-            assert(root.shards[elem].stages.constructor === Array, tojson(root));
-            assert(root.shards[elem].stages[0].hasOwnProperty("$cursor"), tojson(root));
-            results = results.concat(root.shards[elem].stages[0].$cursor);
-        }
-    }
-
-    return results;
-}
-
-/**
  * Given the root stage of agg explain's JSON representation of a query plan ('root'), returns
  * whether the plan as stage called 'stage'.
  */
