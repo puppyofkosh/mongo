@@ -132,7 +132,6 @@ void DocumentSourceCursor::loadBatch() {
     switch (state) {
         case PlanExecutor::ADVANCED:
         case PlanExecutor::IS_EOF:
-            // _execStatus is already OK by default, so not resetting it here.
             return;  // We've reached our limit or exhausted the cursor.
         case PlanExecutor::DEAD: {
             _execStatus =
