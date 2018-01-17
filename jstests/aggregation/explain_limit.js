@@ -11,9 +11,9 @@
     const kCollSize = kMultipleSolutionLimit + 5;
     const kLimit = 10;
 
-    // Return whether or explain() was successful and contained the appropriate
-    // fields given the requested verbosity. Checks that the number of documents
-    // examined is correct based on whether there was more than one plan available.
+    // Return whether or explain() was successful and contained the appropriate fields given the
+    // requested verbosity. Checks that the number of documents examined is correct based on
+    // whether there was more than one plan available.
     function checkResults({results, verbosity, multipleSolutions}) {
         let cursorSubdocs = getAggPlanStages(results, "$cursor");
         for (let elem in cursorSubdocs) {
