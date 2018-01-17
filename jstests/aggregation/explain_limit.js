@@ -1,5 +1,4 @@
-// Tests the behavior of explain() when used with the aggregation
-// pipeline and limits.
+// Tests the behavior of explain() when used with the aggregation pipeline and limits.
 // @tags: [do_not_wrap_aggregations_in_facets]
 (function() {
     "use strict";
@@ -8,37 +7,44 @@
 
     let coll = db.explain_limit;
 
-    const MULTIPLANNER_LIMIT = 101;
-    const COLLSIZE = MULTIPLANNER_LIMIT + 5;
-    const LIMIT = 10;
+    const kMultipleSolutionLimit = 101;
+    const kCollSize = kMultipleSolutionLimit + 5;
+    const kLimit = 10;
 
-    function checkResults(results, verbosity, multiPlanner) {
+    // Return whether or explain() was successful and contained the appropriate
+    // fields given the requested verbosity. Checks that the number of documents
+    // examined is correct based on whether there was more than one plan available.
+    function checkResults({results, verbosity, multipleSolutions}) {
         if (verbosity !== "queryPlanner") {
-            assert(results.executionSuccess);
+            assert.eq(true, results.executionSuccess);
         }
         var cursorSubdocs = getAggPipelineCursorStage(results);
         for (let elem in cursorSubdocs) {
             let result = cursorSubdocs[elem];
-            assert.eq(result.limit, NumberLong(LIMIT), tojson(results));
+            assert.eq(result.limit, NumberLong(kLimit), tojson(results));
 
             if (verbosity === "queryPlanner") {
                 assert(!result.hasOwnProperty("executionStats"), tojson(results));
             } else {
-                // if it's "executionStats" or "allPlansExecution".
-                if (multiPlanner) {
+                // If it's "executionStats" or "allPlansExecution".
+                if (multipleSolutions) {
+                    // If there's more than one plan available, we may run several of them against
+                    // each other to see which is fastest. During this, our limit may be ignored
+                    // and so explain may return that it examined more documents than we asked it
+                    // to.
                     assert.lte(result.executionStats.nReturned,
-                               MULTIPLANNER_LIMIT,
+                               kMultipleSolutionLimit,
                                tojson(results));
                     assert.lte(result.executionStats.totalKeysExamined,
-                               MULTIPLANNER_LIMIT,
+                               kMultipleSolutionLimit,
                                tojson(results));
                     assert.lte(result.executionStats.totalDocsExamined,
-                               MULTIPLANNER_LIMIT,
+                               kMultipleSolutionLimit,
                                tojson(results));
                 } else {
-                    assert.eq(result.executionStats.nReturned, LIMIT, tojson(results));
-                    assert.eq(result.executionStats.totalKeysExamined, LIMIT, tojson(results));
-                    assert.eq(result.executionStats.totalDocsExamined, LIMIT, tojson(results));
+                    assert.eq(result.executionStats.nReturned, kLimit, tojson(results));
+                    assert.eq(result.executionStats.totalKeysExamined, kLimit, tojson(results));
+                    assert.eq(result.executionStats.totalDocsExamined, kLimit, tojson(results));
                 }
             }
         }
@@ -48,30 +54,30 @@
     coll.drop();
     assert.commandWorked(coll.createIndex({a: 1}));
 
-    for (let i = 0; i < COLLSIZE; i++) {
+    for (let i = 0; i < kCollSize; i++) {
         assert.writeOK(coll.insert({a: 1}));
     }
 
-    const pipeline = [{$match: {a: 1}}, {$limit: LIMIT}];
+    const pipeline = [{$match: {a: 1}}, {$limit: kLimit}];
 
-    const res1 = coll.explain("queryPlanner").aggregate(pipeline);
-    checkResults(res1, "queryPlanner", false);
+    var plannerLevel = coll.explain("queryPlanner").aggregate(pipeline);
+    checkResults({results:plannerLevel, verbosity:"queryPlanner", multipleSolutions:false});
 
-    const res2 = coll.explain("executionStats").aggregate(pipeline);
-    checkResults(res2, "executionStats", false);
+    var execLevel = coll.explain("executionStats").aggregate(pipeline);
+    checkResults({results:execLevel, verbosity:"executionStats", multipleSolutions:false});
 
-    const res3 = coll.explain("allPlansExecution").aggregate(pipeline);
-    checkResults(res3, "allPlansExecution", false);
+    var allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
+    checkResults({results:allPlansExecLevel, verbosity:"allPlansExecution", multipleSolutions:false});
 
-    // Create a second index so that we're forced to use the MultiPlanner.
+    // Create a second index so that more than one plan is available.
     assert.commandWorked(coll.createIndex({a: 1, b: 1}));
 
-    const res4 = coll.explain("queryPlanner").aggregate(pipeline);
-    checkResults(res4, "queryPlanner", true);
+    plannerLevel= coll.explain("queryPlanner").aggregate(pipeline);
+    checkResults({results:plannerLevel, verbosity:"queryPlanner", multipleSolutions:true});
 
-    const res5 = coll.explain("executionStats").aggregate(pipeline);
-    checkResults(res5, "executionStats", true);
+    execLevel = coll.explain("executionStats").aggregate(pipeline);
+    checkResults({results:execLevel, verbosity:"executionStats", multipleSolutions:true});
 
-    const res6 = coll.explain("allPlansExecution").aggregate(pipeline);
-    checkResults(res6, "allPlansExecution", true);
+    allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
+    checkResults({results:allPlansExecLevel, verbosity:"allPlansExecution", multipleSolutions:true});
 })();
