@@ -15,9 +15,6 @@
     // fields given the requested verbosity. Checks that the number of documents
     // examined is correct based on whether there was more than one plan available.
     function checkResults({results, verbosity, multipleSolutions}) {
-        if (verbosity !== "queryPlanner") {
-            assert.eq(true, results.executionSuccess);
-        }
         var cursorSubdocs = getAggPipelineCursorStage(results);
         for (let elem in cursorSubdocs) {
             let result = cursorSubdocs[elem];

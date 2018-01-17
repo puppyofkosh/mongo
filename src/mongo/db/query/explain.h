@@ -90,10 +90,6 @@ public:
      *
      * Does not take ownership of its arguments.
      *
-     * If verbosity >= kExecStats, whether or not the execution was successful will be stored in
-     * "executionSuccess". If there is an error, the message will be stored in "errorMessage" and
-     * the code will be stored in "errorCode".
-     *
      **/
     static void explainPipelineExecutor(PlanExecutor* exec,
                                         ExplainOptions::Verbosity verbosity,
