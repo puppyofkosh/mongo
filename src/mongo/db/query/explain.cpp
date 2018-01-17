@@ -780,15 +780,16 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
 
         BSONArrayBuilder allPlansBob(execBob.subarrayStart("allPlansExecution"));
 
+        if (winningPlanTrialStats) {
+            BSONObjBuilder planBob(allPlansBob.subobjStart());
+            generateSinglePlanExecutionInfo(winningPlanTrialStats, verbosity, boost::none, &planBob);
+            planBob.doneFast();
+        }
+
         const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
         for (size_t i = 0; i < rejectedStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
             generateSinglePlanExecutionInfo(rejectedStats[i].get(), verbosity, boost::none, &planBob);
-            planBob.doneFast();
-        }
-        if (winningPlanTrialStats) {
-            BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateSinglePlanExecutionInfo(winningPlanTrialStats, verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
 
@@ -801,7 +802,7 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
 void Explain::explainStages(PlanExecutor* exec,
                             const Collection* collection,
                             ExplainOptions::Verbosity verbosity,
-                            boost::optional<Status> executePlanStatus,
+                            Status executePlanStatus,
                             PlanStageStats* winningPlanTrialStats,
                             BSONObjBuilder* out) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
@@ -815,8 +816,7 @@ void Explain::explainStages(PlanExecutor* exec,
     }
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        invariant(executePlanStatus);
-        generateExecutionInfo(exec, verbosity, *executePlanStatus, winningPlanTrialStats, out);
+        generateExecutionInfo(exec, verbosity, executePlanStatus, winningPlanTrialStats, out);
     }
 }
 
@@ -845,23 +845,21 @@ void Explain::explainStages(PlanExecutor* exec,
                             BSONObjBuilder* out) {
     auto winningPlanTrialStats = Explain::getWinningPlanTrialStats(exec);
 
-    boost::optional<Status> executePlanStatusOpt;
+    Status executePlanStatus = Status::OK();
 
     // If we need execution stats, then run the plan in order to gather the stats.
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        auto executePlanStatus = exec->executePlan();
+        executePlanStatus = exec->executePlan();
 
         // If executing the query failed because it was killed, then the collection may no longer be
         // valid. We indicate this by setting our collection pointer to null.
         if (executePlanStatus == ErrorCodes::QueryPlanKilled) {
             collection = nullptr;
         }
-
-        executePlanStatusOpt = executePlanStatus;
     }
 
     explainStages(
-        exec, collection, verbosity, executePlanStatusOpt, winningPlanTrialStats.get(), out);
+        exec, collection, verbosity, executePlanStatus, winningPlanTrialStats.get(), out);
 
     generateServerInfo(out);
 }
