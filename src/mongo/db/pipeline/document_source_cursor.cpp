@@ -189,17 +189,17 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 
     invariant(_exec);
 
-    BSONObjBuilder builder;
-    builder.append("query", _query);
+    MutableDocument out;
+    out["query"] = Value(_query);
 
     if (!_sort.isEmpty())
-        builder.append("sort", _sort);
+        out["sort"] = Value(_sort);
 
     if (_limit)
-        builder.append("limit", _limit->getLimit());
+        out["limit"] = Value(_limit->getLimit());
 
     if (!_projection.isEmpty())
-        builder.append("fields", _projection);
+        out["fields"] = Value(_projection);
 
     // Need this lock since we may try to access the collection's info cache when generating
     // planner info.
@@ -208,14 +208,24 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
     auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
 
+    BSONObjBuilder explainStats;
     Explain::addPlanExecStats(_exec.get(),
                               collection,
                               verbosity.get(),
                               _execStatus,
                               _winningPlanTrialStats.get(),
-                              &builder);
+                              &explainStats);
 
-    return Value(DOC(getSourceName() << builder.obj()));
+    BSONObj obj = explainStats.obj();
+    invariant(obj.hasField("queryPlanner"));
+    out["queryPlanner"] = Value(obj["queryPlanner"]);
+
+    if (verbosity.get() >= ExplainOptions::Verbosity::kExecStats) {
+        invariant(obj.hasField("executionStats"));
+        out["executionStats"] = Value(obj["executionStats"]);
+    }
+
+    return Value(DOC(getSourceName() << out.freezeToValue()));
 }
 
 void DocumentSourceCursor::detachFromOperationContext() {
