@@ -59,6 +59,8 @@ public:
      *
      * Does not take ownership of its arguments.
      *
+     * If collection is not nullptr, the caller should hold an IS lock on it.
+     *
      * If there is an error during the execution of the query, the error message and code are
      * added to the "executionStats" section of the explain.
      */
@@ -69,7 +71,7 @@ public:
     /**
      * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to out.
      *
-     * collection may be nullptr.
+     * collection may be nullptr. If it isn't the caller should hold an IS lock on it.
      * winningPlanTrialStats may be nullptr.
      * executePlanStatus may be boost::none if verbosity < kExecStats.
      **/
@@ -186,6 +188,8 @@ private:
      * by 'out'.
      *
      * This is a helper for generating explain BSON. It is used by explainStages(...).
+     *
+     * If collection isn't nullptr the caller should hold an IS lock on it.
      *
      * @param exec -- the stage tree for the operation being explained.
      * @param collection -- the collection used in the operation.

@@ -265,7 +265,8 @@ void DocumentSourceCursor::cleanupExecutor() {
     auto cursorManager = collection ? collection->getCursorManager() : nullptr;
     _exec->dispose(opCtx, cursorManager);
 
-    // Not freeing _exec if we're in explain mode since it will be used in serialize().
+    // Not freeing _exec if we're in explain mode since it will be used in serialize() to gather
+    // execution stats.
     if (!pExpCtx->explain) {
         _exec.reset();
     }
@@ -277,7 +278,8 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
         readLock.getCollection() ? readLock.getCollection()->getCursorManager() : nullptr;
     _exec->dispose(pExpCtx->opCtx, cursorManager);
 
-    // Not freeing _exec if we're in explain mode since it will be used in serialize().
+    // Not freeing _exec if we're in explain mode since it will be used in serialize() to gather
+    // execution stats.
     if (!pExpCtx->explain) {
         _exec.reset();
     }
