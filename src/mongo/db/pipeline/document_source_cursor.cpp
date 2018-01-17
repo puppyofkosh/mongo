@@ -209,12 +209,12 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
 
     BSONObjBuilder explainStats;
-    Explain::addPlanExecStats(_exec.get(),
-                              collection,
-                              verbosity.get(),
-                              _execStatus,
-                              _winningPlanTrialStats.get(),
-                              &explainStats);
+    Explain::explainStages(_exec.get(),
+                          collection,
+                          verbosity.get(),
+                          _execStatus,
+                          _winningPlanTrialStats.get(),
+                          &explainStats);
 
     BSONObj obj = explainStats.obj();
     invariant(obj.hasField("queryPlanner"));
@@ -251,7 +251,6 @@ void DocumentSourceCursor::doDispose() {
 
 void DocumentSourceCursor::cleanupExecutor() {
     invariant(_exec);
-
     auto* opCtx = pExpCtx->opCtx;
     // We need to be careful to not use AutoGetCollection here, since we only need the lock to
     // protect potential access to the Collection's CursorManager, and AutoGetCollection may throw
@@ -288,8 +287,6 @@ void DocumentSourceCursor::cleanupExecutor(const AutoGetCollectionForRead& readL
 DocumentSourceCursor::~DocumentSourceCursor() {
     if (pExpCtx->explain) {
         invariant(_exec->isDisposed());  // _exec should have at least been disposed.
-
-        // _exec's destructor will destroy the underlying PlanExecutor.
     } else {
         invariant(!_exec);  // '_exec' should have been cleaned up via dispose() before destruction.
     }

@@ -94,8 +94,8 @@ void flattenExecTree(const PlanStage* root, vector<const PlanStage*>* flattened)
 }
 
 /**
- * Gets a pointer to the MultiPlanStage inside the stage tree rooted at 'root'.
- * Returns nullptr if there is no MPS.
+ * Gets a pointer to the MultiPlanStage inside the stage tree rooted at 'root'. Returns nullptr if
+ * there is no MPS.
  */
 MultiPlanStage* getMultiPlanStage(PlanStage* root) {
     if (root->stageType() == STAGE_MULTI_PLAN) {
@@ -115,8 +115,8 @@ MultiPlanStage* getMultiPlanStage(PlanStage* root) {
 }
 
 /**
- * Gets a pointer to the PipelineProxyStage if it is the root of the tree.
- * Returns nullptr if there is no PPS that is root.
+ * Gets a pointer to the PipelineProxyStage if it is the root of the tree. Returns nullptr if
+ * there is no PPS that is root.
  */
 PipelineProxyStage* getPipelineProxyStage(PlanStage* root) {
     if (root->stageType() == STAGE_PIPELINE_PROXY) {
@@ -132,7 +132,7 @@ PipelineProxyStage* getPipelineProxyStage(PlanStage* root) {
  *
  * This is used for getting the total number of keys examined by a plan. We need
  * to collect a 'totalKeysExamined' metric for a regular explain (in which case this
- * gets called from Explain::generateExecStatsForRun()) or for the slow query log / profiler
+ * gets called from Explain::generateSinglePlanExecutionInfo()) or for the slow query log / profiler
  * (in which case this gets called from Explain::getSummaryStats()).
  */
 size_t getKeysExamined(StageType type, const SpecificStats* specific) {
@@ -159,7 +159,7 @@ size_t getKeysExamined(StageType type, const SpecificStats* specific) {
  *
  * This is used for getting the total number of documents examined by a plan. We need
  * to collect a 'totalDocsExamined' metric for a regular explain (in which case this
- * gets called from Explain::generateExecStatsForRun()) or for the slow query log / profiler
+ * gets called from Explain::generateSinglePlanExecutionInfo()) or for the slow query log / profiler
  * (in which case this gets called from Explain::getSummaryStats()).
  */
 size_t getDocsExamined(StageType type, const SpecificStats* specific) {
@@ -249,6 +249,38 @@ void appendMultikeyPaths(const BSONObj& keyPattern,
     }
 
     subMultikeyPaths.doneFast();
+}
+
+/**
+ * Gather the PlanStageStats for all of the losing plans. If exec doesn't have a MultiPlanStage
+ * (or any losing plans), will return an empty vector.
+ */
+std::vector<std::unique_ptr<PlanStageStats>> getRejectedPlansTrialStats(PlanExecutor* exec) {
+    // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
+    // this point, since we have a PlanExecutor.
+    const auto mps = getMultiPlanStage(exec->getRootStage());
+    std::vector<std::unique_ptr<PlanStageStats>> res;
+
+    // Get the stats from the trial period for all the plans.
+    if (mps) {
+        const auto mpsStats = mps->getStats();
+        for (size_t i = 0; i < mpsStats->children.size(); ++i) {
+            if (i != static_cast<size_t>(mps->bestPlanIdx())) {
+                res.emplace_back(std::move(mpsStats->children[i]));
+            }
+        }
+    }
+
+    return res;
+}
+
+/**
+ * Get PlanExecutor's winning plan stats tree.
+ */
+unique_ptr<PlanStageStats> getWinningPlanStatsTree(const PlanExecutor* exec) {
+    MultiPlanStage* mps = getMultiPlanStage(exec->getRootStage());
+    return mps ? std::move(mps->getStats()->children[mps->bestPlanIdx()])
+        : std::move(exec->getRootStage()->getStats());
 }
 
 }  // namespace
@@ -592,15 +624,6 @@ BSONObj Explain::getWinningPlanStats(const PlanExecutor* exec) {
 }
 
 // static
-unique_ptr<PlanStageStats> Explain::getWinningPlanStatsTree(const PlanExecutor* exec) {
-    MultiPlanStage* mps = getMultiPlanStage(exec->getRootStage());
-    unique_ptr<PlanStageStats> winningStats(
-        mps ? std::move(mps->getStats()->children[mps->bestPlanIdx()])
-            : std::move(exec->getRootStage()->getStats()));
-    return winningStats;
-}
-
-// static
 void Explain::getWinningPlanStats(const PlanExecutor* exec, BSONObjBuilder* bob) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
     statsToBSON(*winningStats, ExplainOptions::Verbosity::kExecStats, bob, bob);
@@ -663,7 +686,7 @@ void Explain::generatePlannerInfo(PlanExecutor* exec,
 }
 
 // static
-void Explain::generateExecStatsForRun(const PlanStageStats* stats,
+void Explain::generateSinglePlanExecutionInfo(const PlanStageStats* stats,
                                       ExplainOptions::Verbosity verbosity,
                                       boost::optional<long long> totalTimeMillis,
                                       BSONObjBuilder* out) {
@@ -724,28 +747,8 @@ std::unique_ptr<PlanStageStats> Explain::getWinningPlanTrialStats(PlanExecutor* 
     return nullptr;
 }
 
-std::vector<std::unique_ptr<PlanStageStats>> Explain::getRejectedPlansTrialStats(
-    PlanExecutor* exec) {
-    // Inspect the tree to see if there is a MultiPlanStage. Plan selection has already happened at
-    // this point, since we have a PlanExecutor.
-    const auto mps = getMultiPlanStage(exec->getRootStage());
-    std::vector<std::unique_ptr<PlanStageStats>> res;
-
-    // Get the stats from the trial period for all the plans.
-    if (mps) {
-        const auto mpsStats = mps->getStats();
-        for (size_t i = 0; i < mpsStats->children.size(); ++i) {
-            if (i != static_cast<size_t>(mps->bestPlanIdx())) {
-                res.emplace_back(std::move(mpsStats->children[i]));
-            }
-        }
-    }
-
-    return res;
-}
-
 // static
-void Explain::generateExecStatsSubobj(PlanExecutor* exec,
+void Explain::generateExecutionInfo(PlanExecutor* exec,
                                       ExplainOptions::Verbosity verbosity,
                                       Status executePlanStatus,
                                       PlanStageStats* winningPlanTrialStats,
@@ -765,7 +768,7 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
     OperationContext* opCtx = exec->getOpCtx();
     long long totalTimeMillis = durationCount<Milliseconds>(CurOp::get(opCtx)->elapsedTimeTotal());
     const auto winningExecStats = getWinningPlanStatsTree(exec);
-    generateExecStatsForRun(winningExecStats.get(), verbosity, totalTimeMillis, &execBob);
+    generateSinglePlanExecutionInfo(winningExecStats.get(), verbosity, totalTimeMillis, &execBob);
 
     // Also generate exec stats for all plans, if the verbosity level is high enough.
     // These stats reflect what happened during the trial period that ranked the plans.
@@ -780,12 +783,12 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
         const vector<unique_ptr<PlanStageStats>> rejectedStats = getRejectedPlansTrialStats(exec);
         for (size_t i = 0; i < rejectedStats.size(); ++i) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(rejectedStats[i].get(), verbosity, boost::none, &planBob);
+            generateSinglePlanExecutionInfo(rejectedStats[i].get(), verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
         if (winningPlanTrialStats) {
             BSONObjBuilder planBob(allPlansBob.subobjStart());
-            generateExecStatsForRun(winningPlanTrialStats, verbosity, boost::none, &planBob);
+            generateSinglePlanExecutionInfo(winningPlanTrialStats, verbosity, boost::none, &planBob);
             planBob.doneFast();
         }
 
@@ -795,12 +798,12 @@ void Explain::generateExecStatsSubobj(PlanExecutor* exec,
     execBob.doneFast();
 }
 
-void Explain::addPlanExecStats(PlanExecutor* exec,
-                               const Collection* collection,
-                               ExplainOptions::Verbosity verbosity,
-                               boost::optional<Status> executePlanStatus,
-                               PlanStageStats* winningPlanTrialStats,
-                               BSONObjBuilder* out) {
+void Explain::explainStages(PlanExecutor* exec,
+                            const Collection* collection,
+                            ExplainOptions::Verbosity verbosity,
+                            boost::optional<Status> executePlanStatus,
+                            PlanStageStats* winningPlanTrialStats,
+                            BSONObjBuilder* out) {
     unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
 
     //
@@ -813,7 +816,7 @@ void Explain::addPlanExecStats(PlanExecutor* exec,
 
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
         invariant(executePlanStatus);
-        generateExecStatsSubobj(exec, verbosity, *executePlanStatus, winningPlanTrialStats, out);
+        generateExecutionInfo(exec, verbosity, *executePlanStatus, winningPlanTrialStats, out);
     }
 }
 
@@ -840,7 +843,7 @@ void Explain::explainStages(PlanExecutor* exec,
                             const Collection* collection,
                             ExplainOptions::Verbosity verbosity,
                             BSONObjBuilder* out) {
-    std::unique_ptr<PlanStageStats> winningPlanTrialStats = Explain::getWinningPlanTrialStats(exec);
+    auto winningPlanTrialStats = Explain::getWinningPlanTrialStats(exec);
 
     boost::optional<Status> executePlanStatusOpt;
 
@@ -857,7 +860,7 @@ void Explain::explainStages(PlanExecutor* exec,
         executePlanStatusOpt = executePlanStatus;
     }
 
-    addPlanExecStats(
+    explainStages(
         exec, collection, verbosity, executePlanStatusOpt, winningPlanTrialStats.get(), out);
 
     generateServerInfo(out);
