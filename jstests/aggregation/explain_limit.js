@@ -15,7 +15,7 @@
     // fields given the requested verbosity. Checks that the number of documents
     // examined is correct based on whether there was more than one plan available.
     function checkResults({results, verbosity, multipleSolutions}) {
-        var cursorSubdocs = getAggPlanStages(results, "$cursor")
+        let cursorSubdocs = getAggPlanStages(results, "$cursor")
         for (let elem in cursorSubdocs) {
             let stageResult = cursorSubdocs[elem];
             assert(stageResult.hasOwnProperty("$cursor"));
@@ -60,13 +60,13 @@
 
     const pipeline = [{$match: {a: 1}}, {$limit: kLimit}];
 
-    var plannerLevel = coll.explain("queryPlanner").aggregate(pipeline);
+    let plannerLevel = coll.explain("queryPlanner").aggregate(pipeline);
     checkResults({results:plannerLevel, verbosity:"queryPlanner", multipleSolutions:false});
 
-    var execLevel = coll.explain("executionStats").aggregate(pipeline);
+    let execLevel = coll.explain("executionStats").aggregate(pipeline);
     checkResults({results:execLevel, verbosity:"executionStats", multipleSolutions:false});
 
-    var allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
+    let allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
     checkResults({results:allPlansExecLevel, verbosity:"allPlansExecution", multipleSolutions:false});
 
     // Create a second index so that more than one plan is available.
