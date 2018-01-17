@@ -172,7 +172,7 @@ private:
      * 'exec' is the stage tree for the operation being explained.
      * 'collection' is the collection used in the operation. If it isn't nullptr, the
      * caller should hold an IS lock on it.
-     * 'out' is a builder for the explain output. 
+     * 'out' is a builder for the explain output.
      */
     static void generatePlannerInfo(PlanExecutor* exec,
                                     const Collection* collection,

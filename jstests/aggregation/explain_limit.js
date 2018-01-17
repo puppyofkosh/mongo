@@ -32,9 +32,8 @@
                     // each other to see which is fastest. During this, our limit may be ignored
                     // and so explain may return that it examined more documents than we asked it
                     // to.
-                    assert.lte(result.executionStats.nReturned,
-                               kMultipleSolutionLimit,
-                               tojson(results));
+                    assert.lte(
+                        result.executionStats.nReturned, kMultipleSolutionLimit, tojson(results));
                     assert.lte(result.executionStats.totalKeysExamined,
                                kMultipleSolutionLimit,
                                tojson(results));
@@ -61,23 +60,25 @@
     const pipeline = [{$match: {a: 1}}, {$limit: kLimit}];
 
     let plannerLevel = coll.explain("queryPlanner").aggregate(pipeline);
-    checkResults({results:plannerLevel, verbosity:"queryPlanner", multipleSolutions:false});
+    checkResults({results: plannerLevel, verbosity: "queryPlanner", multipleSolutions: false});
 
     let execLevel = coll.explain("executionStats").aggregate(pipeline);
-    checkResults({results:execLevel, verbosity:"executionStats", multipleSolutions:false});
+    checkResults({results: execLevel, verbosity: "executionStats", multipleSolutions: false});
 
     let allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
-    checkResults({results:allPlansExecLevel, verbosity:"allPlansExecution", multipleSolutions:false});
+    checkResults(
+        {results: allPlansExecLevel, verbosity: "allPlansExecution", multipleSolutions: false});
 
     // Create a second index so that more than one plan is available.
     assert.commandWorked(coll.createIndex({a: 1, b: 1}));
 
-    plannerLevel= coll.explain("queryPlanner").aggregate(pipeline);
-    checkResults({results:plannerLevel, verbosity:"queryPlanner", multipleSolutions:true});
+    plannerLevel = coll.explain("queryPlanner").aggregate(pipeline);
+    checkResults({results: plannerLevel, verbosity: "queryPlanner", multipleSolutions: true});
 
     execLevel = coll.explain("executionStats").aggregate(pipeline);
-    checkResults({results:execLevel, verbosity:"executionStats", multipleSolutions:true});
+    checkResults({results: execLevel, verbosity: "executionStats", multipleSolutions: true});
 
     allPlansExecLevel = coll.explain("allPlansExecution").aggregate(pipeline);
-    checkResults({results:allPlansExecLevel, verbosity:"allPlansExecution", multipleSolutions:true});
+    checkResults(
+        {results: allPlansExecLevel, verbosity: "allPlansExecution", multipleSolutions: true});
 })();
