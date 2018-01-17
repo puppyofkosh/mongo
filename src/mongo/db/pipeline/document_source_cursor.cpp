@@ -202,20 +202,24 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!_projection.isEmpty())
         out["fields"] = Value(_projection);
 
-    // Need this lock since we may try to access the collection's info cache when generating
-    // planner info.
-    auto opCtx = pExpCtx->opCtx;
-    AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
-    Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
-    auto collection = dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
-
     BSONObjBuilder explainStats;
-    Explain::explainStages(_exec.get(),
-                           collection,
-                           verbosity.get(),
-                           _execStatus,
-                           _winningPlanTrialStats.get(),
-                           &explainStats);
+
+    {
+        // Need this lock since 'explainStages' may try to access the collection's info cache when
+        // generating planner info.
+        auto opCtx = pExpCtx->opCtx;
+        AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
+        Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
+        auto collection =
+            dbLock.getDb() ? dbLock.getDb()->getCollection(opCtx, _exec->nss()) : nullptr;
+
+        Explain::explainStages(_exec.get(),
+                               collection,
+                               verbosity.get(),
+                               _execStatus,
+                               _winningPlanTrialStats.get(),
+                               &explainStats);
+    }
 
     BSONObj obj = explainStats.obj();
     invariant(obj.hasField("queryPlanner"));
