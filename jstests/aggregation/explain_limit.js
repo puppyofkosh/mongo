@@ -15,7 +15,7 @@
     // fields given the requested verbosity. Checks that the number of documents
     // examined is correct based on whether there was more than one plan available.
     function checkResults({results, verbosity, multipleSolutions}) {
-        let cursorSubdocs = getAggPlanStages(results, "$cursor")
+        let cursorSubdocs = getAggPlanStages(results, "$cursor");
         for (let elem in cursorSubdocs) {
             let stageResult = cursorSubdocs[elem];
             assert(stageResult.hasOwnProperty("$cursor"));
