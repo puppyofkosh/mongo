@@ -202,11 +202,9 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
     if (!_projection.isEmpty())
         out["fields"] = Value(_projection);
 
-    BSONObjBuilder explainStats;
+    BSONObjBuilder explainStatsBuilder;
 
     {
-        // Need this lock since 'explainStages' may try to access the collection's info cache when
-        // generating planner info.
         auto opCtx = pExpCtx->opCtx;
         AutoGetDb dbLock(opCtx, _exec->nss().db(), MODE_IS);
         Lock::CollectionLock collLock(opCtx->lockState(), _exec->nss().ns(), MODE_IS);
@@ -218,16 +216,16 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
                                verbosity.get(),
                                _execStatus,
                                _winningPlanTrialStats.get(),
-                               &explainStats);
+                               &explainStatsBuilder);
     }
 
-    BSONObj obj = explainStats.obj();
-    invariant(obj.hasField("queryPlanner"));
-    out["queryPlanner"] = Value(obj["queryPlanner"]);
+    BSONObj explainStats = explainStatsBuilder.obj();
+    invariant(explainStats["queryPlanner"]);
+    out["queryPlanner"] = Value(explainStats["queryPlanner"]);
 
     if (verbosity.get() >= ExplainOptions::Verbosity::kExecStats) {
-        invariant(obj.hasField("executionStats"));
-        out["executionStats"] = Value(obj["executionStats"]);
+        invariant(explainStats["executionStats"]);
+        out["executionStats"] = Value(explainStats["executionStats"]);
     }
 
     return Value(DOC(getSourceName() << out.freezeToValue()));

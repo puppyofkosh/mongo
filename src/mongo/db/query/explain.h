@@ -59,7 +59,8 @@ public:
      *
      * Does not take ownership of its arguments.
      *
-     * If 'collection' is not nullptr, the caller should hold an IS lock on it.
+     * The caller should hold at least an IS lock on the collection the that the query runs on,
+     * even if 'collection' is nullptr.
      *
      * If there is an error during the execution of the query, the error message and code are
      * added to the "executionStats" section of the explain.
@@ -69,17 +70,18 @@ public:
                               ExplainOptions::Verbosity verbosity,
                               BSONObjBuilder* out);
     /**
-     * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to 'out'.
+     * Adds "queryPlanner" and "executionStats" (if requested in verbosity) fields to 'out'. Unlike
+     * the other overload of explainStages() above, this one does not add the "serverInfo" section.
      *
-     * 'exec' is the stage tree for the operation being explained.
-     * 'collection' is the relevant collection. It may be nullptr, but if not the caller should hold
-     * an IS lock on it.
-     * 'verbosity' is the verbosity level of the explain.
-     * 'executePlanStatus' is the status returned after executing the query (Status::OK if the query
-     * wasn't executed).
-     * 'winningPlanTrialStats' is the stats of the winning plan during the trial period. May be
+     * - 'exec' is the stage tree for the operation being explained.
+     * - 'collection' is the relevant collection. It may be nullptr, but if not the caller should
+     * hold an IS lock on it.
+     * - 'verbosity' is the verbosity level of the explain.
+     * - 'executePlanStatus' is the status returned after executing the query (Status::OK if the
+     * query wasn't executed).
+     * - 'winningPlanTrialStats' is the stats of the winning plan during the trial period. May be
      * nullptr.
-     * 'out' is the builder for the explain output.
+     * - 'out' is the builder for the explain output.
      **/
     static void explainStages(PlanExecutor* exec,
                               const Collection* collection,
@@ -94,7 +96,6 @@ public:
      * readable explain format.
      *
      * The explain information is generated with the level of detail specified by 'verbosity'.
-     *
      **/
     static void explainPipelineExecutor(PlanExecutor* exec,
                                         ExplainOptions::Verbosity verbosity,
@@ -170,10 +171,10 @@ private:
      *
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      *
-     * 'exec' is the stage tree for the operation being explained.
-     * 'collection' is the collection used in the operation. If it isn't nullptr, the caller should
-     * hold an IS lock on it.
-     * 'out' is a builder for the explain output.
+     * - 'exec' is the stage tree for the operation being explained.
+     * - 'collection' is the collection used in the operation. If it isn't nullptr, the caller
+     * should hold an IS lock on it.
+     * - 'out' is a builder for the explain output.
      */
     static void generatePlannerInfo(PlanExecutor* exec,
                                     const Collection* collection,
@@ -196,8 +197,8 @@ private:
      *
      * If verbosity >= kExecAllPlans, it will include the "allPlansExecution" array.
      *
-     * 'execPlanStatus' is the value returned after executing the query.
-     * 'winningPlanTrialStats' may be nullptr.
+     * - 'execPlanStatus' is the value returned after executing the query.
+     * - 'winningPlanTrialStats' may be nullptr.
      **/
     static void generateExecutionInfo(PlanExecutor* exec,
                                       ExplainOptions::Verbosity verbosity,
