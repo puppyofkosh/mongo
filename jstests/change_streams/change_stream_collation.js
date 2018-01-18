@@ -7,6 +7,16 @@
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
     load("jstests/libs/change_stream_util.js");        // For 'ChangeStreamTest'.
 
+    const sharded = new ShardingTest({
+        shards: 2,
+        mongos: 3,
+        rs: {
+            nodes: 1,
+            // Use a higher frequency for periodic noops to speed up the test.
+            setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true},
+        },
+    });
+    var db = sharded.s0.getDB("change_stream_collation");
     let cst = new ChangeStreamTest(db);
 
     const caseInsensitive = {locale: "en_US", strength: 2};
@@ -27,6 +37,14 @@
     // opened before it existed.
     caseInsensitiveCollection =
         assertCreateCollection(db, caseInsensitiveCollection, {collation: caseInsensitive});
+
+    // shardCollection
+    var res = db.adminCommand({enableSharding: db.getName()});
+
+    res = db.adminCommand(
+        {shardCollection: caseInsensitiveCollection.getFullName(), key: {_id: 1}, collation: {locale: "simple"}});
+    assert.commandWorked(res);
+    
     cst.assertNextChangesEqual({
         cursor: simpleCollationStream,
         expectedChanges: [{operationType: "invalidate"}],
@@ -55,6 +73,17 @@
 
     assert.writeOK(caseInsensitiveCollection.insert({_id: 0, text: "aBc"}));
     assert.writeOK(caseInsensitiveCollection.insert({_id: 1, text: "abc"}));
+
+    // Split the collection into 2 chunks: [MinKey, 0), [0, MaxKey).
+    assert.commandWorked(db.adminCommand({split: caseInsensitiveCollection.getFullName(), middle: {_id: 0}}));
+
+    // Move a chunk to the non-primary shard.
+    assert.commandWorked(db.adminCommand({
+        moveChunk: caseInsensitiveCollection.getFullName(),
+        find: {_id: 1},
+        to: sharded.rs1.getURL(),
+        _waitForDelete: true
+    }));
 
     cst.assertNextChangesEqual(
         {cursor: implicitCaseInsensitiveStream, expectedChanges: [{docId: 0}, {docId: 1}]});
