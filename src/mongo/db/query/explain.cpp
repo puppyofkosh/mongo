@@ -802,8 +802,6 @@ void Explain::explainStages(PlanExecutor* exec,
                             Status executePlanStatus,
                             PlanStageStats* winningPlanTrialStats,
                             BSONObjBuilder* out) {
-    unique_ptr<PlanStageStats> winningStats = getWinningPlanStatsTree(exec);
-
     //
     // Use the stats trees to produce explain BSON.
     //
@@ -828,8 +826,9 @@ void Explain::explainPipelineExecutor(PlanExecutor* exec,
 
     // If we need execution stats, this runs the plan in order to gather the stats.
     if (verbosity >= ExplainOptions::Verbosity::kExecStats) {
-        Status executePlanStatus = Status::OK();
-        exec->executePlan().ignore();
+        // TODO SERVER-32732: An execution error should be reported in explain, but should not
+        // cause the explain itself to fail.
+        uassertStatusOK(exec->executePlan());
     }
 
     *out << "stages" << Value(pps->writeExplainOps(verbosity));
