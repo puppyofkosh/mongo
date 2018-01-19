@@ -190,6 +190,13 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
 
     invariant(_exec);
 
+    if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans &&
+        _exec->getRootStage()->findStageOfType(STAGE_MULTI_PLAN) != nullptr) {
+        invariant(_winningPlanTrialStats,
+                  "Should have stored winning plan trial stats during execution.");
+    }
+
+
     MutableDocument out;
     out["query"] = Value(_query);
 
