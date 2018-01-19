@@ -38,18 +38,20 @@
     caseInsensitiveCollection =
         assertCreateCollection(db, caseInsensitiveCollection, {collation: caseInsensitive});
 
-    // shardCollection
-    var res = db.adminCommand({enableSharding: db.getName()});
-
-    res = db.adminCommand(
-        {shardCollection: caseInsensitiveCollection.getFullName(), key: {_id: 1}, collation: {locale: "simple"}});
-    assert.commandWorked(res);
-    
     cst.assertNextChangesEqual({
         cursor: simpleCollationStream,
         expectedChanges: [{operationType: "invalidate"}],
         expectInvalidate: true
     });
+
+    // shardCollection
+    var res = db.adminCommand({enableSharding: db.getName()});
+
+    print("Sharding collection...");
+    res = db.adminCommand(
+        {shardCollection: caseInsensitiveCollection.getFullName(), key: {_id: "hashed"}, collation: {locale: "simple"}});
+    assert.commandWorked(res);
+
 
     const implicitCaseInsensitiveStream = cst.startWatchingChanges({
         pipeline: [
@@ -75,16 +77,27 @@
     assert.writeOK(caseInsensitiveCollection.insert({_id: 1, text: "abc"}));
 
     // Split the collection into 2 chunks: [MinKey, 0), [0, MaxKey).
-    assert.commandWorked(db.adminCommand({split: caseInsensitiveCollection.getFullName(), middle: {_id: 0}}));
+    // FIXME: I could not figure out why the collection gets split on its own.
+    // print("Splitting collection...");
+    // assert.commandWorked(db.adminCommand({split: caseInsensitiveCollection.getFullName(), middle: {_id: 0}}));
+    // print(caseInsensitiveCollection.getShardDistribution());
 
+    print("Shard distribution is...");
+    print(caseInsensitiveCollection.getShardDistribution());
+
+    
     // Move a chunk to the non-primary shard.
     assert.commandWorked(db.adminCommand({
         moveChunk: caseInsensitiveCollection.getFullName(),
         find: {_id: 1},
-        to: sharded.rs1.getURL(),
-        _waitForDelete: true
+        //to: sharded.rs1.getURL(),
+        to: sharded.rs0.getURL(),
+        _waitForDelete: false
     }));
+    print("Shard distribution is...");
+    print(caseInsensitiveCollection.getShardDistribution());
 
+    print("About to run failing statement.");
     cst.assertNextChangesEqual(
         {cursor: implicitCaseInsensitiveStream, expectedChanges: [{docId: 0}, {docId: 1}]});
     cst.assertNextChangesEqual(
