@@ -98,20 +98,9 @@ void flattenExecTree(const PlanStage* root, vector<const PlanStage*>* flattened)
  * there is no MPS.
  */
 MultiPlanStage* getMultiPlanStage(PlanStage* root) {
-    if (root->stageType() == STAGE_MULTI_PLAN) {
-        MultiPlanStage* mps = static_cast<MultiPlanStage*>(root);
-        return mps;
-    }
-
-    const auto& children = root->getChildren();
-    for (size_t i = 0; i < children.size(); i++) {
-        MultiPlanStage* mps = getMultiPlanStage(children[i].get());
-        if (mps != NULL) {
-            return mps;
-        }
-    }
-
-    return nullptr;
+    PlanStage* ps = root->findStageOfType(STAGE_MULTI_PLAN);
+    invariant(ps == nullptr || ps->stageType() == STAGE_MULTI_PLAN);
+    return static_cast<MultiPlanStage*>(ps);
 }
 
 /**
@@ -754,6 +743,12 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
                                     PlanStageStats* winningPlanTrialStats,
                                     BSONObjBuilder* out) {
     invariant(verbosity >= ExplainOptions::Verbosity::kExecStats);
+    if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans &&
+        exec->getRootStage()->findStageOfType(STAGE_MULTI_PLAN) != nullptr) {
+        invariant(winningPlanTrialStats,
+                  "winningPlanTrialStats should be non-null when requesting "
+                  "execution stats for all plans");
+    }
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
     // If there is an execution error while running the query, the error is reported under
