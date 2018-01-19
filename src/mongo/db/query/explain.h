@@ -74,8 +74,8 @@ public:
      * the other overload of explainStages() above, this one does not add the "serverInfo" section.
      *
      * - 'exec' is the stage tree for the operation being explained.
-     * - 'collection' is the relevant collection. It may be nullptr, but if not the caller should
-     * hold an IS lock on it.
+     * - 'collection' is the relevant collection. The caller should hold at least an IS lock on the
+     * collection which the query ran on, even 'collection' is nullptr.
      * - 'verbosity' is the verbosity level of the explain.
      * - 'executePlanStatus' is the status returned after executing the query (Status::OK if the
      * query wasn't executed).
@@ -172,8 +172,8 @@ private:
      * This is a helper for generating explain BSON. It is used by explainStages(...).
      *
      * - 'exec' is the stage tree for the operation being explained.
-     * - 'collection' is the collection used in the operation. If it isn't nullptr, the caller
-     * should hold an IS lock on it.
+     * - 'collection' is the collection used in the operation. The caller should hold an IS lock on
+     * the collection which the query is for, even if 'collection' is nullptr.
      * - 'out' is a builder for the explain output.
      */
     static void generatePlannerInfo(PlanExecutor* exec,
