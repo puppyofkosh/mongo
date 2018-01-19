@@ -347,11 +347,7 @@ TEST_F(DocumentSourceCursorTest, ExpressionContextAndSerializeVerbosityMismatch)
     // Execute the plan so that the source populates its internal executionStats.
     exhaustCursor();
 
-    try {
-        source()->serialize(verb2).getDocument();
-    } catch (const DBException& e) {
-        ASSERT_NE(e.reason().find("Mismatch between verbosity"), std::string::npos);
-    }
+    ASSERT_THROWS_CODE(source()->serialize(verb2), DBException, 50660);
 }
 
 TEST_F(DocumentSourceCursorTest, TailableAwaitDataCursorShouldErrorAfterTimeout) {

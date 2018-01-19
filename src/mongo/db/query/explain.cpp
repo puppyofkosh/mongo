@@ -746,8 +746,7 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
     if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans &&
         exec->getRootStage()->findStageOfType(STAGE_MULTI_PLAN) != nullptr) {
         invariant(winningPlanTrialStats,
-                  "winningPlanTrialStats should be non-null when requesting "
-                  "execution stats for all plans");
+                  "winningPlanTrialStats must be non-null when requesting all execution stats");
     }
     BSONObjBuilder execBob(out->subobjStart("executionStats"));
 
