@@ -3,7 +3,7 @@
 (function() {
     "use strict";
 
-    load("jstests/libs/analyze_plan.js");  // For getAggPlanStages()
+    load("jstests/libs/analyze_plan.js");  // For getAggPlanStages().
 
     let coll = db.explain_limit;
 
