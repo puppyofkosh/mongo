@@ -196,6 +196,9 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
                   "Should have stored winning plan trial stats during execution.");
     }
 
+    uassert(50660,
+            "Mismatch between verbosity passed to serialize() and expression context verbosity",
+            verbosity == pExpCtx->explain);
 
     MutableDocument out;
     out["query"] = Value(_query);

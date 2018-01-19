@@ -338,6 +338,22 @@ TEST_F(DocumentSourceCursorTest, SerializationExecAllPlansExplainLevel) {
     source()->dispose();
 }
 
+TEST_F(DocumentSourceCursorTest, ExpressionContextAndSerializeVerbosityMismatch) {
+    const auto verb1 = ExplainOptions::Verbosity::kExecAllPlans;
+    const auto verb2 = ExplainOptions::Verbosity::kQueryPlanner;
+    createSource();
+    ctx()->explain = verb1;
+
+    // Execute the plan so that the source populates its internal executionStats.
+    exhaustCursor();
+
+    try {
+        source()->serialize(verb2).getDocument();
+    } catch (const DBException& e) {
+        ASSERT_NE(e.reason().find("Mismatch between verbosity"), std::string::npos);
+    }
+}
+
 TEST_F(DocumentSourceCursorTest, TailableAwaitDataCursorShouldErrorAfterTimeout) {
     // Make sure the collection exists, otherwise we'll default to a NO_YIELD yield policy.
     const bool capped = true;
