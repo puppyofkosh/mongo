@@ -98,7 +98,10 @@ ClusterCursorManager::PinnedCursor::PinnedCursor(PinnedCursor&& other)
     : _manager(std::move(other._manager)),
       _cursor(other._cursor),
       _nss(std::move(other._nss)),
-      _cursorId(std::move(other._cursorId)) {}
+      _cursorId(std::move(other._cursorId)) {
+    // We don't want 'other' trying to return the cursor when its destructor is called.
+    other._cursor = nullptr;
+}
 
 ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator=(
     ClusterCursorManager::PinnedCursor&& other) {
@@ -108,6 +111,8 @@ ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator
     }
     _manager = std::move(other._manager);
     _cursor = other._cursor;
+    // We don't want 'other' trying to return the cursor when its destructor is called.
+    other._cursor = nullptr;
     _nss = std::move(other._nss);
     _cursorId = std::move(other._cursorId);
     return *this;
@@ -155,6 +160,9 @@ void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
     _manager->checkInCursor(_cursor, _nss, _cursorId, cursorState);
+
+    // Invalidate our pointer to the cursor so that we don't try to return it on destruction.
+    _cursor = nullptr;
     *this = PinnedCursor();
 }
 

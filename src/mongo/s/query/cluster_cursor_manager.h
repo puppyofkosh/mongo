@@ -259,7 +259,7 @@ public:
         void returnAndKillCursor();
 
         ClusterCursorManager* _manager = nullptr;
-        ClusterClientCursor* _cursor;
+        ClusterClientCursor* _cursor = nullptr;
         NamespaceString _nss;
         CursorId _cursorId = 0;
     };
@@ -550,7 +550,7 @@ private:
         boost::optional<LogicalSessionId> _lsid;
 
         // Current operation using the cursor. nullptr if the cursor is not "checked out."
-        OperationContext* _operationUsingCursor;
+        OperationContext* _operationUsingCursor = nullptr;
 
     };
 
