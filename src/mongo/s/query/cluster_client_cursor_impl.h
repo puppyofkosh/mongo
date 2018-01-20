@@ -72,7 +72,6 @@ public:
      * Transfers ownership of the underlying cursor to the caller.
      */
     std::unique_ptr<ClusterClientCursor> releaseCursor();
-
 private:
     OperationContext* _opCtx;
     std::unique_ptr<ClusterClientCursor> _ccc;

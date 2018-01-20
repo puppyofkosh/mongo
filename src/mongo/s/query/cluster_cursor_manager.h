@@ -116,6 +116,7 @@ public:
     };
 
     /**
+     * TODO: Update
      * PinnedCursor is a moveable, non-copyable class representing ownership of a cursor that has
      * been leased from a ClusterCursorManager.
      *
@@ -247,7 +248,7 @@ public:
          * and 'cursorId' must be non-zero.
          */
         PinnedCursor(ClusterCursorManager* manager,
-                     std::unique_ptr<ClusterClientCursor> cursor,
+                     ClusterClientCursor* cursor,
                      const NamespaceString& nss,
                      CursorId cursorId);
 
@@ -258,7 +259,7 @@ public:
         void returnAndKillCursor();
 
         ClusterCursorManager* _manager = nullptr;
-        std::unique_ptr<ClusterClientCursor> _cursor;
+        ClusterClientCursor* _cursor;
         NamespaceString _nss;
         CursorId _cursorId = 0;
     };
@@ -424,7 +425,7 @@ private:
      * Intentionally private.  Clients should use public methods on PinnedCursor to check a cursor
      * back in.
      */
-    void checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
+    void checkInCursor(ClusterClientCursor* cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
                        CursorState cursorState);
@@ -494,29 +495,37 @@ private:
             return _lastActive;
         }
 
-        bool isCursorOwned() const {
-            return static_cast<bool>(_cursor);
-        }
-
         boost::optional<LogicalSessionId> getLsid() const {
             return _lsid;
         }
 
         /**
-         * Releases the cursor from this entry.  If the cursor has already been released, returns
-         * null.
+         * Releases the cursor from this entry. Should only be called before destroying the entry.
          */
         std::unique_ptr<ClusterClientCursor> releaseCursor() {
+            invariant(!_operationUsingCursor);
+            invariant(_cursor);
             return std::move(_cursor);
         }
 
+        ClusterClientCursor* getCursorForOperation(OperationContext* opCtx) {
+            invariant(!_operationUsingCursor);
+            _operationUsingCursor = opCtx;
+            return _cursor.get();
+        }
+
+        OperationContext* getOperationUsingCursor() const {
+            return _operationUsingCursor;
+        }
+
         /**
+         * TODO: Update comment
          * Transfers ownership of the given released cursor back to this entry.
          */
-        void returnCursor(std::unique_ptr<ClusterClientCursor> cursor) {
-            invariant(cursor);
-            invariant(!_cursor);
-            _cursor = std::move(cursor);
+        void returnCursor(ClusterClientCursor* cursor) {
+            invariant(cursor == _cursor.get());
+            invariant(_operationUsingCursor);
+            _operationUsingCursor = nullptr;
         }
 
         void setKillPending() {
@@ -539,6 +548,10 @@ private:
         CursorLifetime _cursorLifetime = CursorLifetime::Mortal;
         Date_t _lastActive;
         boost::optional<LogicalSessionId> _lsid;
+
+        // Current operation using the cursor. nullptr if the cursor is not "checked out."
+        OperationContext* _operationUsingCursor;
+
     };
 
     /**
