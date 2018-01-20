@@ -551,7 +551,6 @@ private:
 
         // Current operation using the cursor. nullptr if the cursor is not "checked out."
         OperationContext* _operationUsingCursor = nullptr;
-
     };
 
     /**

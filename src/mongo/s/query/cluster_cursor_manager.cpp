@@ -161,7 +161,7 @@ void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     // back to the manager.
     _manager->checkInCursor(_cursor, _nss, _cursorId, cursorState);
 
-    // Invalidate our pointer to the cursor so that we don't try to return it on destruction.
+    // Invalidate our pointer to the cursor so that we don't try to return it again on destruction.
     _cursor = nullptr;
     *this = PinnedCursor();
 }
@@ -385,8 +385,7 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             CursorEntry& entry = cursorIdEntryPair.second;
             if (entry.getLifetimeType() == CursorLifetime::Mortal &&
-                entry.getOperationUsingCursor() == nullptr &&
-                entry.getLastActive() <= cutoff) {
+                entry.getOperationUsingCursor() == nullptr && entry.getLastActive() <= cutoff) {
                 entry.setInactive();
                 log() << "Marking cursor id " << cursorIdEntryPair.first
                       << " for deletion, idle since " << entry.getLastActive().toString();
