@@ -122,11 +122,14 @@ StatusWith<ClusterQueryResult> ClusterCursorManager::PinnedCursor::next(
 void ClusterCursorManager::PinnedCursor::reattachToOperationContext(OperationContext* opCtx) {
     invariant(_cursor);
     _cursor->reattachToOperationContext(opCtx);
+    _opCtx = opCtx;
 }
 
 void ClusterCursorManager::PinnedCursor::detachFromOperationContext() {
     invariant(_cursor);
     _cursor->detachFromOperationContext();
+    invariant(_opCtx);
+    _opCtx = nullptr;
 }
 
 bool ClusterCursorManager::PinnedCursor::isTailable() const {
@@ -184,9 +187,10 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
+    invariant(_opCtx);
 
     // Inform the manager that the cursor should be killed.
-    invariantOK(_manager->killCursor(_nss, _cursorId));
+    invariantOK(_manager->killCursor(_opCtx, _nss, _cursorId));
 
     // Return the cursor to the manager.  It will be deleted on the next call to
     // ClusterCursorManager::reapZombieCursors().
@@ -363,15 +367,38 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     detachedCursor.getValue().reset();
 }
 
-Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cursorId) {
+Status ClusterCursorManager::killCursor(OperationContext* opCtx,
+                                        const NamespaceString& nss,
+                                        CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
+
+    log() << "ian: killCursor()";
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     if (!entry) {
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    entry->setKillPending();
+    if (entry->getOperationUsingCursor()) {
+        // TODO: Kill the operation.
+
+        // Old behavior
+        entry->setKillPending();
+        return Status::OK();
+    }
+
+    auto cursorStatus = _detachCursor(lk, nss, cursorId);
+
+    // At this point we've already found that the CursorEntry, and made sure that it's not in use.
+    invariant(cursorStatus.isOK());
+
+    // TODO: might be a good idea to give up lk here, since we do actually have to wait for another
+    // thread.
+    log() << "ian:Calling kill() on the cursor";
+    cursorStatus.getValue()->kill(opCtx);
+
+    log() << "ian:Destructing it";
+    cursorStatus.getValue().reset();
 
     return Status::OK();
 }
@@ -431,6 +458,7 @@ std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
         }
     }
 
+    // TODO: We'll still have to keep track of this somehow.
     std::size_t cursorsTimedOut = 0;
 
     for (auto& cursorDescriptor : zombieCursorDescriptors) {
@@ -536,7 +564,7 @@ std::vector<GenericCursor> ClusterCursorManager::getAllCursors() const {
 std::pair<Status, int> ClusterCursorManager::killCursorsWithMatchingSessions(
     OperationContext* opCtx, const SessionKiller::Matcher& matcher) {
     auto eraser = [&](ClusterCursorManager& mgr, CursorId id) {
-        uassertStatusOK(mgr.killCursor(getNamespaceForCursorId(id).get(), id));
+        uassertStatusOK(mgr.killCursor(opCtx, getNamespaceForCursorId(id).get(), id));
     };
 
     auto visitor = makeKillSessionsCursorManagerVisitor(opCtx, matcher, std::move(eraser));

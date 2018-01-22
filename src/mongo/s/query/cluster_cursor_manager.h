@@ -258,6 +258,7 @@ public:
         void returnAndKillCursor();
 
         ClusterCursorManager* _manager = nullptr;
+        OperationContext* _opCtx;
         std::unique_ptr<ClusterClientCursor> _cursor;
         NamespaceString _nss;
         CursorId _cursorId = 0;
@@ -329,7 +330,7 @@ public:
      *
      * Does not block.
      */
-    Status killCursor(const NamespaceString& nss, CursorId cursorId);
+    Status killCursor(OperationContext* opCtx, const NamespaceString& nss, CursorId cursorId);
 
     /**
      * Informs the manager that all mortal cursors with a 'last active' time equal to or earlier

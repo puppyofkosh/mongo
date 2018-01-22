@@ -47,6 +47,7 @@ std::string ClusterCursorCleanupJob::name() const {
     return "ClusterCursorCleanupJob";
 }
 
+    // TODO: delete
 void ClusterCursorCleanupJob::run() {
     Client::initThread(name().c_str());
 
