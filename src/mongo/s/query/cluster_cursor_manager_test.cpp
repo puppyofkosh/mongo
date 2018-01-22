@@ -117,7 +117,7 @@ protected:
 
         auto killCursorOpCtx = killCursorClient->makeOperationContext();
         invariant(killCursorOpCtx);
-        ASSERT_OK(getManager()->killCursor(nss, cursorId));
+        ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
 
         // Restore the old client. We don't need 'killCursorClient' anymore.
         killCursorOpCtx.reset();
@@ -276,7 +276,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorKilled) {
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
-    ASSERT_OK(getManager()->killCursor(nss, cursorId));
+    killCursorFromDifferentOpCtx(nss, cursorId);
     ASSERT_EQ(
         ErrorCodes::CursorNotFound,
         getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker).getStatus());
@@ -419,7 +419,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorMultipleCursors) {
     }
     // Kill each cursor and verify that it was successfully killed.
     for (size_t i = 0; i < numCursors; ++i) {
-        ASSERT_OK(getManager()->killCursor(nss, cursorIds[i]));
+        ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorIds[i]));
         ASSERT(!isMockCursorKilled(i));
         getManager()->reapZombieCursors(nullptr);
         ASSERT(isMockCursorKilled(i));
@@ -428,7 +428,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorMultipleCursors) {
 
 // Test that killing an unknown cursor returns an error with code ErrorCodes::CursorNotFound.
 TEST_F(ClusterCursorManagerTest, KillCursorUnknown) {
-    Status killResult = getManager()->killCursor(nss, 5);
+    Status killResult = getManager()->killCursor(_opCtx.get(), nss, 5);
     ASSERT_EQ(ErrorCodes::CursorNotFound, killResult);
 }
 
@@ -444,7 +444,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorWrongNamespace) {
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
-    Status killResult = getManager()->killCursor(incorrectNamespace, cursorId);
+    Status killResult = getManager()->killCursor(_opCtx.get(), incorrectNamespace, cursorId);
     ASSERT_EQ(ErrorCodes::CursorNotFound, killResult);
 }
 
@@ -458,7 +458,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorWrongCursorId) {
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
-    Status killResult = getManager()->killCursor(nss, cursorId + 1);
+    Status killResult = getManager()->killCursor(_opCtx.get(), nss, cursorId + 1);
     ASSERT_EQ(ErrorCodes::CursorNotFound, killResult);
 }
 
@@ -592,7 +592,7 @@ TEST_F(ClusterCursorManagerTest, ReapZombieCursorsBasic) {
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
-    ASSERT_OK(getManager()->killCursor(nss, cursorId));
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
     ASSERT(!isMockCursorKilled(0));
     getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
@@ -709,7 +709,7 @@ TEST_F(ClusterCursorManagerTest, StatsKillShardedCursor) {
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
     ASSERT_EQ(1U, getManager()->stats().cursorsMultiTarget);
-    ASSERT_OK(getManager()->killCursor(nss, cursorId));
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
     ASSERT_EQ(0U, getManager()->stats().cursorsMultiTarget);
 }
 
@@ -723,7 +723,7 @@ TEST_F(ClusterCursorManagerTest, StatsKillNotShardedCursor) {
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
     ASSERT_EQ(1U, getManager()->stats().cursorsSingleTarget);
-    ASSERT_OK(getManager()->killCursor(nss, cursorId));
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
     ASSERT_EQ(0U, getManager()->stats().cursorsSingleTarget);
 }
 
@@ -1148,7 +1148,7 @@ TEST_F(ClusterCursorManagerTest, OneCursorWithASession) {
     ASSERT(cursors.find(cursorId) != cursors.end());
 
     // Remove the cursor from the manager.
-    ASSERT_OK(getManager()->killCursor(nss, cursorId));
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
 
     // There should be no more cursor entries by session id.
     LogicalSessionIdSet sessions;
@@ -1213,7 +1213,7 @@ TEST_F(ClusterCursorManagerTest, MultipleCursorsWithSameSession) {
     ASSERT(cursors.find(cursorId2) != cursors.end());
 
     // Remove one cursor from the manager.
-    ASSERT_OK(getManager()->killCursor(nss, cursorId1));
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId1));
 
     // Should still be able to retrieve the session.
     lsids.clear();
