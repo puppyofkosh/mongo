@@ -179,8 +179,9 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
 
-    // Inform the manager that the cursor should be killed.
-    invariantOK(_manager->killCursor(_nss, _cursorId));
+    // Inform the manager that the cursor should be killed. The cursor is checked out by this
+    // thread, so we pass a null opCtx.
+    invariantOK(_manager->killCursor(nullptr, _nss, _cursorId));
 
     // Return the cursor to the manager.  It will be deleted on the next call to
     // ClusterCursorManager::reapZombieCursors().
@@ -381,7 +382,9 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
     return authChecker(entry->getAuthenticatedUsers());
 }
 
-Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cursorId) {
+Status ClusterCursorManager::killCursor(OperationContext* opCtx,
+                                        const NamespaceString& nss,
+                                        CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
@@ -394,6 +397,8 @@ Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cur
     if (opUsingCursor) {
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
+    } else {
+        invariant(opCtx);
     }
 
     entry->setKillPending();
@@ -561,7 +566,7 @@ std::vector<GenericCursor> ClusterCursorManager::getAllCursors() const {
 std::pair<Status, int> ClusterCursorManager::killCursorsWithMatchingSessions(
     OperationContext* opCtx, const SessionKiller::Matcher& matcher) {
     auto eraser = [&](ClusterCursorManager& mgr, CursorId id) {
-        uassertStatusOK(mgr.killCursor(getNamespaceForCursorId(id).get(), id));
+        uassertStatusOK(mgr.killCursor(opCtx, getNamespaceForCursorId(id).get(), id));
     };
 
     auto visitor = makeKillSessionsCursorManagerVisitor(opCtx, matcher, std::move(eraser));

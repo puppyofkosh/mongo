@@ -342,9 +342,11 @@ public:
      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
      *
+     * If the cursor is checked out, 'opCtx' may be nullptr.
+     *
      * Does not block.
      */
-    Status killCursor(const NamespaceString& nss, CursorId cursorId);
+    Status killCursor(OperationContext* opCtx, const NamespaceString& nss, CursorId cursorId);
 
     /**
      * Informs the manager that all mortal cursors with a 'last active' time equal to or earlier
