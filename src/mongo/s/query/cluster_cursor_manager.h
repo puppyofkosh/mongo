@@ -501,12 +501,19 @@ private:
         boost::optional<LogicalSessionId> getLsid() const {
             return _lsid;
         }
+        
+        OperationContext* getOperationUsingCursor() const {
+            return _operationUsingCursor;
+        }
 
         /**
          * Releases the cursor from this entry.  If the cursor has already been released, returns
          * null.
          */
-        std::unique_ptr<ClusterClientCursor> releaseCursor() {
+        std::unique_ptr<ClusterClientCursor> releaseCursor(OperationContext* opCtx = nullptr) {
+            invariant(!_operationUsingCursor);
+            invariant(_cursor);
+            _operationUsingCursor = opCtx;
             return std::move(_cursor);
         }
 
@@ -516,7 +523,9 @@ private:
         void returnCursor(std::unique_ptr<ClusterClientCursor> cursor) {
             invariant(cursor);
             invariant(!_cursor);
+            invariant(_operationUsingCursor);
             _cursor = std::move(cursor);
+            _operationUsingCursor = nullptr;
         }
 
         void setKillPending() {
@@ -539,6 +548,9 @@ private:
         CursorLifetime _cursorLifetime = CursorLifetime::Mortal;
         Date_t _lastActive;
         boost::optional<LogicalSessionId> _lsid;
+
+        // The current operation, if any, which has the cursor checked out.
+        OperationContext* _operationUsingCursor = nullptr;
     };
 
     /**
