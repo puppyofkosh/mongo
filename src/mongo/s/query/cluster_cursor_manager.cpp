@@ -302,10 +302,12 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         }
     }
 
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
-    if (!cursor) {
+    if (entry->getOperationUsingCursor()) {
         return cursorInUseStatus(nss, cursorId);
     }
+
+    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor(opCtx);
+
     // Note: due to SERVER-31138, despite putting this in a unique_ptr, it's actually not safe to
     // return before the end of this function.  Be careful to avoid any early returns/throws after
     // this point.
@@ -602,10 +604,11 @@ StatusWith<std::unique_ptr<ClusterClientCursor>> ClusterCursorManager::_detachCu
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
-    if (!cursor) {
+    if (entry->getOperationUsingCursor()) {
         return cursorInUseStatus(nss, cursorId);
     }
+
+    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
 
     auto nsToContainerIt = _namespaceToContainerMap.find(nss);
     invariant(nsToContainerIt != _namespaceToContainerMap.end());
