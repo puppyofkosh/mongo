@@ -198,7 +198,7 @@ public:
          * If 'Exhausted' is passed, the manager will de-register and destroy the cursor after it
          * is returned.
          */
-        void returnCursor(CursorState cursorState);
+        void returnCursor(CursorState cursorState, bool killUnexhausted = false);
 
         /**
          * Returns the cursor id for the underlying cursor, or zero if no cursor is owned.
@@ -254,6 +254,7 @@ public:
         /**
          * Informs the manager that the cursor should be killed, and transfers ownership of the
          * cursor back to the manager.  A cursor must be owned.
+         * TODO Updateee
          */
         void returnAndKillCursor();
 
@@ -425,10 +426,12 @@ private:
      * Intentionally private.  Clients should use public methods on PinnedCursor to check a cursor
      * back in.
      */
-    void checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
+    void checkInCursor(OperationContext* opCtx,
+                       std::unique_ptr<ClusterClientCursor> cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
-                       CursorState cursorState);
+                       CursorState cursorState,
+                       bool killUnexhausted);
 
     /**
      * Returns a pointer to the CursorEntry for the given cursor.  If the given cursor is not
@@ -450,6 +453,11 @@ private:
     StatusWith<std::unique_ptr<ClusterClientCursor>> _detachCursor(WithLock,
                                                                    NamespaceString const& nss,
                                                                    CursorId cursorId);
+
+    /**
+     * TODO: comment
+     */
+    static void killDetachedCursor(OperationContext*, std::unique_ptr<ClusterClientCursor> cursor);
 
     /**
      * CursorEntry is a moveable, non-copyable container for a single cursor.
@@ -502,7 +510,7 @@ private:
         boost::optional<LogicalSessionId> getLsid() const {
             return _lsid;
         }
-        
+
         OperationContext* getOperationUsingCursor() const {
             return _operationUsingCursor;
         }
