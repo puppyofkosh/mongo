@@ -285,23 +285,6 @@ public:
     }
 
     /**
-     * Traverse the stage tree, depth first and return the first stage of a given type.
-     */
-    PlanStage* findStageOfType(StageType desiredStageType) {
-        if (stageType() == desiredStageType) {
-            return this;
-        }
-
-        for (const auto& child : _children) {
-            PlanStage* p = child->findStageOfType(desiredStageType);
-            if (p) {
-                return p;
-            }
-        }
-        return nullptr;
-    }
-
-    /**
      * Retrieve a list of this stage's children. This stage keeps ownership of
      * its children.
      */

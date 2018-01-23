@@ -194,13 +194,6 @@ Value DocumentSourceCursor::serialize(boost::optional<ExplainOptions::Verbosity>
             "Mismatch between verbosity passed to serialize() and expression context verbosity",
             verbosity == pExpCtx->explain);
 
-    if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans &&
-        _exec->getRootStage()->findStageOfType(STAGE_MULTI_PLAN) != nullptr) {
-        uassert(50661,
-                "Should have stored winning plan trial stats during execution.",
-                _winningPlanTrialStats);
-    }
-
     MutableDocument out;
     out["query"] = Value(_query);
 
