@@ -389,6 +389,7 @@ CursorId ClusterFind::runQuery(OperationContext* opCtx,
 
 StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
                                                    const GetMoreRequest& request) {
+    LOG(0) << "ian: In getMore()";
     auto cursorManager = Grid::get(opCtx)->getCursorManager();
 
     auto pinnedCursor = cursorManager->checkOutCursor(request.nss, request.cursorid, opCtx);
@@ -399,6 +400,8 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
 
     // If the fail point is enabled, busy wait until it is disabled.
     while (MONGO_FAIL_POINT(keepCursorPinnedDuringGetMore)) {
+        LOG(0) << "ian: Spinning in failpoint";
+        sleepsecs(3);
     }
 
     // A user can only call getMore on their own cursor. If there were multiple users authenticated
@@ -436,13 +439,6 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
 
     pinnedCursor.getValue().reattachToOperationContext(opCtx);
 
-    // A pinned cursor will not be destroyed immediately if an exception is thrown. Instead it will
-    // be marked as killed, then reaped by a background thread later. If this happens, we want to be
-    // sure the cursor does not have a pointer to this OperationContext, since it will be destroyed
-    // as soon as we return, but the cursor will live on a bit longer.
-    ScopeGuard cursorDetach =
-        MakeGuard([&pinnedCursor]() { pinnedCursor.getValue().detachFromOperationContext(); });
-
     while (!FindCommon::enoughForGetMore(batchSize, batch.size())) {
         auto context = batch.empty()
             ? RouterExecStage::ExecContext::kGetMoreNoResultsYet
@@ -461,7 +457,14 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         }
 
         if (!next.isOK()) {
+            log() << "ian: cluster_find: next is " << next.getStatus();
             return next.getStatus();
+        }
+
+        const auto interruptStatus = opCtx->checkForInterruptNoAssert();
+        if (!interruptStatus.isOK()) {
+            log() << "ian: cluster_find: opCtx was interrupted.";
+            return interruptStatus;
         }
 
         if (next.getValue().isEOF()) {
@@ -489,11 +492,10 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         batch.push_back(std::move(*next.getValue().getResult()));
     }
 
-    // Upon successful completion, we need to detach from the operation and transfer ownership of
-    // the cursor back to the cursor manager.
-    cursorDetach.Dismiss();
-    pinnedCursor.getValue().detachFromOperationContext();
+    // Upon successful completion, we need to return the cursor to the manager, and detach
+    // the operation context. FIXME: DO we actually need this detachOperationContext anymore?
     pinnedCursor.getValue().returnCursor(cursorState);
+    pinnedCursor.getValue().detachFromOperationContext();
 
     CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
         ? CursorId(0)

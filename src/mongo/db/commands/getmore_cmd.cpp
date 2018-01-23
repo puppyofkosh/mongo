@@ -235,6 +235,8 @@ public:
                 readLock.reset();
                 readLock.emplace(opCtx, request.nss);
             }
+            log() << "ian: Spinning in mongod";
+            sleepsecs(3);
         }
 
         // A user can only call getMore on their own cursor. If there were multiple users

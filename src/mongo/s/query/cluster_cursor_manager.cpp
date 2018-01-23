@@ -126,8 +126,9 @@ void ClusterCursorManager::PinnedCursor::reattachToOperationContext(OperationCon
 }
 
 void ClusterCursorManager::PinnedCursor::detachFromOperationContext() {
-    invariant(_cursor);
-    _cursor->detachFromOperationContext();
+    if (_cursor) {
+        _cursor->detachFromOperationContext();
+    }
     invariant(_opCtx);
     _opCtx = nullptr;
 }
@@ -153,14 +154,13 @@ UserNameIterator ClusterCursorManager::PinnedCursor::getAuthenticatedUsers() con
     return _cursor->getAuthenticatedUsers();
 }
 
-void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState,
-                                                      bool killUnexhausted) {
+void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
     invariant(_opCtx);
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
     _manager->checkInCursor(
-        _opCtx, std::move(_cursor), _nss, _cursorId, cursorState, killUnexhausted);
+        _opCtx, std::move(_cursor), _nss, _cursorId, cursorState);
     *this = PinnedCursor();
 }
 
@@ -192,13 +192,7 @@ void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
     invariant(_opCtx);
 
-    //
-    // TODO: Should return, then kill the cursor! Otherwise kill will interrupt this opCtx!
-    //
-
-    // Return the cursor to the manager, where it will be killed.
-    //
-    returnCursor(CursorState::NotExhausted, true);
+    _manager->checkInAndKillCursor(_opCtx, std::move(_cursor), _nss, _cursorId);
 }
 
 ClusterCursorManager::ClusterCursorManager(ClockSource* clockSource)
@@ -328,12 +322,31 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
     return PinnedCursor(this, std::move(cursor), nss, cursorId);
 }
 
+void ClusterCursorManager::checkInAndKillCursor(OperationContext* opCtx,
+                                                std::unique_ptr<ClusterClientCursor> cursor,
+                                                const NamespaceString& nss,
+                                                CursorId cursorId) {
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
+
+    invariant(cursor);
+
+    CursorEntry* entry = _getEntry(lk, nss, cursorId);
+    invariant(entry);
+
+    entry->returnCursor(std::move(cursor));
+    auto detachedCursorStatus = _detachCursor(lk, nss, cursorId);
+    // We just returned the cursor, so it better be there.
+    invariantOK(detachedCursorStatus.getStatus());
+
+    lk.unlock();
+    killDetachedCursor(opCtx, std::move(detachedCursorStatus.getValue()));
+}
+
 void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
                                          std::unique_ptr<ClusterClientCursor> cursor,
                                          const NamespaceString& nss,
                                          CursorId cursorId,
-                                         CursorState cursorState,
-                                         bool killUnexhausted) {
+                                         CursorState cursorState) {
     // Read the clock out of the lock.
     const auto now = _clockSource->now();
 
@@ -350,10 +363,7 @@ void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
     entry->setLastActive(now);
     entry->returnCursor(std::move(cursor));
 
-    log() << "State: " << (int)cursorState;
-    log() << "killUnexhausted: " << killUnexhausted;
-
-    if (cursorState == CursorState::NotExhausted && !killUnexhausted) {
+    if (cursorState == CursorState::NotExhausted) {
         // We'll be using the cursor again later, so just leave it alone.
         return;
     }
@@ -365,7 +375,7 @@ void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
     // We just returned the cursor, so it better be there.
     invariantOK(detachedCursorStatus.getStatus());
 
-    if (cursorState == CursorState::NotExhausted || !remotesExhausted) {
+    if (!remotesExhausted) {
         // The cursor has been checked in but still has state on other nodes. Kill it and then
         // clean it up.
 
@@ -388,7 +398,7 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
                                         CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
 
-    log() << "ian: killCursor()";
+    log() << "ian: mongos killCursor()";
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     if (!entry) {
@@ -397,11 +407,13 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
 
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     if (opUsingCursor) {
+        log() << "Killing opCtx";
         // TODO: Set killPending here, so we don't count it as a pinned cursor in stats.
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
         return Status::OK();
     }
+    log() << "Can just delete the cursor";
 
     auto cursorStatus = _detachCursor(lk, nss, cursorId);
 

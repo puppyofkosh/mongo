@@ -198,7 +198,7 @@ public:
          * If 'Exhausted' is passed, the manager will de-register and destroy the cursor after it
          * is returned.
          */
-        void returnCursor(CursorState cursorState, bool killUnexhausted = false);
+        void returnCursor(CursorState cursorState);
 
         /**
          * Returns the cursor id for the underlying cursor, or zero if no cursor is owned.
@@ -430,8 +430,15 @@ private:
                        std::unique_ptr<ClusterClientCursor> cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
-                       CursorState cursorState,
-                       bool killUnexhausted);
+                       CursorState cursorState);
+
+    /**
+     * TODO comment
+     **/
+    void checkInAndKillCursor(OperationContext* opCtx,
+                              std::unique_ptr<ClusterClientCursor> cursor,
+                              const NamespaceString& nss,
+                              CursorId cursorId);
 
     /**
      * Returns a pointer to the CursorEntry for the given cursor.  If the given cursor is not
