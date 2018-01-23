@@ -94,11 +94,28 @@ void flattenExecTree(const PlanStage* root, vector<const PlanStage*>* flattened)
 }
 
 /**
+ * Traverse the stage tree, depth first and return the first stage of a given type.
+ */
+PlanStage* findStageOfType(PlanStage* root, StageType desiredStageType) {
+    if (root->stageType() == desiredStageType) {
+        return root;
+    }
+
+    for (const auto& child : root->getChildren()) {
+        PlanStage* p = findStageOfType(child.get(), desiredStageType);
+        if (p) {
+            return p;
+        }
+    }
+    return nullptr;
+}
+
+/**
  * Gets a pointer to the MultiPlanStage inside the stage tree rooted at 'root'. Returns nullptr if
  * there is no MPS.
  */
 MultiPlanStage* getMultiPlanStage(PlanStage* root) {
-    PlanStage* ps = root->findStageOfType(STAGE_MULTI_PLAN);
+    PlanStage* ps = findStageOfType(root, STAGE_MULTI_PLAN);
     invariant(ps == nullptr || ps->stageType() == STAGE_MULTI_PLAN);
     return static_cast<MultiPlanStage*>(ps);
 }
@@ -744,7 +761,7 @@ void Explain::generateExecutionInfo(PlanExecutor* exec,
                                     BSONObjBuilder* out) {
     invariant(verbosity >= ExplainOptions::Verbosity::kExecStats);
     if (verbosity >= ExplainOptions::Verbosity::kExecAllPlans &&
-        exec->getRootStage()->findStageOfType(STAGE_MULTI_PLAN) != nullptr) {
+        findStageOfType(exec->getRootStage(), STAGE_MULTI_PLAN) != nullptr) {
         invariant(winningPlanTrialStats,
                   "winningPlanTrialStats must be non-null when requesting all execution stats");
     }
