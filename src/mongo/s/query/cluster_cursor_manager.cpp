@@ -371,6 +371,13 @@ Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cur
         return cursorNotFoundStatus(nss, cursorId);
     }
 
+    // Interrupt any operation currently using the cursor.
+    OperationContext* opUsingCursor = entry->getOperationUsingCursor();
+    if (opUsingCursor) {
+        stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
+        opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
+    }
+
     entry->setKillPending();
 
     return Status::OK();
@@ -382,8 +389,8 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             CursorEntry& entry = cursorIdEntryPair.second;
-            if (entry.getLifetimeType() == CursorLifetime::Mortal && entry.isCursorOwned() &&
-                entry.getLastActive() <= cutoff) {
+            if (entry.getLifetimeType() == CursorLifetime::Mortal &&
+                !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff) {
                 entry.setInactive();
                 log() << "Marking cursor id " << cursorIdEntryPair.first
                       << " for deletion, idle since " << entry.getLastActive().toString();
@@ -470,7 +477,7 @@ ClusterCursorManager::Stats ClusterCursorManager::stats() const {
                 continue;
             }
 
-            if (!entry.isCursorOwned()) {
+            if (entry.getOperationUsingCursor()) {
                 ++stats.cursorsPinned;
             }
 

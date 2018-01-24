@@ -494,14 +494,10 @@ private:
             return _lastActive;
         }
 
-        bool isCursorOwned() const {
-            return static_cast<bool>(_cursor);
-        }
-
         boost::optional<LogicalSessionId> getLsid() const {
             return _lsid;
         }
-        
+
         OperationContext* getOperationUsingCursor() const {
             return _operationUsingCursor;
         }

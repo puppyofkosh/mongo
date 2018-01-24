@@ -464,6 +464,11 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             return next.getStatus();
         }
 
+        const auto interruptStatus = opCtx->checkForInterruptNoAssert();
+        if (!interruptStatus.isOK()) {
+            return interruptStatus;
+        }
+
         if (next.getValue().isEOF()) {
             // We reached end-of-stream. If the cursor is not tailable, then we mark it as
             // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even when
