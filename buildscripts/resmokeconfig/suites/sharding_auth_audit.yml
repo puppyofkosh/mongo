@@ -33,6 +33,7 @@ selector:
   - jstests/sharding/migration_server_status.js                       # SERVER-21713
   - jstests/sharding/migration_move_chunk_after_receive.js            # SERVER-21713
   - jstests/sharding/migration_critical_section_concurrency.js        # SERVER-21713
+  - jstests/sharding/kill_pinned_cursor.js # SERVER-32395
 
 executor:
   config:

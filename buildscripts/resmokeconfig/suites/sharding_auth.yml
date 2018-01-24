@@ -33,6 +33,7 @@ selector:
   - jstests/sharding/movechunk_interrupt_at_primary_stepdown.js       # SERVER-21713
   - jstests/sharding/movechunk_parallel.js                            # SERVER-21713
   - jstests/sharding/migration_critical_section_concurrency.js        # SERVER-21713
+  - jstests/sharding/kill_pinned_cursor.js # SERVER-32395
 
 executor:
   config:
