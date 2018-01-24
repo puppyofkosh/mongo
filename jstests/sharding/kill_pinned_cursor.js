@@ -1,25 +1,19 @@
-// @tags: [requires_getmore, does_not_support_stepdowns]
+// @tags: [requires_getmore]
 //
 // Uses getMore to pin an open cursor.
 //
-// Does not support stepdowns because if a stepdown were to occur between running find() and
-// calling killCursors on the cursor ID returned by find(), the killCursors might be sent to
-// different node than the one which has the cursor. This would result in the node returning
-// "CursorNotFound."
-//
-// Test killing a pinned cursor. Since cursors are generally pinned for short periods while result
-// batches are generated, this requires some special machinery to keep a cursor permanently pinned.
+// Run a query on a sharded cluster where one of the shards hangs. Running killCursors on the
+// mongos should interrupt the getMore and cause the cursor to be cleaned up in a timely manner.
 
 (function() {
     "use strict";
 
     const kFailPointName = "keepCursorPinnedDuringGetMore";
 
-    // TODO: More than one shard
-    var st = new ShardingTest({shards: 1, config: 1});
+    const st = new ShardingTest({shards: 2, config: 3});
     assert.neq(null, st, "sharded cluster failed to start up");
     const mongosDB = st.s.getDB("test");
-    const mongodDB = st.shard0.getDB("test");
+    const shard0DB = st.shard0.getDB("test");
 
     let coll = mongosDB.jstest_kill_pinned_cursor;
     coll.drop();
@@ -28,40 +22,49 @@
         assert.writeOK(coll.insert({_id: i}));
     }
 
+    // Now split up the data so that [0,5) go to shard 0 and [5,10) go to shard 1.
+    assert.commandWorked(st.s.adminCommand({enableSharding: "test"}));
+    st.ensurePrimaryShard("test", st.shard0.shardName);
+    assert.commandWorked(st.s.adminCommand({shardCollection: coll.getFullName(), key: {_id: 1}}));
+    assert.commandWorked(st.s.adminCommand({split: coll.getFullName(), middle: {_id: 5}}));
+
+    assert.commandWorked(st.s.adminCommand({
+        moveChunk: coll.getFullName(),
+        find: {_id: 6},
+        to: st.shard1.shardName,
+        _waitForDelete: true,
+    }));
+
+    // Set up the first mongod to hang on a getMore request.
     let cleanup = null;
     let cursorId;
 
-    // kill the cursor associated with the command and assert that we get the
-    // OperationInterrupted error.
     try {
-        print("setting up failpoint on mongod");
-        // ONLY set the failpoint on the mongod. Setting the failpoint on the mongos will
+        // ONLY set the failpoint on the first mongod. Setting the failpoint on the mongos will
         // only cause it to spin, and not actually send any requests out.
         assert.commandWorked(
-            mongodDB.adminCommand({configureFailPoint: kFailPointName, mode: "alwaysOn"}));
+            shard0DB.adminCommand({configureFailPoint: kFailPointName, mode: "alwaysOn"}));
 
-        print("running find() command");
-        let cmdRes = mongosDB.runCommand({find: coll.getName(), batchSize: 2});
+        // Run a find with a sort, so that we must return the results from shard 0 before the
+        // results from shard 1. This should cause the entire query to hang.
+        let cmdRes = mongosDB.runCommand({find: coll.getName(), sort: {_id: 1}, batchSize: 2});
         assert.commandWorked(cmdRes);
         cursorId = cmdRes.cursor.id;
         assert.neq(cursorId, NumberLong(0));
 
-        print("running getMore in other shell");
         let runGetMoreAndExpectError = function() {
             let response = db.runCommand({getMore: cursorId, collection: collName});
             // We expect that the operation will get interrupted and fail.
             assert.commandFailedWithCode(response, ErrorCodes.CursorKilled);
         };
-        let code = "let cursorId = " + cursorId.toString() + ";";
-        code += "let collName = '" + coll.getName() + "';";
-        code += "(" + runGetMoreAndExpectError.toString() + ")();";
+        let code = `let cursorId = ${cursorId.toString()};`;
+        code += `let collName = "${coll.getName()}";`;
+        code += `(${runGetMoreAndExpectError.toString()})();`;
         cleanup = startParallelShell(code, st.s.port);
 
         // Sleep until we know the cursor is pinned on the mongod.
-        print("waiting for cursor to be pinned");
-        assert.soon(() => mongodDB.serverStatus().metrics.cursor.open.pinned > 0);
+        assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned > 0);
 
-        print("Running killCursors");
         cmdRes = mongosDB.runCommand({killCursors: coll.getName(), cursors: [cursorId]});
         assert.commandWorked(cmdRes);
         assert.eq(cmdRes.cursorsKilled, [cursorId]);
@@ -69,7 +72,7 @@
         assert.eq(cmdRes.cursorsNotFound, []);
         assert.eq(cmdRes.cursorsUnknown, []);
     } finally {
-        assert.commandWorked(mongodDB.adminCommand({configureFailPoint: kFailPointName,
+        assert.commandWorked(shard0DB.adminCommand({configureFailPoint: kFailPointName,
                                                     mode: "off"}));
         if (cleanup) {
             cleanup();
@@ -78,7 +81,7 @@
 
     // Eventually the cursor on the mongod should be cleaned up, now that we've disabled the
     // failpoint.
-    assert.soon(() => mongodDB.serverStatus().metrics.cursor.open.pinned == 0);
+    assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned == 0);
 
     // Eventually the cursor should get reaped, at which point the next call to killCursors
     // should report that nothing was killed.
