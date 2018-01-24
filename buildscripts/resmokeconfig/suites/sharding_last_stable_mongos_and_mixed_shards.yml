@@ -118,6 +118,8 @@ selector:
   - jstests/sharding/auth_slaveok_routing.js
   # This test should not be run with a mixed cluster environment.
   - jstests/sharding/nonreplicated_uuids_on_shardservers.js
+  # Relies on new feature in mongos (>= ~3.7)
+  - jstests/sharding/kill_pinned_cursor.js
 
 executor:
   config:
