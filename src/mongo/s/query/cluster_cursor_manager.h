@@ -503,13 +503,25 @@ private:
         }
 
         /**
-         * Releases the cursor from this entry.  If the cursor has already been released, returns
-         * null.
+         * Releases the cursor from this entry. Illegal to call if there is an operation already
+         * using the cursor.
          */
-        std::unique_ptr<ClusterClientCursor> releaseCursor(OperationContext* opCtx = nullptr) {
+        std::unique_ptr<ClusterClientCursor> releaseCursor(OperationContext* opCtx) {
             invariant(!_operationUsingCursor);
             invariant(_cursor);
+            invariant(opCtx);
             _operationUsingCursor = opCtx;
+            return std::move(_cursor);
+        }
+
+        /**
+         * Releases the cursor from this entry forever. After calling this, it is illegal to call
+         * releaseCursor() or returnCursor() again.
+         */
+        std::unique_ptr<ClusterClientCursor> releaseCursorForever() {
+            invariant(!_operationUsingCursor);
+            invariant(_cursor);
+            _operationUsingCursor = nullptr;
             return std::move(_cursor);
         }
 

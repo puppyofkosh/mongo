@@ -90,6 +90,20 @@ ClusterClientCursorImpl::ClusterClientCursorImpl(std::unique_ptr<RouterStageMock
 
 StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next(
     RouterExecStage::ExecContext execContext) {
+    const auto opCtx = _root->getOpCtx();
+    invariant(opCtx);
+    const auto interruptStatus = opCtx->checkForInterruptNoAssert();
+    if (!interruptStatus.isOK()) {
+        if (isTailableAndAwaitData() &&
+            interruptStatus == ErrorCodes::ExceededTimeLimit) {
+            // TODO SERVER-31484 We should ignore timeout errors for now, but eventually they
+            // should be fatal for any type of cursor.
+        } else {
+            // We actually got interrupted by something.
+            return interruptStatus;
+        }
+    }
+
     // First return stashed results, if there are any.
     if (!_stash.empty()) {
         auto front = std::move(_stash.front());

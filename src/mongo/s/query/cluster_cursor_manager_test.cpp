@@ -118,7 +118,6 @@ protected:
         Client::setCurrent(std::move(pinningClient));
     }
 
-
 private:
     void setUp() final {
         auto client = serviceContext.makeClient("testClient");

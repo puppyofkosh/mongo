@@ -615,7 +615,7 @@ StatusWith<std::unique_ptr<ClusterClientCursor>> ClusterCursorManager::_detachCu
         return cursorInUseStatus(nss, cursorId);
     }
 
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
+    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursorForever();
 
     auto nsToContainerIt = _namespaceToContainerMap.find(nss);
     invariant(nsToContainerIt != _namespaceToContainerMap.end());
