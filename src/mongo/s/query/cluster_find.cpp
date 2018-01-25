@@ -464,18 +464,6 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             return next.getStatus();
         }
 
-        const auto interruptStatus = opCtx->checkForInterruptNoAssert();
-        if (!interruptStatus.isOK()) {
-            if (pinnedCursor.getValue().isTailableAndAwaitData() &&
-                interruptStatus == ErrorCodes::ExceededTimeLimit) {
-                // Whatever. We should return an empty batch.
-                // This was likely caused by the deadline we set earlier in this function.
-            } else {
-                // We actually got interrupted by some other event.
-                return interruptStatus;
-            }
-        }
-
         if (next.getValue().isEOF()) {
             // We reached end-of-stream. If the cursor is not tailable, then we mark it as
             // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even when
