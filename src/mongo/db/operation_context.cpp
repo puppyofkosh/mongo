@@ -42,7 +42,9 @@
 #include "mongo/util/fail_point_service.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
+#include "mongo/util/stacktrace.h"
 #include "mongo/util/system_tick_source.h"
+
 
 namespace mongo {
 
@@ -352,6 +354,11 @@ StatusWith<stdx::cv_status> OperationContext::waitForConditionOrInterruptNoAsser
 }
 
 void OperationContext::markKilled(ErrorCodes::Error killCode) {
+    if (killCode == ErrorCodes::ExceededTimeLimit) {
+        LOG(0) << "ian: PRINTING STACK TRACE";
+        printStackTrace();
+    }
+
     invariant(killCode != ErrorCodes::OK);
     stdx::unique_lock<stdx::mutex> lkWaitMutex;
     if (_waitMutex) {

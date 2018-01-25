@@ -3631,7 +3631,7 @@ tasks:
   - func: "do setup"
   - func: "run tests"
     vars:
-      resmoke_args: --suites=sharding_auth --storageEngine=wiredTiger
+      resmoke_args: --suites=sharding_auth --storageEngine=wiredTiger --repeat=100
       run_multiple_jobs: true
 
 - <<: *task_template

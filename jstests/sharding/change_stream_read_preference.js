@@ -19,7 +19,7 @@
         name: "change_stream_read_pref",
         shards: 2,
         rs: {
-            nodes: 2,
+            nodes: {d0: {verbose: 2}, d1: {verbose: 2}},
             // Use a higher frequency for periodic noops to speed up the test.
             setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}
         },
