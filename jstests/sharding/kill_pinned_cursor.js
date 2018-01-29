@@ -72,8 +72,8 @@
         assert.eq(cmdRes.cursorsNotFound, []);
         assert.eq(cmdRes.cursorsUnknown, []);
     } finally {
-        assert.commandWorked(shard0DB.adminCommand({configureFailPoint: kFailPointName,
-                                                    mode: "off"}));
+        assert.commandWorked(
+            shard0DB.adminCommand({configureFailPoint: kFailPointName, mode: "off"}));
         if (cleanup) {
             cleanup();
         }

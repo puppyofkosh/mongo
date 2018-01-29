@@ -94,8 +94,7 @@ StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next(
     invariant(opCtx);
     const auto interruptStatus = opCtx->checkForInterruptNoAssert();
     if (!interruptStatus.isOK()) {
-        if (isTailableAndAwaitData() &&
-            interruptStatus == ErrorCodes::ExceededTimeLimit) {
+        if (isTailableAndAwaitData() && interruptStatus == ErrorCodes::ExceededTimeLimit) {
             // TODO SERVER-31484 We should ignore timeout errors for now, but eventually they
             // should be fatal for any type of cursor.
         } else {

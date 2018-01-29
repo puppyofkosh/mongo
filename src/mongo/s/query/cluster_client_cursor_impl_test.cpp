@@ -46,6 +46,7 @@ protected:
     ServiceContextNoop serviceContext;
     ServiceContext::UniqueOperationContext _opCtx;
     Client* _client;
+
 private:
     void setUp() final {
         auto client = serviceContext.makeClient("testClient");
@@ -61,7 +62,6 @@ private:
 
         Client::releaseCurrent();
     }
-
 };
 
 TEST_F(ClusterClientCursorImplTest, NumReturnedSoFar) {
