@@ -26,8 +26,6 @@
  *    it in the license file.
  */
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-
 #include "mongo/platform/basic.h"
 
 #include "mongo/s/query/cluster_client_cursor_impl.h"
@@ -42,8 +40,6 @@
 #include "mongo/s/query/router_stage_remove_metadata_fields.h"
 #include "mongo/s/query/router_stage_skip.h"
 #include "mongo/stdx/memory.h"
-#include "mongo/util/log.h"
-#include "mongo/util/stacktrace.h"
 
 namespace mongo {
 
@@ -102,11 +98,8 @@ StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next(
             interruptStatus == ErrorCodes::ExceededTimeLimit) {
             // TODO SERVER-31484 We should ignore timeout errors for now, but eventually they
             // should be fatal for any type of cursor.
-            LOG(0) << "ian: Caught ExceededTimeLimit error";
         } else {
             // We actually got interrupted by something.
-            LOG(0) << "ian: Returning interrupt status " << interruptStatus;
-            printStackTrace();
             return interruptStatus;
         }
     }

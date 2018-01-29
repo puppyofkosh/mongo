@@ -54,8 +54,6 @@ std::vector<ClusterClientCursorParams::RemoteCursor> establishCursors(
     const ReadPreferenceSetting readPref,
     const std::vector<std::pair<ShardId, BSONObj>>& remotes,
     bool allowPartialResults) {
-
-    LOG(0) << "ian: In establishCursors()";
     // Construct the requests
     std::vector<AsyncRequestsSender::Request> requests;
     for (const auto& remote : remotes) {
@@ -74,8 +72,6 @@ std::vector<ClusterClientCursorParams::RemoteCursor> establishCursors(
     try {
         // Get the responses
         while (!ars.done()) {
-            LOG(0) << "ian: In establishCursors(), getting responses";
-            invariant(!opCtx->hasDeadline());
             try {
                 auto response = ars.next();
                 remoteCursors.emplace_back(

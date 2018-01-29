@@ -255,7 +255,6 @@ CursorId runQueryWithoutRetrying(OperationContext* opCtx,
 
     // Establish the cursors with a consistent shardVersion across shards.
 
-    invariant(!opCtx->hasDeadline());
     params.remotes = establishCursors(opCtx,
                                       Grid::get(opCtx)->getExecutorPool()->getArbitraryExecutor(),
                                       query.nss(),
