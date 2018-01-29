@@ -186,4 +186,13 @@ UserNameIterator makeUserNameIteratorForContainer(const Container& container) {
     return makeUserNameIterator(container.begin(), container.end());
 }
 
+template <typename Container>
+Container userNameIteratorToContainer(UserNameIterator it) {
+    Container c;
+    while (it.more()) {
+        c.emplace_back(it.next());
+    }
+    return c;
+}
+
 }  // namespace mongo
