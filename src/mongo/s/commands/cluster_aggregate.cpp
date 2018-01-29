@@ -522,7 +522,6 @@ BSONObj establishMergingMongosCursor(OperationContext* opCtx,
 
     ClusterClientCursorParams params(
         requestedNss,
-        AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames(),
         ReadPreferenceSetting::get(opCtx));
 
     params.tailableMode = pipelineForMerging->getContext()->tailableMode;
@@ -595,12 +594,14 @@ BSONObj establishMergingMongosCursor(OperationContext* opCtx,
     CursorId clusterCursorId = 0;
 
     if (cursorState == ClusterCursorManager::CursorState::NotExhausted) {
+        auto authUsers = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames();
         clusterCursorId = uassertStatusOK(Grid::get(opCtx)->getCursorManager()->registerCursor(
             opCtx,
             ccc.releaseCursor(),
             requestedNss,
             ClusterCursorManager::CursorType::MultiTarget,
-            ClusterCursorManager::CursorLifetime::Mortal));
+            ClusterCursorManager::CursorLifetime::Mortal,
+            authUsers));
     }
 
     responseBuilder.done(clusterCursorId, requestedNss.ns());
