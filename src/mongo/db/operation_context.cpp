@@ -105,14 +105,11 @@ Microseconds OperationContext::computeMaxTimeFromDeadline(Date_t when) {
 
 OperationContext::DeadlineStash::DeadlineStash(OperationContext* opCtx)
     : _opCtx(opCtx), _originalDeadline(_opCtx->getDeadline()) {
-    LOG(0) << "ian: Creating deadline stash for opCtx " << (uintptr_t)opCtx;
-    printStackTrace();
     _opCtx->_deadline = Date_t::max();
     _opCtx->_maxTime = _opCtx->computeMaxTimeFromDeadline(Date_t::max());
 }
 
 OperationContext::DeadlineStash::~DeadlineStash() {
-    LOG(0) << "ian: Destroying deadline stash for opCtx " << (uintptr_t)_opCtx;
     _opCtx->_deadline = _originalDeadline;
     _opCtx->_maxTime = _opCtx->computeMaxTimeFromDeadline(_originalDeadline);
 }
@@ -358,7 +355,7 @@ StatusWith<stdx::cv_status> OperationContext::waitForConditionOrInterruptNoAsser
 
 void OperationContext::markKilled(ErrorCodes::Error killCode) {
     if (killCode == ErrorCodes::ExceededTimeLimit) {
-        LOG(0) << "ian: In markKilled()";
+        LOG(0) << "ian: PRINTING STACK TRACE";
         printStackTrace();
     }
 

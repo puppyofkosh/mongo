@@ -44,7 +44,6 @@
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
-#include "mongo/util/stacktrace.h"
 
 namespace mongo {
 
@@ -57,7 +56,6 @@ std::vector<ClusterClientCursorParams::RemoteCursor> establishCursors(
     bool allowPartialResults) {
 
     LOG(0) << "ian: In establishCursors()";
-    printStackTrace();
     // Construct the requests
     std::vector<AsyncRequestsSender::Request> requests;
     for (const auto& remote : remotes) {

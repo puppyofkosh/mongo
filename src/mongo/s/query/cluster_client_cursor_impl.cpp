@@ -96,11 +96,6 @@ StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next(
     RouterExecStage::ExecContext execContext) {
     const auto opCtx = _root->getOpCtx();
     invariant(opCtx);
-
-    // TODO: Remove!
-    sleepsecs(2);
-    //
-
     const auto interruptStatus = opCtx->checkForInterruptNoAssert();
     if (!interruptStatus.isOK()) {
         if (isTailableAndAwaitData() &&
