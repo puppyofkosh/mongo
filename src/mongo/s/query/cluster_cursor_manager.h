@@ -322,14 +322,22 @@ public:
                                             AuthCheck checkSessionAuth = kCheckSession);
 
     /**
-     * Informs the manager that the given cursor should be killed.  The cursor need not necessarily
-     * be in the 'idle' state, and the lifetime type of the cursor is ignored.
-     *
-     * If the given cursor is not registered, returns an error Status with code CursorNotFound.
-     * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
-     *
-     * Does not block.
+     * Returns an OK status if we're authorized to erase the cursor. Otherwise, returns
+     * ErrorCodes::Unauthorized.
      */
+    Status checkAuthForKillCursors(OperationContext* opCtx,
+                                   const NamespaceString& nss,
+                                   CursorId id);
+
+    /**
+      * Informs the manager that the given cursor should be killed.  The cursor need not necessarily
+      * be in the 'idle' state, and the lifetime type of the cursor is ignored.
+      *
+      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
+      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
+      *
+      * Does not block.
+      */
     Status killCursor(const NamespaceString& nss, CursorId cursorId);
 
     /**
@@ -519,6 +527,14 @@ private:
             invariant(!_operationUsingCursor);
             invariant(_cursor);
             _operationUsingCursor = opCtx;
+            return _cursor.get();
+        }
+
+        /**
+         * Get a const pointer to the cursor. This is safe to call even if an operation is using the
+         * cursor as long as we only call thread-safe functions on the cursor returned.
+         **/
+        const ClusterClientCursor* getConstCursor() {
             return _cursor.get();
         }
 

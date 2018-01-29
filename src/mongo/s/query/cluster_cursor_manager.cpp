@@ -365,6 +365,25 @@ void ClusterCursorManager::checkInCursor(ClusterClientCursor* cursor,
     detachedCursor.getValue().reset();
 }
 
+Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
+                                                     const NamespaceString& nss,
+                                                     CursorId cursorId) {
+    auto* as = AuthorizationSession::get(opCtx->getClient());
+    invariant(as);
+
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
+    auto entry = _getEntry(lk, nss, cursorId);
+
+    if (!entry) {
+        return cursorNotFoundStatus(nss, cursorId);
+    }
+
+    // Note that getAuthenticatedUsers() is thread-safe, so it's okay to call even if there's
+    // an operation using the cursor.
+    return as->checkAuthForKillCursors(nss, entry->getConstCursor()->getAuthenticatedUsers());
+}
+
+
 Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
 

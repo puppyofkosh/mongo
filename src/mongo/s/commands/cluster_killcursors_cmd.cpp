@@ -42,17 +42,8 @@ public:
 
 private:
     Status _checkAuth(Client* client, const NamespaceString& nss, CursorId cursorId) const final {
-        auto* as = AuthorizationSession::get(client);
-        invariant(as);
-
-        auto* opCtx = client->getOperationContext();
-        auto ccPin = grid.getCursorManager()->checkOutCursor(
-            nss, cursorId, opCtx, ClusterCursorManager::kNoCheckSession);
-        if (!ccPin.isOK()) {
-            return ccPin.getStatus();
-        }
-
-        return as->checkAuthForKillCursors(nss, ccPin.getValue().getAuthenticatedUsers());
+        return grid.getCursorManager()->checkAuthForKillCursors(
+            client->getOperationContext(), nss, cursorId);
     }
 
     Status _killCursor(OperationContext* opCtx,

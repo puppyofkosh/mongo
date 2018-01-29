@@ -101,6 +101,9 @@ public:
 
     bool isTailableAndAwaitData() const final;
 
+    /**
+     * This function is thread safe since it just reads from a const field.
+     */
     UserNameIterator getAuthenticatedUsers() const final;
 
     long long getNumReturnedSoFar() const final;

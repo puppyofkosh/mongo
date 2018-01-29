@@ -100,7 +100,7 @@ public:
     virtual bool isTailableAndAwaitData() const = 0;
 
     /**
-     * Returns the set of authenticated users when this cursor was created.
+     * Returns the set of authenticated users when this cursor was created. Must be thread-safe.
      */
     virtual UserNameIterator getAuthenticatedUsers() const = 0;
 
