@@ -509,7 +509,7 @@ private:
 
         /**
          * Releases the cursor from this entry forever. After calling this, it is illegal to call
-         * releaseCursor() or returnCursor() again.
+         * getOperationUsingCursor() or returnCursor() again.
          */
         std::unique_ptr<ClusterClientCursor> releaseCursorForever() {
             invariant(!_operationUsingCursor);
