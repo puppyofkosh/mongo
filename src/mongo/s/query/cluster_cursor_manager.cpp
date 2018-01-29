@@ -611,7 +611,7 @@ StatusWith<std::unique_ptr<ClusterClientCursor>> ClusterCursorManager::_detachCu
     }
 
     // Transfer ownership away from the entry.
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
+    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursorForever();
 
     // Destroy the entry.
     auto nsToContainerIt = _namespaceToContainerMap.find(nss);

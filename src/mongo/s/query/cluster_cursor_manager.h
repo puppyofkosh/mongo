@@ -500,16 +500,24 @@ private:
         }
 
         /**
-         * Releases the cursor from this entry. Should only be called before destroying the entry.
+         * Releases the cursor from this entry forever. After calling this, it is illegal to call
+         * releaseCursor() or returnCursor() again.
          */
-        std::unique_ptr<ClusterClientCursor> releaseCursor() {
+        std::unique_ptr<ClusterClientCursor> releaseCursorForever() {
             invariant(!_operationUsingCursor);
             invariant(_cursor);
+            _operationUsingCursor = nullptr;
             return std::move(_cursor);
         }
 
+        /**
+         * Returns the cursor owned by this CursorEntry for an operation to use. Only one operation
+         * may use the cursor at a time, so callers should check that getOperationUsingCursor()
+         * returns null before using this function.
+         */
         ClusterClientCursor* getCursorForOperation(OperationContext* opCtx) {
             invariant(!_operationUsingCursor);
+            invariant(_cursor);
             _operationUsingCursor = opCtx;
             return _cursor.get();
         }
@@ -519,8 +527,8 @@ private:
         }
 
         /**
-         * TODO: Update comment
-         * Transfers ownership of the given released cursor back to this entry.
+         * Indicate that the cursor is no longer in use by an operation. Once this is called,
+         * another operation may check the cursor out.
          */
         void returnCursor(ClusterClientCursor* cursor) {
             invariant(cursor == _cursor.get());
