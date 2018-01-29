@@ -116,17 +116,17 @@ public:
     };
 
     /**
-     * TODO: Update
-     * PinnedCursor is a moveable, non-copyable class representing ownership of a cursor that has
-     * been leased from a ClusterCursorManager.
+     * PinnedCursor is a moveable, non-copyable class representing a cursor that has been leased
+     * from a ClusterCursorManager.
      *
-     * A PinnedCursor can either be in a state where it owns a cursor, or can be in a null state
-     * where it owns no cursor.  If a cursor is owned, the underlying cursor can be iterated with
-     * next(), and the underlying cursor can be returned to the manager with the returnCursor()
-     * method (and after it is returned, no cursor will be owned).
+     * A PinnedCursor can either be in a state where it has a pointer to a cursor owned by the
+     * manager, or can be in a null state where it represents no cursor. If a cursor is checked
+     * out, the underlying cursor can be iterated with next(), and the underlying cursor can be
+     * returned to the manager with the returnCursor() method (and after it is returned, the pin
+     * represents no cursor).
      *
-     * Invoking the PinnedCursor's destructor while it owns a cursor will kill and return the
-     * cursor.
+     * Invoking the PinnedCursor's destructor while it has a cursor checked out will kill and
+     * return the cursor to the manager.
      */
     class PinnedCursor {
         MONGO_DISALLOW_COPYING(PinnedCursor);
