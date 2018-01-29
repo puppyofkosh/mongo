@@ -78,10 +78,10 @@ uint32_t extractPrefixFromCursorId(CursorId cursorId) {
 }  // namespace
 
 ClusterCursorManager::PinnedCursor::PinnedCursor(ClusterCursorManager* manager,
-                                                 std::unique_ptr<ClusterClientCursor> cursor,
+                                                 ClusterClientCursor* cursor,
                                                  const NamespaceString& nss,
                                                  CursorId cursorId)
-    : _manager(manager), _cursor(std::move(cursor)), _nss(nss), _cursorId(cursorId) {
+    : _manager(manager), _cursor(cursor), _nss(nss), _cursorId(cursorId) {
     invariant(_manager);
     invariant(_cursor);
     invariant(_cursorId);  // Zero is not a valid cursor id.
@@ -96,9 +96,12 @@ ClusterCursorManager::PinnedCursor::~PinnedCursor() {
 
 ClusterCursorManager::PinnedCursor::PinnedCursor(PinnedCursor&& other)
     : _manager(std::move(other._manager)),
-      _cursor(std::move(other._cursor)),
+      _cursor(other._cursor),
       _nss(std::move(other._nss)),
-      _cursorId(std::move(other._cursorId)) {}
+      _cursorId(std::move(other._cursorId)) {
+    // We don't want 'other' trying to return the cursor when its destructor is called.
+    other._cursor = nullptr;
+}
 
 ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator=(
     ClusterCursorManager::PinnedCursor&& other) {
@@ -107,7 +110,9 @@ ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator
         returnAndKillCursor();
     }
     _manager = std::move(other._manager);
-    _cursor = std::move(other._cursor);
+    _cursor = other._cursor;
+    // We don't want 'other' trying to return the cursor when its destructor is called.
+    other._cursor = nullptr;
     _nss = std::move(other._nss);
     _cursorId = std::move(other._cursorId);
     return *this;
@@ -154,7 +159,10 @@ void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
-    _manager->checkInCursor(std::move(_cursor), _nss, _cursorId, cursorState);
+    _manager->checkInCursor(_cursor, _nss, _cursorId, cursorState);
+
+    // Invalidate our pointer to the cursor so that we don't try to return it again on destruction.
+    _cursor = nullptr;
     *this = PinnedCursor();
 }
 
@@ -302,13 +310,11 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         }
     }
 
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
-    if (!cursor) {
+    if (entry->getOperationUsingCursor()) {
         return cursorInUseStatus(nss, cursorId);
     }
-    // Note: due to SERVER-31138, despite putting this in a unique_ptr, it's actually not safe to
-    // return before the end of this function.  Be careful to avoid any early returns/throws after
-    // this point.
+
+    ClusterClientCursor* cursor = entry->getCursorForOperation(opCtx);
 
     // We use pinning of a cursor as a proxy for active, user-initiated use of a cursor.  Therefore,
     // we pass down to the logical session cache and vivify the record (updating last use).
@@ -316,12 +322,10 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         LogicalSessionCache::get(opCtx)->vivify(opCtx, cursor->getLsid().get());
     }
 
-    // Note that pinning a cursor transfers ownership of the underlying ClusterClientCursor object
-    // to the pin; the CursorEntry is left with a null ClusterClientCursor.
-    return PinnedCursor(this, std::move(cursor), nss, cursorId);
+    return PinnedCursor(this, cursor, nss, cursorId);
 }
 
-void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
+void ClusterCursorManager::checkInCursor(ClusterClientCursor* cursor,
                                          const NamespaceString& nss,
                                          CursorId cursorId,
                                          CursorState cursorState) {
@@ -338,7 +342,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     invariant(entry);
 
     entry->setLastActive(now);
-    entry->returnCursor(std::move(cursor));
+    entry->returnCursor(cursor);
 
     if (cursorState == CursorState::NotExhausted || entry->getKillPending()) {
         return;
@@ -380,8 +384,8 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             CursorEntry& entry = cursorIdEntryPair.second;
-            if (entry.getLifetimeType() == CursorLifetime::Mortal && entry.isCursorOwned() &&
-                entry.getLastActive() <= cutoff) {
+            if (entry.getLifetimeType() == CursorLifetime::Mortal &&
+                entry.getOperationUsingCursor() == nullptr && entry.getLastActive() <= cutoff) {
                 entry.setInactive();
                 log() << "Marking cursor id " << cursorIdEntryPair.first
                       << " for deletion, idle since " << entry.getLastActive().toString();
@@ -468,7 +472,7 @@ ClusterCursorManager::Stats ClusterCursorManager::stats() const {
                 continue;
             }
 
-            if (!entry.isCursorOwned()) {
+            if (entry.getOperationUsingCursor()) {
                 ++stats.cursorsPinned;
             }
 
@@ -602,11 +606,14 @@ StatusWith<std::unique_ptr<ClusterClientCursor>> ClusterCursorManager::_detachCu
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
-    if (!cursor) {
+    if (entry->getOperationUsingCursor()) {
         return cursorInUseStatus(nss, cursorId);
     }
 
+    // Transfer ownership away from the entry.
+    std::unique_ptr<ClusterClientCursor> cursor = entry->releaseCursor();
+
+    // Destroy the entry.
     auto nsToContainerIt = _namespaceToContainerMap.find(nss);
     invariant(nsToContainerIt != _namespaceToContainerMap.end());
     CursorEntryMap& entryMap = nsToContainerIt->second.entryMap;
