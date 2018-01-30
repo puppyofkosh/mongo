@@ -78,10 +78,10 @@ uint32_t extractPrefixFromCursorId(CursorId cursorId) {
 }  // namespace
 
 ClusterCursorManager::PinnedCursor::PinnedCursor(ClusterCursorManager* manager,
-                                                 ClusterClientCursor* cursor,
+                                                 std::unique_ptr<ClusterClientCursor> cursor,
                                                  const NamespaceString& nss,
                                                  CursorId cursorId)
-    : _manager(manager), _cursor(cursor), _nss(nss), _cursorId(cursorId) {
+    : _manager(manager), _cursor(std::move(cursor)), _nss(nss), _cursorId(cursorId) {
     invariant(_manager);
     invariant(_cursor);
     invariant(_cursorId);  // Zero is not a valid cursor id.
@@ -96,11 +96,9 @@ ClusterCursorManager::PinnedCursor::~PinnedCursor() {
 
 ClusterCursorManager::PinnedCursor::PinnedCursor(PinnedCursor&& other)
     : _manager(std::move(other._manager)),
-      _cursor(other._cursor),
+      _cursor(std::move(other._cursor)),
       _nss(std::move(other._nss)),
       _cursorId(std::move(other._cursorId)) {
-    // We don't want 'other' trying to return the cursor when its destructor is called.
-    other._cursor = nullptr;
 }
 
 ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator=(
@@ -110,9 +108,7 @@ ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator
         returnAndKillCursor();
     }
     _manager = std::move(other._manager);
-    _cursor = other._cursor;
-    // We don't want 'other' trying to return the cursor when its destructor is called.
-    other._cursor = nullptr;
+    _cursor = std::move(other._cursor);
     _nss = std::move(other._nss);
     _cursorId = std::move(other._cursorId);
     return *this;
@@ -159,11 +155,9 @@ void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
-    _manager->checkInCursor(_cursor, _nss, _cursorId, cursorState);
+    _manager->checkInCursor(std::move(_cursor), _nss, _cursorId, cursorState);
 
-    // Invalidate our pointer to the cursor so that we don't try to return it again on destruction.
-    _cursor = nullptr;
-    *this = PinnedCursor();
+      *this = PinnedCursor();
 }
 
 CursorId ClusterCursorManager::PinnedCursor::getCursorId() const {
@@ -314,7 +308,10 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         return cursorInUseStatus(nss, cursorId);
     }
 
-    ClusterClientCursor* cursor = entry->getCursorForOperation(opCtx);
+    // Note: due to SERVER-31138, despite putting this in a unique_ptr, it's actually not safe to
+    // return before the end of this function. Be careful to avoid any early returns/throws after
+    // this point.
+    auto cursor = entry->releaseCursor(opCtx);
 
     // We use pinning of a cursor as a proxy for active, user-initiated use of a cursor.  Therefore,
     // we pass down to the logical session cache and vivify the record (updating last use).
@@ -322,10 +319,10 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         LogicalSessionCache::get(opCtx)->vivify(opCtx, cursor->getLsid().get());
     }
 
-    return PinnedCursor(this, cursor, nss, cursorId);
+    return PinnedCursor(this, std::move(cursor), nss, cursorId);
 }
 
-void ClusterCursorManager::checkInCursor(ClusterClientCursor* cursor,
+void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
                                          const NamespaceString& nss,
                                          CursorId cursorId,
                                          CursorState cursorState) {
@@ -342,7 +339,7 @@ void ClusterCursorManager::checkInCursor(ClusterClientCursor* cursor,
     invariant(entry);
 
     entry->setLastActive(now);
-    entry->returnCursor(cursor);
+    entry->returnCursor(std::move(cursor));
 
     if (cursorState == CursorState::NotExhausted || entry->getKillPending()) {
         return;
@@ -380,7 +377,9 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
 
     // Note that getAuthenticatedUsers() is thread-safe, so it's okay to call even if there's
     // an operation using the cursor.
-    return as->checkAuthForKillCursors(nss, entry->getConstCursor()->getAuthenticatedUsers());
+    // FIXME: TODO: change!
+    return Status::OK();
+    //return as->checkAuthForKillCursors(nss, entry->getConstCursor()->getAuthenticatedUsers());
 }
 
 

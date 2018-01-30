@@ -248,7 +248,7 @@ public:
          * and 'cursorId' must be non-zero.
          */
         PinnedCursor(ClusterCursorManager* manager,
-                     ClusterClientCursor* cursor,
+                     std::unique_ptr<ClusterClientCursor> cursor,
                      const NamespaceString& nss,
                      CursorId cursorId);
 
@@ -259,7 +259,7 @@ public:
         void returnAndKillCursor();
 
         ClusterCursorManager* _manager = nullptr;
-        ClusterClientCursor* _cursor = nullptr;
+        std::unique_ptr<ClusterClientCursor> _cursor;
         NamespaceString _nss;
         CursorId _cursorId = 0;
     };
@@ -433,7 +433,7 @@ private:
      * Intentionally private.  Clients should use public methods on PinnedCursor to check a cursor
      * back in.
      */
-    void checkInCursor(ClusterClientCursor* cursor,
+    void checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
                        CursorState cursorState);
@@ -523,19 +523,11 @@ private:
          * may use the cursor at a time, so callers should check that getOperationUsingCursor()
          * returns null before using this function.
          */
-        ClusterClientCursor* getCursorForOperation(OperationContext* opCtx) {
+        std::unique_ptr<ClusterClientCursor> releaseCursor(OperationContext* opCtx) {
             invariant(!_operationUsingCursor);
             invariant(_cursor);
             _operationUsingCursor = opCtx;
-            return _cursor.get();
-        }
-
-        /**
-         * Get a const pointer to the cursor. This is safe to call even if an operation is using the
-         * cursor as long as we only call thread-safe functions on the cursor returned.
-         **/
-        const ClusterClientCursor* getConstCursor() {
-            return _cursor.get();
+            return std::move(_cursor);
         }
 
         OperationContext* getOperationUsingCursor() const {
@@ -546,8 +538,8 @@ private:
          * Indicate that the cursor is no longer in use by an operation. Once this is called,
          * another operation may check the cursor out.
          */
-        void returnCursor(ClusterClientCursor* cursor) {
-            invariant(cursor == _cursor.get());
+        void returnCursor(std::unique_ptr<ClusterClientCursor> cursor) {
+            _cursor = std::move(cursor);
             invariant(_operationUsingCursor);
             _operationUsingCursor = nullptr;
         }
