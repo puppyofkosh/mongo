@@ -1,19 +1,21 @@
-// @tags: [requires_getmore]
-//
-// Uses getMore to pin an open cursor.
-//
-// Run a query on a sharded cluster where one of the shards hangs. Running killCursors on the
-// mongos should always succeed.
+/**
+ Run a query on a sharded cluster where one of the shards hangs. Running killCursors on the mongos
+ should always succeed.
+
+ Uses getMore to pin an open cursor.
+ @tags: [requires_getmore]
+*/
 
 (function() {
     "use strict";
 
     const kFailPointName = "keepCursorPinnedDuringGetMore";
 
-    const st = new ShardingTest({shards: 2, config: 3});
-    assert.neq(null, st, "sharded cluster failed to start up");
-    const mongosDB = st.s.getDB("test");
-    const shard0DB = st.shard0.getDB("test");
+    // No need for more than one config server.
+    const st = new ShardingTest({shards: 2, config: 1});
+    const kDBName = "test";
+    const mongosDB = st.s.getDB(kDBName);
+    const shard0DB = st.shard0.getDB(kDBName);
 
     let coll = mongosDB.jstest_kill_pinned_cursor;
     coll.drop();
@@ -23,8 +25,8 @@
     }
 
     // Now split up the data so that [0,5) go to shard 0 and [5,10) go to shard 1.
-    assert.commandWorked(st.s.adminCommand({enableSharding: "test"}));
-    st.ensurePrimaryShard("test", st.shard0.shardName);
+    assert.commandWorked(st.s.adminCommand({enableSharding: kDBName}));
+    st.ensurePrimaryShard(kDBName, st.shard0.shardName);
     assert.commandWorked(st.s.adminCommand({shardCollection: coll.getFullName(), key: {_id: 1}}));
     assert.commandWorked(st.s.adminCommand({split: coll.getFullName(), middle: {_id: 5}}));
 
@@ -52,7 +54,7 @@
         cursorId = cmdRes.cursor.id;
         assert.neq(cursorId, NumberLong(0));
 
-        let runGetMore = function() {
+        const runGetMore = function() {
             db.runCommand({getMore: cursorId, collection: collName});
         };
         let code = `let cursorId = ${cursorId.toString()};`;
@@ -64,6 +66,9 @@
         assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned > 0);
 
         cmdRes = mongosDB.runCommand({killCursors: coll.getName(), cursors: [cursorId]});
+
+        // Now that we know the cursor is stuck waiting on a remote to respond, we test that we can
+        // still successfully kill it without hanging or returning a "CursorInUse" error.
         assert.commandWorked(cmdRes);
         assert.eq(cmdRes.cursorsKilled, [cursorId]);
         assert.eq(cmdRes.cursorsAlive, []);
