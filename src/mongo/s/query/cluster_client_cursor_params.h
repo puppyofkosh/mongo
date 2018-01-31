@@ -87,9 +87,10 @@ struct ClusterClientCursorParams {
     ClusterClientCursorParams(NamespaceString nss,
                               UserNameIterator authenticatedUsersIter,
                               boost::optional<ReadPreferenceSetting> readPref = boost::none)
-        : nsString(std::move(nss)),
-          authenticatedUsers(
-              userNameIteratorToContainer<std::vector<UserName>>(authenticatedUsersIter)) {
+        : nsString(std::move(nss)) {
+        while (authenticatedUsersIter.more()) {
+            authenticatedUsers.emplace_back(authenticatedUsersIter.next());
+        }
         if (readPref) {
             readPreference = std::move(readPref.get());
         }
@@ -99,7 +100,7 @@ struct ClusterClientCursorParams {
     NamespaceString nsString;
 
     // The set of authenticated users when this cursor was created.
-    const std::vector<UserName> authenticatedUsers;
+    std::vector<UserName> authenticatedUsers;
 
     // Per-remote node data.
     std::vector<RemoteCursor> remotes;
