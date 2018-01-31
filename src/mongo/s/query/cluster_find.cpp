@@ -194,7 +194,6 @@ CursorId runQueryWithoutRetrying(OperationContext* opCtx,
 
     ClusterClientCursorParams params(
         query.nss(),
-        AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames(),
         readPref);
     params.limit = query.getQueryRequest().getLimit();
     params.batchSize = query.getQueryRequest().getEffectiveBatchSize();
@@ -391,6 +390,24 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
                                                    const GetMoreRequest& request) {
     auto cursorManager = Grid::get(opCtx)->getCursorManager();
 
+    // A user can only call getMore on their own cursor. If there were multiple users authenticated
+    // when the cursor was created, then at least one of them must be authenticated in order to run
+    // getMore on the cursor.
+    auto authenticatedUsersStatus =
+        cursorManager->getAuthenticatedUsersForCursor(request.nss, request.cursorid);
+    if (!authenticatedUsersStatus.isOK()) {
+        return authenticatedUsersStatus.getStatus();
+    }
+    if (!AuthorizationSession::get(opCtx->getClient())
+             ->isCoauthorizedWith(authenticatedUsersStatus.getValue())) {
+        return {ErrorCodes::Unauthorized,
+                str::stream() << "cursor id " << request.cursorid
+                              << " was not created by the authenticated user"};
+    }
+
+    // TODO: This is an ABA problem! what if the cursor goes away, and a different one comes back?
+    // we'll access a cursor we shouldn't be able to. checkCursor should probably do the auth check.
+
     auto pinnedCursor = cursorManager->checkOutCursor(request.nss, request.cursorid, opCtx);
     if (!pinnedCursor.isOK()) {
         return pinnedCursor.getStatus();
@@ -399,16 +416,6 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
 
     // If the fail point is enabled, busy wait until it is disabled.
     while (MONGO_FAIL_POINT(keepCursorPinnedDuringGetMore)) {
-    }
-
-    // A user can only call getMore on their own cursor. If there were multiple users authenticated
-    // when the cursor was created, then at least one of them must be authenticated in order to run
-    // getMore on the cursor.
-    if (!AuthorizationSession::get(opCtx->getClient())
-             ->isCoauthorizedWith(pinnedCursor.getValue().getAuthenticatedUsers())) {
-        return {ErrorCodes::Unauthorized,
-                str::stream() << "cursor id " << request.cursorid
-                              << " was not created by the authenticated user"};
     }
 
     if (auto readPref = pinnedCursor.getValue().getReadPreference()) {

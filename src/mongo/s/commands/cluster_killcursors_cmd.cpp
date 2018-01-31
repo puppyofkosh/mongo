@@ -42,8 +42,15 @@ public:
 
 private:
     Status _checkAuth(Client* client, const NamespaceString& nss, CursorId cursorId) const final {
-        return grid.getCursorManager()->checkAuthForKillCursors(
-            client->getOperationContext(), nss, cursorId);
+        auto* as = AuthorizationSession::get(client);
+        invariant(as);
+
+        auto manager = grid.getCursorManager();
+        auto authenticatedUsersStatus = manager->getAuthenticatedUsersForCursor(nss, cursorId);
+        if (!authenticatedUsersStatus.isOK()) {
+            return authenticatedUsersStatus.getStatus();
+        }
+        return as->checkAuthForKillCursors(nss, authenticatedUsersStatus.getValue());
     }
 
     Status _killCursor(OperationContext* opCtx,

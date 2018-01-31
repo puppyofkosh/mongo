@@ -522,7 +522,6 @@ BSONObj establishMergingMongosCursor(OperationContext* opCtx,
 
     ClusterClientCursorParams params(
         requestedNss,
-        AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames(),
         ReadPreferenceSetting::get(opCtx));
 
     params.tailableMode = pipelineForMerging->getContext()->tailableMode;

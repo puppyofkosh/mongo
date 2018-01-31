@@ -187,12 +187,6 @@ public:
         bool isTailableAndAwaitData() const;
 
         /**
-         * Returns the set of authenticated users when this cursor was created. Cannot be called
-         * after returnCursor() is called.  A cursor must be owned.
-         */
-        UserNameIterator getAuthenticatedUsers() const;
-
-        /**
          * Transfers ownership of the underlying cursor back to the manager.  A cursor must be
          * owned, and a cursor will no longer be owned after this method completes.
          *
@@ -321,13 +315,9 @@ public:
                                             OperationContext* opCtx,
                                             AuthCheck checkSessionAuth = kCheckSession);
 
-    /**
-     * Returns an OK status if we're authorized to erase the cursor. Otherwise, returns
-     * ErrorCodes::Unauthorized.
-     */
-    Status checkAuthForKillCursors(OperationContext* opCtx,
-                                   const NamespaceString& nss,
-                                   CursorId id);
+
+    StatusWith<UserNameIterator> getAuthenticatedUsersForCursor(const NamespaceString& nss,
+                                                                CursorId id);
 
     /**
       * Informs the manager that the given cursor should be killed.  The cursor need not necessarily
@@ -471,12 +461,15 @@ private:
         CursorEntry(std::unique_ptr<ClusterClientCursor> cursor,
                     CursorType cursorType,
                     CursorLifetime cursorLifetime,
-                    Date_t lastActive)
+                    Date_t lastActive,
+                    UserNameIterator authenticatedUsersIter)
             : _cursor(std::move(cursor)),
               _cursorType(cursorType),
               _cursorLifetime(cursorLifetime),
               _lastActive(lastActive),
-              _lsid(_cursor->getLsid()) {
+              _lsid(_cursor->getLsid()),
+              _authenticatedUsers(
+                  userNameIteratorToContainer<std::vector<UserName>>(authenticatedUsersIter)) {
             invariant(_cursor);
         }
 
@@ -556,6 +549,10 @@ private:
             _lastActive = lastActive;
         }
 
+        UserNameIterator getAuthenticatedUsers() const {
+            return makeUserNameIterator(_authenticatedUsers.begin(), _authenticatedUsers.end());
+        }
+
     private:
         std::unique_ptr<ClusterClientCursor> _cursor;
         bool _killPending = false;
@@ -567,6 +564,9 @@ private:
 
         // Current operation using the cursor. nullptr if the cursor is not "checked out."
         OperationContext* _operationUsingCursor = nullptr;
+
+        // The set of authenticated users when this cursor was created.
+        const std::vector<UserName> _authenticatedUsers;
     };
 
     /**

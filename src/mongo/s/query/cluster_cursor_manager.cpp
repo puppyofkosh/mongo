@@ -98,8 +98,7 @@ ClusterCursorManager::PinnedCursor::PinnedCursor(PinnedCursor&& other)
     : _manager(std::move(other._manager)),
       _cursor(std::move(other._cursor)),
       _nss(std::move(other._nss)),
-      _cursorId(std::move(other._cursorId)) {
-}
+      _cursorId(std::move(other._cursorId)) {}
 
 ClusterCursorManager::PinnedCursor& ClusterCursorManager::PinnedCursor::operator=(
     ClusterCursorManager::PinnedCursor&& other) {
@@ -146,18 +145,13 @@ boost::optional<ReadPreferenceSetting> ClusterCursorManager::PinnedCursor::getRe
     return _cursor->getReadPreference();
 }
 
-UserNameIterator ClusterCursorManager::PinnedCursor::getAuthenticatedUsers() const {
-    invariant(_cursor);
-    return _cursor->getAuthenticatedUsers();
-}
-
 void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
     _manager->checkInCursor(std::move(_cursor), _nss, _cursorId, cursorState);
 
-      *this = PinnedCursor();
+    *this = PinnedCursor();
 }
 
 CursorId ClusterCursorManager::PinnedCursor::getCursorId() const {
@@ -270,8 +264,10 @@ StatusWith<CursorId> ClusterCursorManager::registerCursor(
     } while (cursorId == 0 || entryMap.count(cursorId) > 0);
 
     // Create a new CursorEntry and register it in the CursorEntryContainer's map.
+    auto authenticatedUsers = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames();
     auto emplaceResult =
-        entryMap.emplace(cursorId, CursorEntry(std::move(cursor), cursorType, cursorLifetime, now));
+        entryMap.emplace(cursorId, CursorEntry(std::move(cursor), cursorType, cursorLifetime, now,
+                                               std::move(authenticatedUsers)));
     invariant(emplaceResult.second);
 
     return cursorId;
@@ -362,12 +358,8 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     detachedCursor.getValue().reset();
 }
 
-Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
-                                                     const NamespaceString& nss,
-                                                     CursorId cursorId) {
-    auto* as = AuthorizationSession::get(opCtx->getClient());
-    invariant(as);
-
+StatusWith<UserNameIterator> ClusterCursorManager::getAuthenticatedUsersForCursor(
+    const NamespaceString& nss, CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
     auto entry = _getEntry(lk, nss, cursorId);
 
@@ -375,13 +367,8 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    // Note that getAuthenticatedUsers() is thread-safe, so it's okay to call even if there's
-    // an operation using the cursor.
-    // FIXME: TODO: change!
-    return Status::OK();
-    //return as->checkAuthForKillCursors(nss, entry->getConstCursor()->getAuthenticatedUsers());
+    return entry->getAuthenticatedUsers();
 }
-
 
 Status ClusterCursorManager::killCursor(const NamespaceString& nss, CursorId cursorId) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
