@@ -188,11 +188,11 @@ UserNameIterator makeUserNameIteratorForContainer(const Container& container) {
 
 template <typename Container>
 Container userNameIteratorToContainer(UserNameIterator it) {
-    Container c;
+    Container container;
     while (it.more()) {
-        c.emplace_back(it.next());
+        container.emplace_back(it.next());
     }
-    return c;
+    return container;
 }
 
 }  // namespace mongo

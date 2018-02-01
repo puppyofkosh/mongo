@@ -323,15 +323,15 @@ public:
                                                                 CursorId id);
 
     /**
-      * Informs the manager that the given cursor should be killed.  The cursor need not necessarily
-      * be in the 'idle' state, and the lifetime type of the cursor is ignored.
-      *
-      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
-      * Otherwise, interrupts the OperationContext which is currently using the cursor, marks it as
-      * 'kill pending,' and returns Status::OK().
-      *
-      * Does not block.
-      */
+     * Informs the manager that the given cursor should be killed.  The cursor need not necessarily
+     * be in the 'idle' state, and the lifetime type of the cursor is ignored.
+     *
+     * If the given cursor is not registered, returns an error Status with code CursorNotFound.
+     * Otherwise, interrupts the OperationContext which is currently using the cursor, marks it as
+     * 'kill pending,' and returns Status::OK().
+     *
+     * Does not block.
+     */
     Status killCursor(const NamespaceString& nss, CursorId cursorId);
 
     /**
