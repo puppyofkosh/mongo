@@ -316,6 +316,9 @@ public:
                                             AuthCheck checkSessionAuth = kCheckSession);
 
 
+    /**
+     * Returns users allowed to access the given cursor, even if the cursor is checked out.
+     */
     StatusWith<UserNameIterator> getAuthenticatedUsersForCursor(const NamespaceString& nss,
                                                                 CursorId id);
 
@@ -324,7 +327,8 @@ public:
       * be in the 'idle' state, and the lifetime type of the cursor is ignored.
       *
       * If the given cursor is not registered, returns an error Status with code CursorNotFound.
-      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
+      * Otherwise, interrupts the OperationContext which is currently using the cursor, marks it as
+      * 'kill pending,' and returns Status::OK().
       *
       * Does not block.
       */
@@ -502,7 +506,8 @@ private:
 
         /**
          * Releases the cursor from this entry forever. After calling this, it is illegal to call
-         * getOperationUsingCursor() or returnCursor() again.
+         * getOperationUsingCursor() or returnCursor() again. This should really only be called when
+         * the CursorManager is about to destroy the cursor.
          */
         std::unique_ptr<ClusterClientCursor> releaseCursorForever() {
             invariant(!_operationUsingCursor);
