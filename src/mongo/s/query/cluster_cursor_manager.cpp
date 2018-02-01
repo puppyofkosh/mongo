@@ -295,6 +295,14 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         return cursorNotFoundStatus(nss, cursorId);
     }
 
+    // Check if the user is coauthorized to access this cursor.
+    if (!AuthorizationSession::get(opCtx->getClient())
+        ->isCoauthorizedWith(entry->getAuthenticatedUsers())) {
+        return {ErrorCodes::Unauthorized,
+                str::stream() << "cursor id " << cursorId
+                              << " was not created by the authenticated user"};
+    }
+
     if (checkSessionAuth == kCheckSession) {
         const auto cursorPrivilegeStatus = checkCursorSessionPrivilege(opCtx, entry->getLsid());
         if (!cursorPrivilegeStatus.isOK()) {

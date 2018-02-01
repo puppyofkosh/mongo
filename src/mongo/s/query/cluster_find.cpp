@@ -390,24 +390,6 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
                                                    const GetMoreRequest& request) {
     auto cursorManager = Grid::get(opCtx)->getCursorManager();
 
-    // A user can only call getMore on their own cursor. If there were multiple users authenticated
-    // when the cursor was created, then at least one of them must be authenticated in order to run
-    // getMore on the cursor.
-    auto authenticatedUsersStatus =
-        cursorManager->getAuthenticatedUsersForCursor(request.nss, request.cursorid);
-    if (!authenticatedUsersStatus.isOK()) {
-        return authenticatedUsersStatus.getStatus();
-    }
-    if (!AuthorizationSession::get(opCtx->getClient())
-             ->isCoauthorizedWith(authenticatedUsersStatus.getValue())) {
-        return {ErrorCodes::Unauthorized,
-                str::stream() << "cursor id " << request.cursorid
-                              << " was not created by the authenticated user"};
-    }
-
-    // TODO: This is an ABA problem! what if the cursor goes away, and a different one comes back?
-    // we'll access a cursor we shouldn't be able to. checkCursor should probably do the auth check.
-
     auto pinnedCursor = cursorManager->checkOutCursor(request.nss, request.cursorid, opCtx);
     if (!pinnedCursor.isOK()) {
         return pinnedCursor.getStatus();
