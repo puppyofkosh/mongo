@@ -24,18 +24,7 @@
         assert.writeOK(coll.insert({_id: i}));
     }
 
-    // Now split up the data so that [0,5) go to shard 0 and [5,10) go to shard 1.
-    assert.commandWorked(st.s.adminCommand({enableSharding: kDBName}));
-    st.ensurePrimaryShard(kDBName, st.shard0.shardName);
-    assert.commandWorked(st.s.adminCommand({shardCollection: coll.getFullName(), key: {_id: 1}}));
-    assert.commandWorked(st.s.adminCommand({split: coll.getFullName(), middle: {_id: 5}}));
-
-    assert.commandWorked(st.s.adminCommand({
-        moveChunk: coll.getFullName(),
-        find: {_id: 6},
-        to: st.shard1.shardName,
-        _waitForDelete: true,
-    }));
+    st.shardColl(coll, {_id: 1}, {_id: 5}, {_id: 6}, kDBName, false);
 
     // Set up the first mongod to hang on a getMore request.
     let cleanup = null;
@@ -48,7 +37,8 @@
             shard0DB.adminCommand({configureFailPoint: kFailPointName, mode: "alwaysOn"}));
 
         // Run a find with a sort, so that we must return the results from shard 0 before the
-        // results from shard 1. This should cause the entire query to hang.
+        // results from shard 1. This should cause the mongos to hang, waiting on the network for
+        // the response from the hung shard.
         let cmdRes = mongosDB.runCommand({find: coll.getName(), sort: {_id: 1}, batchSize: 2});
         assert.commandWorked(cmdRes);
         cursorId = cmdRes.cursor.id;
