@@ -32,6 +32,8 @@
 
 #include <vector>
 
+#include "mongo/db/auth/authorization_manager.h"
+#include "mongo/db/auth/authz_manager_external_state_mock.h"
 #include "mongo/db/logical_session_cache.h"
 #include "mongo/db/logical_session_cache_noop.h"
 #include "mongo/db/operation_context_noop.h"
@@ -98,6 +100,11 @@ protected:
 
 private:
     void setUp() final {
+        auto localManagerState = stdx::make_unique<AuthzManagerExternalStateMock>();
+        auto uniqueAuthzManager =
+            stdx::make_unique<AuthorizationManager>(std::move(localManagerState));
+        AuthorizationManager::set(&serviceContext, std::move(uniqueAuthzManager));
+
         auto client = serviceContext.makeClient("testClient");
         _opCtx = client->makeOperationContext();
         _client = client.get();
@@ -135,7 +142,7 @@ TEST_F(ClusterCursorManagerTest, RegisterCursor) {
     auto cursor = allocateMockCursor();
     cursor->queueResult(BSON("a" << 1));
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                std::move(cursor),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -154,7 +161,7 @@ TEST_F(ClusterCursorManagerTest, RegisterCursor) {
 // Test that registering a cursor returns a non-zero cursor id.
 TEST_F(ClusterCursorManagerTest, RegisterCursorReturnsNonZeroId) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -167,7 +174,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorBasic) {
     auto cursor = allocateMockCursor();
     cursor->queueResult(BSON("a" << 1));
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                std::move(cursor),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -193,7 +200,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorMultipleCursors) {
         auto cursor = allocateMockCursor();
         cursor->queueResult(BSON("a" << i));
         cursorIds[i] =
-            assertGet(getManager()->registerCursor(nullptr,
+            assertGet(getManager()->registerCursor(_opCtx.get(),
                                                    std::move(cursor),
                                                    nss,
                                                    ClusterCursorManager::CursorType::SingleTarget,
@@ -215,7 +222,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorMultipleCursors) {
 // Test that checking out a pinned cursor returns an error with code ErrorCodes::CursorInUse.
 TEST_F(ClusterCursorManagerTest, CheckOutCursorPinned) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -229,7 +236,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorPinned) {
 // Test that checking out a killed cursor returns an error with code ErrorCodes::CursorNotFound.
 TEST_F(ClusterCursorManagerTest, CheckOutCursorKilled) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -251,7 +258,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorWrongNamespace) {
     const NamespaceString correctNamespace("test.correct");
     const NamespaceString incorrectNamespace("test.incorrect");
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                correctNamespace,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -264,7 +271,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorWrongNamespace) {
 // even if there is an existing cursor with the same namespace but a different cursor id.
 TEST_F(ClusterCursorManagerTest, CheckOutCursorWrongCursorId) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -277,7 +284,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorWrongCursorId) {
 // current time.
 TEST_F(ClusterCursorManagerTest, CheckOutCursorUpdateActiveTime) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -297,7 +304,7 @@ TEST_F(ClusterCursorManagerTest, CheckOutCursorUpdateActiveTime) {
 // current time.
 TEST_F(ClusterCursorManagerTest, ReturnCursorUpdateActiveTime) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -315,7 +322,7 @@ TEST_F(ClusterCursorManagerTest, ReturnCursorUpdateActiveTime) {
 // Test that killing a pinned cursor by id successfully kills the cursor.
 TEST_F(ClusterCursorManagerTest, KillCursorBasic) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -337,7 +344,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorMultipleCursors) {
     // Register cursors and populate 'cursorIds' with the returned cursor ids.
     for (size_t i = 0; i < numCursors; ++i) {
         cursorIds[i] =
-            assertGet(getManager()->registerCursor(nullptr,
+            assertGet(getManager()->registerCursor(_opCtx.get(),
                                                    allocateMockCursor(),
                                                    nss,
                                                    ClusterCursorManager::CursorType::SingleTarget,
@@ -364,7 +371,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorWrongNamespace) {
     const NamespaceString correctNamespace("test.correct");
     const NamespaceString incorrectNamespace("test.incorrect");
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                correctNamespace,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -377,7 +384,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorWrongNamespace) {
 // even if there is an existing cursor with the same namespace but a different cursor id.
 TEST_F(ClusterCursorManagerTest, KillCursorWrongCursorId) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -388,7 +395,7 @@ TEST_F(ClusterCursorManagerTest, KillCursorWrongCursorId) {
 
 // Test that killing all mortal expired cursors correctly kills a mortal expired cursor.
 TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceBasic) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -403,7 +410,7 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceBasic) {
 TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceSkipUnexpired) {
     Date_t timeBeforeCursorCreation = getClockSource()->now();
     getClockSource()->advance(Milliseconds(1));
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -416,7 +423,7 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceSkipUnexpired) {
 
 // Test that killing all mortal expired cursors does not kill a cursor that is immortal.
 TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceSkipImmortal) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -431,7 +438,7 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceSkipImmortal) {
 // pinned.
 TEST_F(ClusterCursorManagerTest, ShouldNotKillPinnedCursors) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -458,7 +465,7 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceMultipleCursors) 
         if (i < numKilledCursorsExpected) {
             cutoff = getClockSource()->now();
         }
-        ASSERT_OK(getManager()->registerCursor(nullptr,
+        ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -483,7 +490,7 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceMultipleCursors) 
 TEST_F(ClusterCursorManagerTest, KillAllCursors) {
     const size_t numCursors = 10;
     for (size_t i = 0; i < numCursors; ++i) {
-        ASSERT_OK(getManager()->registerCursor(nullptr,
+        ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -503,7 +510,7 @@ TEST_F(ClusterCursorManagerTest, KillAllCursors) {
 // cursor.
 TEST_F(ClusterCursorManagerTest, ReapZombieCursorsBasic) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -518,7 +525,7 @@ TEST_F(ClusterCursorManagerTest, ReapZombieCursorsBasic) {
 // that is still pinned.
 TEST_F(ClusterCursorManagerTest, ReapZombieCursorsSkipPinned) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -532,7 +539,7 @@ TEST_F(ClusterCursorManagerTest, ReapZombieCursorsSkipPinned) {
 // Test that reaping does not call kill() on the underlying ClusterClientCursor for cursors that
 // haven't been killed.
 TEST_F(ClusterCursorManagerTest, ReapZombieCursorsSkipNonZombies) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -551,7 +558,7 @@ TEST_F(ClusterCursorManagerTest, StatsInitAsZero) {
 
 // Test that registering a sharded cursor updates the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsRegisterShardedCursor) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::MultiTarget,
@@ -561,7 +568,7 @@ TEST_F(ClusterCursorManagerTest, StatsRegisterShardedCursor) {
 
 // Test that registering a not-sharded cursor updates the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsRegisterNotShardedCursor) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -572,7 +579,7 @@ TEST_F(ClusterCursorManagerTest, StatsRegisterNotShardedCursor) {
 // Test that checking out a cursor updates the pinned counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsPinCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::MultiTarget,
@@ -586,7 +593,7 @@ TEST_F(ClusterCursorManagerTest, StatsPinCursor) {
 TEST_F(ClusterCursorManagerTest, StatsRegisterMultipleCursors) {
     const size_t numShardedCursors = 10;
     for (size_t i = 0; i < numShardedCursors; ++i) {
-        ASSERT_OK(getManager()->registerCursor(nullptr,
+        ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::MultiTarget,
@@ -596,7 +603,7 @@ TEST_F(ClusterCursorManagerTest, StatsRegisterMultipleCursors) {
     }
     const size_t numNotShardedCursors = 10;
     for (size_t i = 0; i < numNotShardedCursors; ++i) {
-        ASSERT_OK(getManager()->registerCursor(nullptr,
+        ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -609,7 +616,7 @@ TEST_F(ClusterCursorManagerTest, StatsRegisterMultipleCursors) {
 // Test that killing a sharded cursor decrements the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsKillShardedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::MultiTarget,
@@ -622,7 +629,7 @@ TEST_F(ClusterCursorManagerTest, StatsKillShardedCursor) {
 // Test that killing a not-sharded cursor decrements the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsKillNotShardedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -635,7 +642,7 @@ TEST_F(ClusterCursorManagerTest, StatsKillNotShardedCursor) {
 // Test that killing a pinned cursor decrements the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsKillPinnedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::MultiTarget,
@@ -649,7 +656,7 @@ TEST_F(ClusterCursorManagerTest, StatsKillPinnedCursor) {
 // Test that exhausting a sharded cursor decrements the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsExhaustShardedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::MultiTarget,
@@ -665,7 +672,7 @@ TEST_F(ClusterCursorManagerTest, StatsExhaustShardedCursor) {
 // Test that exhausting a not-sharded cursor decrements the corresponding counter in stats().
 TEST_F(ClusterCursorManagerTest, StatsExhaustNotShardedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -682,7 +689,7 @@ TEST_F(ClusterCursorManagerTest, StatsExhaustNotShardedCursor) {
 // stats().
 TEST_F(ClusterCursorManagerTest, StatsExhaustPinnedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -699,7 +706,7 @@ TEST_F(ClusterCursorManagerTest, StatsExhaustPinnedCursor) {
 // stats().
 TEST_F(ClusterCursorManagerTest, StatsCheckInWithoutExhaustingPinnedCursor) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -715,7 +722,7 @@ TEST_F(ClusterCursorManagerTest, StatsCheckInWithoutExhaustingPinnedCursor) {
 // Test that getting the namespace for a cursor returns the correct namespace.
 TEST_F(ClusterCursorManagerTest, GetNamespaceForCursorIdBasic) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -733,7 +740,7 @@ TEST_F(ClusterCursorManagerTest, GetNamespaceForCursorIdMultipleCursorsSameNames
     std::vector<CursorId> cursorIds(numCursors);
     for (size_t i = 0; i < numCursors; ++i) {
         cursorIds[i] =
-            assertGet(getManager()->registerCursor(nullptr,
+            assertGet(getManager()->registerCursor(_opCtx.get(),
                                                    allocateMockCursor(),
                                                    nss,
                                                    ClusterCursorManager::CursorType::SingleTarget,
@@ -755,7 +762,7 @@ TEST_F(ClusterCursorManagerTest, GetNamespaceForCursorIdMultipleCursorsDifferent
     for (size_t i = 0; i < numCursors; ++i) {
         NamespaceString cursorNamespace(std::string(str::stream() << "test.collection" << i));
         auto cursorId =
-            assertGet(getManager()->registerCursor(nullptr,
+            assertGet(getManager()->registerCursor(_opCtx.get(),
                                                    allocateMockCursor(),
                                                    cursorNamespace,
                                                    ClusterCursorManager::CursorType::SingleTarget,
@@ -786,7 +793,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorDefaultConstructor) {
 // cursor.
 TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorNotExhausted) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -805,7 +812,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorNotExhausted) {
 // cursor, and leaves the pin owning no cursor.
 TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhausted) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -838,7 +845,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaust
     mockCursor->markRemotesNotExhausted();
 
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                std::move(mockCursor),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -863,7 +870,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaust
 // been returned.
 TEST_F(ClusterCursorManagerTest, PinnedCursorMoveAssignmentKill) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -879,7 +886,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorMoveAssignmentKill) {
 TEST_F(ClusterCursorManagerTest, PinnedCursorDestructorKill) {
     {
         auto cursorId =
-            assertGet(getManager()->registerCursor(nullptr,
+            assertGet(getManager()->registerCursor(_opCtx.get(),
                                                    allocateMockCursor(),
                                                    nss,
                                                    ClusterCursorManager::CursorType::SingleTarget,
@@ -898,7 +905,7 @@ TEST_F(ClusterCursorManagerTest, RemotesExhausted) {
     ASSERT_FALSE(mockCursor->remotesExhausted());
 
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                std::move(mockCursor),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -911,7 +918,7 @@ TEST_F(ClusterCursorManagerTest, RemotesExhausted) {
 // Test that killed cursors which are still pinned are not reaped.
 TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -933,7 +940,7 @@ TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
 }
 
 TEST_F(ClusterCursorManagerTest, CannotRegisterCursorDuringShutdown) {
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -945,7 +952,7 @@ TEST_F(ClusterCursorManagerTest, CannotRegisterCursorDuringShutdown) {
     ASSERT(isMockCursorKilled(0));
 
     ASSERT_EQUALS(ErrorCodes::ShutdownInProgress,
-                  getManager()->registerCursor(nullptr,
+                  getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -954,7 +961,7 @@ TEST_F(ClusterCursorManagerTest, CannotRegisterCursorDuringShutdown) {
 
 TEST_F(ClusterCursorManagerTest, CannotCheckoutCursorDuringShutdown) {
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -974,7 +981,7 @@ TEST_F(ClusterCursorManagerTest, CannotCheckoutCursorDuringShutdown) {
  */
 TEST_F(ClusterCursorManagerTest, CursorsWithoutSessions) {
     // Add a cursor with no session to the cursor manager.
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -993,7 +1000,7 @@ TEST_F(ClusterCursorManagerTest, OneCursorWithASession) {
     // Add a cursor with a session to the cursor manager.
     auto lsid = makeLogicalSessionIdForTest();
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -1027,7 +1034,7 @@ TEST_F(ClusterCursorManagerTest, GetSessionIdsWhileCheckedOut) {
     // Add a cursor with a session to the cursor manager.
     auto lsid = makeLogicalSessionIdForTest();
     auto cursorId =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -1048,13 +1055,13 @@ TEST_F(ClusterCursorManagerTest, MultipleCursorsWithSameSession) {
     // Add two cursors on the same session to the cursor manager.
     auto lsid = makeLogicalSessionIdForTest();
     auto cursorId1 =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal));
     auto cursorId2 =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
@@ -1096,20 +1103,20 @@ TEST_F(ClusterCursorManagerTest, MultipleCursorsMultipleSessions) {
 
     // Register two cursors with different lsids, and one without.
     CursorId cursor1 =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid1),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal));
 
     CursorId cursor2 =
-        assertGet(getManager()->registerCursor(nullptr,
+        assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid2),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal));
 
-    ASSERT_OK(getManager()->registerCursor(nullptr,
+    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                            allocateMockCursor(),
                                            nss,
                                            ClusterCursorManager::CursorType::SingleTarget,
@@ -1139,7 +1146,7 @@ TEST_F(ClusterCursorManagerTest, ManyCursorsManySessions) {
     const int count = 10000;
     for (int i = 0; i < count; i++) {
         auto lsid = makeLogicalSessionIdForTest();
-        ASSERT_OK(getManager()->registerCursor(nullptr,
+        ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(lsid),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,

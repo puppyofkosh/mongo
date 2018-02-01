@@ -264,10 +264,12 @@ StatusWith<CursorId> ClusterCursorManager::registerCursor(
     } while (cursorId == 0 || entryMap.count(cursorId) > 0);
 
     // Create a new CursorEntry and register it in the CursorEntryContainer's map.
-    auto authenticatedUsers = AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames();
-    auto emplaceResult =
-        entryMap.emplace(cursorId, CursorEntry(std::move(cursor), cursorType, cursorLifetime, now,
-                                               std::move(authenticatedUsers)));
+    auto authenticatedUsers =
+        AuthorizationSession::get(opCtx->getClient())->getAuthenticatedUserNames();
+    auto emplaceResult = entryMap.emplace(
+        cursorId,
+        CursorEntry(
+            std::move(cursor), cursorType, cursorLifetime, now, std::move(authenticatedUsers)));
     invariant(emplaceResult.second);
 
     return cursorId;
