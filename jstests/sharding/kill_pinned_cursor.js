@@ -1,10 +1,10 @@
 /**
- Run a query on a sharded cluster where one of the shards hangs. Running killCursors on the mongos
- should always succeed.
-
- Uses getMore to pin an open cursor.
- @tags: [requires_getmore]
-*/
+ * Run a query on a sharded cluster where one of the shards hangs. Running killCursors on the mongos
+ * should always succeed.
+ *
+ * Uses getMore to pin an open cursor.
+ * @tags: [requires_getmore]
+ */
 
 (function() {
     "use strict";
