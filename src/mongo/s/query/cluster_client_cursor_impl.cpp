@@ -90,6 +90,13 @@ ClusterClientCursorImpl::ClusterClientCursorImpl(std::unique_ptr<RouterStageMock
 
 StatusWith<ClusterQueryResult> ClusterClientCursorImpl::next(
     RouterExecStage::ExecContext execContext) {
+
+    invariant(_opCtx);
+    const auto interruptStatus = _opCtx->checkForInterruptNoAssert();
+    if (!interruptStatus.isOK()) {
+        return interruptStatus;
+    }
+
     // First return stashed results, if there are any.
     if (!_stash.empty()) {
         auto front = std::move(_stash.front());
@@ -110,10 +117,12 @@ void ClusterClientCursorImpl::kill(OperationContext* opCtx) {
 }
 
 void ClusterClientCursorImpl::reattachToOperationContext(OperationContext* opCtx) {
+    _opCtx = opCtx;
     _root->reattachToOperationContext(opCtx);
 }
 
 void ClusterClientCursorImpl::detachFromOperationContext() {
+    _opCtx = nullptr;
     _root->detachFromOperationContext();
 }
 

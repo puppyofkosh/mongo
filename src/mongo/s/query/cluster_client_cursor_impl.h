@@ -151,6 +151,9 @@ private:
 
     // Stores the logical session id for this cursor.
     boost::optional<LogicalSessionId> _lsid;
+
+    // OpCtx cursor is attached to.
+    OperationContext* _opCtx = nullptr;
 };
 
 }  // namespace mongo
