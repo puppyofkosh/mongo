@@ -1,5 +1,9 @@
 /**
  * Tests that a change stream can use a user-specified, or collection-default collation.
+python buildscripts/resmoke.py --basePort=40000 --dbpathPrefix=~/two/data/ --suites=change_streams_sharded_collections_passthrough jstests/change_streams/change_stream_collation.js --repeat=1000 --continueOnFailure > log.txt
+
+python buildscripts/resmoke.py --basePort=40000 --dbpathPrefix=~/two/data/ --suites=change_streams_sharded_collections_passthrough jstests/change_streams/change_stream_collation.js --repeat=1000 > log.txt
+
  */
 (function() {
     "use strict";
@@ -9,7 +13,11 @@
 
     let cst = new ChangeStreamTest(db);
 
+    //sleep(30 * 1000);
+
     const caseInsensitive = {locale: "en_US", strength: 2};
+
+    //sh.stopBalancer();
 
     // $changeStream cannot run on a non-existent database. Create an unrelated collection to ensure
     // that the database is present before testing.
@@ -33,6 +41,7 @@
         expectInvalidate: true
     });
 
+    print ("Starting cst watchers");
     const implicitCaseInsensitiveStream = cst.startWatchingChanges({
         pipeline: [
             {$changeStream: {}},
@@ -43,6 +52,7 @@
         ],
         collection: caseInsensitiveCollection
     });
+    assert.neq(implicitCaseInsensitiveStream.id, 0);
     const explicitCaseInsensitiveStream = cst.startWatchingChanges({
         pipeline: [
             {$changeStream: {}},
@@ -53,13 +63,19 @@
         aggregateOptions: {collation: caseInsensitive}
     });
 
+    print("Inserting docs");
+
     assert.writeOK(caseInsensitiveCollection.insert({_id: 0, text: "aBc"}));
     assert.writeOK(caseInsensitiveCollection.insert({_id: 1, text: "abc"}));
 
+    print("ian: About to run the buggy statement");
     cst.assertNextChangesEqual(
         {cursor: implicitCaseInsensitiveStream, expectedChanges: [{docId: 0}, {docId: 1}]});
+    print("ian: Ran the buggy statement!");
     cst.assertNextChangesEqual(
         {cursor: explicitCaseInsensitiveStream, expectedChanges: [{docId: 0}, {docId: 1}]});
+
+    return;
 
     // Test that the collation does not apply to the scan over the oplog.
     const similarNameCollection = assertDropAndRecreateCollection(

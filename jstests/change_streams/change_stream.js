@@ -16,6 +16,10 @@
 
     let cst = new ChangeStreamTest(db);
 
+
+    print("Checking if balancer is running...");
+    assert.eq(sh.getBalancerState(), false);
+
     jsTestLog("Testing single insert");
     assertDropAndRecreateCollection(db, "t1");
     let cursor = cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: db.t1});

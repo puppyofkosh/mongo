@@ -140,9 +140,12 @@ function ChangeStreamTest(_db, name = "ChangeStreamTest") {
             assert.soon(function() {
                 // We need to replace the cursor variable so we return the correct cursor.
                 cursor = self.getNextBatch(cursor);
+                print("result # is " + i);
+                print("Cursor id is " + cursor.id);
                 changes[i] = getNextDocFromCursor(cursor);
                 return changes[i] !== null;
             }, "timed out waiting for another result from the change stream");
+            print("Out of assert.soon");
             assertChangeIsExpected(expectedChanges, i, changes, expectInvalidate);
         }
 
