@@ -204,28 +204,34 @@ private:
 };
 
 DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
+    LOG(0) << "ian: In DocumentSourceCloseCursor";
     pExpCtx->checkForInterrupt();
 
     // Close cursor if we have returned an invalidate entry.
     if (_shouldCloseCursor) {
+        LOG(0) << "ian: 1";
         uasserted(ErrorCodes::CloseChangeStream, "Change stream has been invalidated");
     }
 
     auto nextInput = pSource->getNext();
-    if (!nextInput.isAdvanced())
+    if (!nextInput.isAdvanced()) {
+        LOG(0) << "ian: 2";
         return nextInput;
+    }
 
     auto doc = nextInput.getDocument();
     const auto& kOperationTypeField = DocumentSourceChangeStream::kOperationTypeField;
     checkValueType(doc[kOperationTypeField], kOperationTypeField, BSONType::String);
     auto operationType = doc[kOperationTypeField].getString();
     if (operationType == DocumentSourceChangeStream::kInvalidateOpType) {
+        LOG(0) << "ian: 3";
         // Pass the invalidation forward, so that it can be included in the results, or
         // filtered/transformed by further stages in the pipeline, then throw an exception
         // to close the cursor on the next call to getNext().
         _shouldCloseCursor = true;
     }
 
+    LOG(0) << "ian: fallthru";
     return nextInput;
 }
 
@@ -399,6 +405,7 @@ intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationSt
 }
 
 Document DocumentSourceChangeStream::Transformation::applyTransformation(const Document& input) {
+    LOG(0) << "ian applyTransformation: " << input.toString();
     // If we're executing a change stream pipeline that was forwarded from mongos, then we expect it
     // to "need merge"---we expect to be executing the shards part of a split pipeline. It is never
     // correct for mongos to pass through the change stream without splitting into into a merging
@@ -501,6 +508,8 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
             break;
         }
         case repl::OpTypeEnum::kCommand: {
+            // log oplog entry
+            LOG(0) << "ian kcommand: " << input.toString();
             // Any command that makes it through our filter is an invalidating command such as a
             // drop.
             operationType = kInvalidateOpType;
@@ -509,6 +518,7 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
             break;
         }
         case repl::OpTypeEnum::kNoop: {
+            LOG(0) << "ian noop: " << input.toString();
             operationType = kNewShardDetectedOpType;
             // Generate a fake document Id for NewShardDetected operation so that we can resume
             // after this operation.
