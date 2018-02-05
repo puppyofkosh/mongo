@@ -268,12 +268,13 @@ Status _checkPrecondition(OperationContext* opCtx,
         }
 
         BSONObj realres;
-        auto qrStatus = QueryRequest::fromLegacyQuery(nss, preCondition["q"].Obj(), {}, 0, 0, 0);
+        BSONObj queryObj = preCondition["q"].Obj();
+        auto qrStatus = QueryRequest::fromLegacyQuery(nss, queryObj, {}, 0, 0, 0);
         if (!qrStatus.isOK()) {
             return qrStatus.getStatus();
         }
         auto recordId = Helpers::findOne(
-            opCtx, autoColl.getCollection(), std::move(qrStatus.getValue()), false);
+            opCtx, autoColl.getCollection(), queryObj, std::move(qrStatus.getValue()), false);
         if (!recordId.isNull()) {
             realres = collection->docFor(opCtx, recordId).value();
         }

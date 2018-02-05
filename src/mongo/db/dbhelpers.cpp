@@ -110,11 +110,12 @@ RecordId Helpers::findOne(OperationContext* opCtx,
 
     auto qr = stdx::make_unique<QueryRequest>(collection->ns());
     qr->setFilter(query);
-    return findOne(opCtx, collection, std::move(qr), requireIndex);
+    return findOne(opCtx, collection, query, std::move(qr), requireIndex);
 }
 
 RecordId Helpers::findOne(OperationContext* opCtx,
                           Collection* collection,
+                          const BSONObj& query,
                           std::unique_ptr<QueryRequest> qr,
                           bool requireIndex) {
     if (!collection)
@@ -131,7 +132,7 @@ RecordId Helpers::findOne(OperationContext* opCtx,
                                      MatchExpressionParser::kAllowAllSpecialFeatures &
                                          ~MatchExpressionParser::AllowedFeatures::kIsolated);
 
-    massert(17244, "Could not canonicalize " + qr->asFindCommand().toString(), statusWithCQ.isOK());
+    massert(17244, "Could not canonicalize " + query.toString(), statusWithCQ.isOK());
     unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
     size_t options = requireIndex ? QueryPlannerParams::NO_TABLE_SCAN : QueryPlannerParams::DEFAULT;
