@@ -74,7 +74,6 @@ struct Helpers {
 
     static RecordId findOne(OperationContext* opCtx,
                             Collection* collection,
-                            const BSONObj& query,
                             std::unique_ptr<QueryRequest> qr,
                             bool requireIndex);
 
