@@ -23,7 +23,7 @@
 
     st.shardColl(coll, {_id: 1}, {_id: 5}, {_id: 6}, kDBName, false);
 
-    function runPinnedCursorKillTest({failPointName, runGetMoreFunc}) {
+    function runPinnedCursorKillTest({failpointNodeDB, failPointName, runGetMoreFunc, waitForPin}) {
         // Set up the first mongod to hang on a getMore request.
         let cleanup = null;
         let cursorId;
@@ -32,7 +32,7 @@
             // ONLY set the failpoint on the first mongod. Setting the failpoint on the mongos will
             // only cause it to spin, and not actually send any requests out.
             assert.commandWorked(
-                shard0DB.adminCommand({configureFailPoint: failPointName, mode: "alwaysOn"}));
+                failpointNodeDB.adminCommand({configureFailPoint: failPointName, mode: "alwaysOn"}));
 
             // Run a find with a sort, so that we must return the results from shard 0 before the
             // results from shard 1. This should cause the mongos to hang, waiting on the network
@@ -47,7 +47,11 @@
             code += `(${runGetMoreFunc.toString()})();`;
             cleanup = startParallelShell(code, st.s.port);
 
-            assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned > 0);
+            if (waitForPin) {
+                assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned > 0);
+            } else {
+                sleep(1000 * 5);
+            }
 
             cmdRes = mongosDB.runCommand({killCursors: coll.getName(), cursors: [cursorId]});
 
@@ -60,7 +64,7 @@
             assert.eq(cmdRes.cursorsUnknown, []);
         } finally {
             assert.commandWorked(
-                shard0DB.adminCommand({configureFailPoint: failPointName, mode: "off"}));
+                failpointNodeDB.adminCommand({configureFailPoint: failPointName, mode: "off"}));
             if (cleanup) {
                 cleanup();
             }
@@ -87,25 +91,31 @@
     // Test that killing the pinned cursor before it starts building the batch results in a
     // CursorKilled exception.
     let testParameters = {
+        failpointNodeDB: shard0DB,
         failPointName: "keepCursorPinnedDuringGetMore",
         runGetMoreFunc: function() {
             const response = db.runCommand({getMore: cursorId, collection: collName});
             // We expect that the operation will get interrupted and fail.
             assert.commandFailedWithCode(response, ErrorCodes.CursorKilled);
-        }
+        },
+        waitForPin: true
     };
     runPinnedCursorKillTest(testParameters);
 
     // // Test that, if the pinned cursor is killed after it has finished building a batch, that batch
     // // is returned to the client but a subsequent getMore will fail with a 'CursorKilled' exception.
-    // testParameters.failPointName = "waitBeforeUnpinningCursorAfterGetMoreBatch";
-    // testParameters.runGetMoreFunc = function() {
-    //     const getMoreCmd = {getMore: cursorId, collection: collName, batchSize: 2};
-    //     // We expect that the first getMore will succeed, while the second fails because the cursor
-    //     // has been killed.
-    //     assert.commandWorked(db.runCommand(getMoreCmd));
-    //     assert.commandFailedWithCode(db.runCommand(getMoreCmd), ErrorCodes.CursorKilled);
-    // };
+    testParameters = {
+        failpointNodeDB: mongosDB,
+        failPointName: "waitBeforeUnpinningCursorAfterGetMoreBatch",
+        runGetMoreFunc: function() {
+            const getMoreCmd = {getMore: cursorId, collection: collName, batchSize: 2};
+            // We expect that the first getMore will succeed, while the second fails because the cursor
+            // has been killed.
+            assert.commandWorked(db.runCommand(getMoreCmd));
+            assert.commandFailedWithCode(db.runCommand(getMoreCmd), ErrorCodes.CursorKilled);
+        },
+        waitForPin: false
+    }
 
     st.stop();
 })();
