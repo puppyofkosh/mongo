@@ -492,6 +492,10 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         batch.push_back(std::move(*next.getValue().getResult()));
     }
 
+    // If the fail point is enabled, busy wait until it is disabled.
+    while (MONGO_FAIL_POINT(waitBeforeUnpinningCursorAfterGetMoreBatch)) {
+    }
+    
     // Upon successful completion, we need to detach from the operation and transfer ownership of
     // the cursor back to the cursor manager.
     cursorDetach.Dismiss();

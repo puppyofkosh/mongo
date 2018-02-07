@@ -40,6 +40,12 @@ MONGO_FP_DECLARE(keepCursorPinnedDuringGetMore);
 
 MONGO_FP_DECLARE(disableAwaitDataForGetMoreCmd);
 
+MONGO_FP_DECLARE(waitAfterPinningCursorBeforeGetMoreBatch);
+
+MONGO_FP_DECLARE(waitWithPinnedCursorDuringGetMoreBatch);
+
+MONGO_FP_DECLARE(waitBeforeUnpinningCursorAfterGetMoreBatch);
+
 const OperationContext::Decoration<AwaitDataState> awaitDataState =
     OperationContext::declareDecoration<AwaitDataState>();
 
