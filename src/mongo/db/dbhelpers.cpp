@@ -131,7 +131,7 @@ RecordId Helpers::findOne(OperationContext* opCtx,
                                      MatchExpressionParser::kAllowAllSpecialFeatures &
                                          ~MatchExpressionParser::AllowedFeatures::kIsolated);
 
-    massertStatusOK(statusWithCQ.getStatus());
+    massert(17244, "Could not canonicalize " + qr->asFindCommand().toString(), statusWithCQ.isOK());
     unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
     size_t options = requireIndex ? QueryPlannerParams::NO_TABLE_SCAN : QueryPlannerParams::DEFAULT;
