@@ -217,11 +217,9 @@ Status CanonicalQuery::init(OperationContext* opCtx,
                             bool canHaveNoopMatchNodes,
                             std::unique_ptr<MatchExpression> root,
                             std::unique_ptr<CollatorInterface> collator) {
+    const std::string errorPrefix = "Could not canonicalize ";
     _qr = std::move(qr);
     _collator = std::move(collator);
-    auto getErrorContext = [this]() -> std::string {
-        return "Could not canonicalize " + _qr->asFindCommand().toString();
-    };
 
     _canHaveNoopMatchNodes = canHaveNoopMatchNodes;
     _isIsolated = QueryRequest::isQueryIsolated(_qr->getFilter());
@@ -237,7 +235,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     sortTree(_root.get());
     Status validStatus = isValid(_root.get(), *_qr);
     if (!validStatus.isOK()) {
-        return validStatus.withContext(getErrorContext());
+        return validStatus.withContext(errorPrefix + _qr->asFindCommand().toString());
     }
 
     // Validate the projection if there is one.
@@ -245,14 +243,14 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         ParsedProjection* pp;
         Status projStatus = ParsedProjection::make(opCtx, _qr->getProj(), _root.get(), &pp);
         if (!projStatus.isOK()) {
-            return projStatus.withContext(getErrorContext());
+            return projStatus.withContext(errorPrefix + _qr->asFindCommand().toString());
         }
         _proj.reset(pp);
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {
-        return Status(ErrorCodes::BadValue, getErrorContext() +
-                      " :: cannot use sortKey $meta projection without a sort");
+        return Status(ErrorCodes::BadValue, errorPrefix + _qr->asFindCommand().toString() + ": " +
+                      "cannot use sortKey $meta projection without a sort");
     }
 
     return Status::OK();
