@@ -420,8 +420,6 @@ TEST_F(ClusterCursorManagerTest, KillCursorMultipleCursors) {
     // Kill each cursor and verify that it was successfully killed.
     for (size_t i = 0; i < numCursors; ++i) {
         ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorIds[i]));
-        ASSERT(!isMockCursorKilled(i));
-        getManager()->reapZombieCursors(nullptr);
         ASSERT(isMockCursorKilled(i));
     }
 }
@@ -580,22 +578,6 @@ TEST_F(ClusterCursorManagerTest, KillAllCursors) {
     for (size_t i = 0; i < numCursors; ++i) {
         ASSERT(isMockCursorKilled(i));
     }
-}
-
-// Test that reaping correctly calls kill() on the underlying ClusterClientCursor for a killed
-// cursor.
-TEST_F(ClusterCursorManagerTest, ReapZombieCursorsBasic) {
-    auto cursorId =
-        assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
-                                               nss,
-                                               ClusterCursorManager::CursorType::SingleTarget,
-                                               ClusterCursorManager::CursorLifetime::Mortal,
-                                               UserNameIterator()));
-    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
-    ASSERT(isMockCursorKilled(0));
 }
 
 // Test that reaping does not call kill() on the underlying ClusterClientCursor for a killed cursor
