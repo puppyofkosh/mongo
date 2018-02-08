@@ -382,10 +382,10 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
     return authChecker(entry->getAuthenticatedUsers());
 }
 
-Status ClusterCursorManager::killCursor(OperationContext* opCtx,
+Status ClusterCursorManager::killCursor(OperationContext *opCtx,
                                         const NamespaceString& nss,
                                         CursorId cursorId) {
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     if (!entry) {
@@ -394,14 +394,25 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
 
     // Interrupt any operation currently using the cursor.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
+    entry->setKillPending();
     if (opUsingCursor) {
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
-    } else {
-        invariant(opCtx);
+        // Don't delete the cursor, as an operation is using it. It will be cleaned up when the
+        // operation is done.
+        return Status::OK();
     }
 
-    entry->setKillPending();
+    invariant(opCtx);
+
+    // No one is using the cursor, so we destroy it.
+    auto detachedCursor = _detachCursor(lk, nss, cursorId);
+    invariantOK(detachedCursor.getStatus());
+
+    // Deletion of the cursor can happen out of the lock.
+    lk.unlock();
+    detachedCursor.getValue()->kill(opCtx);
+    detachedCursor.getValue().reset();
 
     return Status::OK();
 }
