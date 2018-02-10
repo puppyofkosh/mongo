@@ -2965,7 +2965,7 @@ tasks:
       run_multiple_jobs: true
 
 - <<: *task_template
-  name: change_streams_sharded_collections_passthrough_WT
+  name: change_streams_sharded_collections_passthrough
   commands:
   - func: "do setup"
   - func: "run tests"
