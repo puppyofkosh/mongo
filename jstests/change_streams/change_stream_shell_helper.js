@@ -37,11 +37,15 @@
         checkFunc(cmdObjSeen);
     }
 
-    jsTestLog("Testing watch() without options");
+    jsTestLog("ian: Testing watch() without options");
     let cursor = coll.watch();
+    print("ian: The cursor is ...." + tojson(cursor));
     assert(!cursor.hasNext());
-    assert.writeOK(coll.insert({_id: 0, x: 1}));
-    assert.soon(() => cursor.hasNext());
+    print("ian: Inserting document...");
+    assert.writeOK(coll.insert({_id: 0, x: 1, message: "ian foobar"}));
+    print("ian: doc inserted. Waiting for hasNext()");
+    assert.soon(() => cursor.hasNext(), "", 24 * 60 * 60 * 1000);
+    print("ian: TEST PASSED");
     let change = cursor.next();
     assert(!cursor.hasNext());
     let expected = {

@@ -2965,14 +2965,12 @@ tasks:
       run_multiple_jobs: true
 
 - <<: *task_template
-  name: change_streams_sharded_collections_passthrough
-  depends_on:
-  - name: change_streams
+  name: change_streams_sharded_collections_passthrough_WT
   commands:
   - func: "do setup"
   - func: "run tests"
     vars:
-      resmoke_args: --suites=change_streams_sharded_collections_passthrough --storageEngine=wiredTiger
+      resmoke_args: --suites=change_streams_sharded_collections_passthrough --storageEngine=wiredTiger --repeat=100 jstests/change_streams/change_stream_shell_helper.js
       run_multiple_jobs: true
 
 - <<: *task_template

@@ -148,6 +148,7 @@ CappedInsertNotifier::CappedInsertNotifier() : _version(0), _dead(false) {}
 
 void CappedInsertNotifier::notifyAll() {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
+    log() << "ian: notifyAll() is called";
     ++_version;
     _notifier.notify_all();
 }
@@ -156,9 +157,11 @@ void CappedInsertNotifier::waitUntil(uint64_t prevVersion, Date_t deadline) cons
     stdx::unique_lock<stdx::mutex> lk(_mutex);
     while (!_dead && prevVersion == _version) {
         if (stdx::cv_status::timeout == _notifier.wait_until(lk, deadline.toSystemTimePoint())) {
+            log() << "ian: Exiting waitUntil due to timeout";
             return;
         }
     }
+    log() << "ian: Exiting waitUntil normally";
 }
 
 void CappedInsertNotifier::kill() {

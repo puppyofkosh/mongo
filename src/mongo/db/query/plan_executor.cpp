@@ -618,6 +618,7 @@ PlanExecutor::ExecState PlanExecutor::getNextImpl(Snapshotted<BSONObj>* objOut, 
         } else if (PlanStage::NEED_TIME == code) {
             // Fall through to yield check at end of large conditional.
         } else if (PlanStage::IS_EOF == code) {
+            log() << "ian: Got EOF in PlanExecutor";
             if (!shouldWaitForInserts()) {
                 return PlanExecutor::IS_EOF;
             }
