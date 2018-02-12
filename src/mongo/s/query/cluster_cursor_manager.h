@@ -345,7 +345,7 @@ public:
      *
      * Does not block.
      */
-    void killMortalCursorsInactiveSince(Date_t cutoff);
+    void killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff);
 
     /**
      * Kills all cursors which are registered at the time of the call. If a cursor is registered
@@ -458,6 +458,12 @@ private:
     StatusWith<std::unique_ptr<ClusterClientCursor>> _detachCursor(WithLock,
                                                                    NamespaceString const& nss,
                                                                    CursorId cursorId);
+
+    /**
+     * Kill the cursors satisfying the given predicate.
+     */
+    void killCursorsSatisfying(OperationContext* opCtx,
+                               std::function<bool(CursorId, const CursorEntry&)> pred);
 
     /**
      * CursorEntry is a moveable, non-copyable container for a single cursor.
