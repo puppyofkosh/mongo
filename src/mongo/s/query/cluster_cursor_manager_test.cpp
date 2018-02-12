@@ -379,6 +379,7 @@ TEST_F(ClusterCursorManagerTest, ReturnCursorUpdateActiveTime) {
     getManager()->reapZombieCursors(nullptr);
     ASSERT(!isMockCursorKilled(0));
 }
+
 // Test that killing a pinned cursor by id successfully kills the cursor.
 TEST_F(ClusterCursorManagerTest, KillCursorBasic) {
     auto cursorId =
@@ -397,8 +398,6 @@ TEST_F(ClusterCursorManagerTest, KillCursorBasic) {
     ASSERT_EQ(_opCtx->checkForInterruptNoAssert(), ErrorCodes::CursorKilled);
 
     pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
@@ -971,8 +970,6 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorMoveAssignmentKill) {
     auto pinnedCursor =
         getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
     pinnedCursor = ClusterCursorManager::PinnedCursor();
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
@@ -989,8 +986,6 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorDestructorKill) {
         auto pinnedCursor =
             getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
     }
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
@@ -1035,10 +1030,8 @@ TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
     getManager()->reapZombieCursors(nullptr);
     ASSERT(!isMockCursorKilled(0));
 
-    // The cursor can be reaped once it is returned to the manager.
+    // The cursor can be destroyed once it is returned to the manager.
     pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
