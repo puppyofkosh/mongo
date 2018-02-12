@@ -350,8 +350,9 @@ public:
     void killMortalCursorsInactiveSince(Date_t cutoff);
 
     /**
-     * Informs the manager that all currently-registered cursors should be killed (regardless of
-     * pinned status or lifetime type).
+     * Kills all cursors which are registered at the time of the call. If a cursor is registered
+     * while this function is running, it may not be killed. If the caller wants to guarantee that
+     * all cursors are killed, shutdown() should be used instead.
      *
      * Does not block on the network, though may block on other threads.
      */
