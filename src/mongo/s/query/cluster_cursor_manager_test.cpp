@@ -381,7 +381,20 @@ TEST_F(ClusterCursorManagerTest, ReturnCursorUpdateActiveTime) {
 }
 
 // Test that killing a pinned cursor by id successfully kills the cursor.
-TEST_F(ClusterCursorManagerTest, KillCursorBasic) {
+TEST_F(ClusterCursorManagerTest, KillUnpinnedCursorBasic) {
+    auto cursorId =
+        assertGet(getManager()->registerCursor(_opCtx.get(),
+                                               allocateMockCursor(),
+                                               nss,
+                                               ClusterCursorManager::CursorType::SingleTarget,
+                                               ClusterCursorManager::CursorLifetime::Mortal,
+                                               UserNameIterator()));
+    killCursorFromDifferentOpCtx(nss, cursorId);
+    ASSERT(isMockCursorKilled(0));
+}
+
+// Test that killing a pinned cursor by id successfully kills the cursor.
+TEST_F(ClusterCursorManagerTest, KillPinnedCursorBasic) {
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
