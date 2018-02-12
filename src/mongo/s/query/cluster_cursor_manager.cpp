@@ -118,15 +118,15 @@ StatusWith<ClusterQueryResult> ClusterCursorManager::PinnedCursor::next(
     return _cursor->next(execContext);
 }
 
-void ClusterCursorManager::PinnedCursor::reattachToOperationContext(OperationContext* opCtx) {
-    invariant(_cursor);
-    _cursor->reattachToOperationContext(opCtx);
-}
+// void ClusterCursorManager::PinnedCursor::reattachToOperationContext(OperationContext* opCtx) {
+//     invariant(_cursor);
+//     _cursor->reattachToOperationContext(opCtx);
+// }
 
-void ClusterCursorManager::PinnedCursor::detachFromOperationContext() {
-    invariant(_cursor);
-    _cursor->detachFromOperationContext();
-}
+// void ClusterCursorManager::PinnedCursor::detachFromOperationContext() {
+//     invariant(_cursor);
+//     _cursor->detachFromOperationContext();
+// }
 
 bool ClusterCursorManager::PinnedCursor::isTailable() const {
     invariant(_cursor);
@@ -146,11 +146,9 @@ boost::optional<ReadPreferenceSetting> ClusterCursorManager::PinnedCursor::getRe
 
 void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
-    invariant(_cursor->getCurrentOperationContext());
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
-    OperationContext* opCtx = _cursor->getCurrentOperationContext();
-    _manager->checkInCursor(opCtx, std::move(_cursor), _nss, _cursorId, cursorState);
+    _manager->checkInCursor(std::move(_cursor), _nss, _cursorId, cursorState);
     *this = PinnedCursor();
 }
 
@@ -181,19 +179,11 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
 
-    // TODO: necessary?
-    // If the cursor is currently attached to an OperationContext, it shouldn't be anymore.
-    // _cursor->detachFromOperationContext();
-
     // Inform the manager that the cursor should be killed. The cursor is checked out by this
-    // thread, so we pass a null opCtx.
+    // thread, so it will not be killed immediately, meaning we can pass a null OperationContext.
     invariantOK(_manager->killCursor(nullptr, _nss, _cursorId));
 
-    // Return the cursor to the manager.  It will be deleted on the next call to
-    // ClusterCursorManager::reapZombieCursors().
-    //
-    // The value of the argument to returnCursor() doesn't matter; the cursor will be kept as a
-    // zombie.
+    // Return the cursor to the manager. It will be deleted immediately.
     returnCursor(CursorState::NotExhausted);
 }
 
@@ -333,13 +323,17 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
     return PinnedCursor(this, std::move(cursor), nss, cursorId);
 }
 
-void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
-                                         std::unique_ptr<ClusterClientCursor> cursor,
+void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
                                          const NamespaceString& nss,
                                          CursorId cursorId,
                                          CursorState cursorState) {
     // Read the clock out of the lock.
     const auto now = _clockSource->now();
+
+    // Detach the cursor from the operation which had checked it out.
+    OperationContext *opCtx = cursor->getCurrentOperationContext();
+    invariant(opCtx);
+    cursor->detachFromOperationContext();
 
     stdx::unique_lock<stdx::mutex> lk(_mutex);
 
@@ -353,6 +347,7 @@ void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
     entry->setLastActive(now);
     entry->returnCursor(std::move(cursor));
 
+    // TODO: Deal with case where unexhausted, but killed!
     if (cursorState == CursorState::NotExhausted) {
         // The caller may be back to check the cursor out again.
         return;

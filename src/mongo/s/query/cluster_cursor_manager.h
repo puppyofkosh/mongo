@@ -127,10 +127,11 @@ public:
      * A PinnedCursor can either be in a state where it owns a cursor, or can be in a null state
      * where it owns no cursor.  If a cursor is owned, the underlying cursor can be iterated with
      * next(), and the underlying cursor can be returned to the manager with the returnCursor()
-     * method (and after it is returned, no cursor will be owned).
+     * method (and after it is returned, no cursor will be owned). When a PinnedCursor is created,
+     * the underlying cursor is attached to the current OperationContext.
      *
-     * Invoking the PinnedCursor's destructor while it owns a cursor will kill and return the
-     * cursor.
+     * Invoking the PinnedCursor's destructor while it owns a cursor will kill, detach from the
+     * current OperationContext and return the cursor.
      */
     class PinnedCursor {
         MONGO_DISALLOW_COPYING(PinnedCursor);
@@ -167,18 +168,6 @@ public:
         StatusWith<ClusterQueryResult> next(RouterExecStage::ExecContext);
 
         /**
-         * Sets the operation context for the cursor. Must be called before the first call to
-         * next().
-         */
-        void reattachToOperationContext(OperationContext* opCtx);
-
-        /**
-         * Detaches the cursor from its current OperationContext. A PinnedCursor must be attached to
-         * OperationContext when it destroyed, unless if returnCursor() is used.
-         */
-        void detachFromOperationContext();
-
-        /**
          * Returns whether or not the underlying cursor is tailing a capped collection.  Cannot be
          * called after returnCursor() is called.  A cursor must be owned.
          */
@@ -192,8 +181,9 @@ public:
         bool isTailableAndAwaitData() const;
 
         /**
-         * Transfers ownership of the underlying cursor back to the manager.  A cursor must be
-         * owned, and a cursor will no longer be owned after this method completes.
+         * Transfers ownership of the underlying cursor back to the manager, and detaches it from
+         * the current OperationContext. A cursor must be owned, and a cursor will no longer be
+         * owned after this method completes.
          *
          * If 'Exhausted' is passed, the manager will de-register and destroy the cursor after it
          * is returned.
@@ -310,6 +300,8 @@ public:
      * Only one client may pin a given cursor at a time.  If the given cursor is already pinned,
      * returns an error Status with code CursorInUse.  If the given cursor is not registered or has
      * a pending kill, returns an error Status with code CursorNotFound.
+     *
+     * Checking out a cursor will attach it to the given operation context.
      *
      * 'authChecker' is function that will be called with the list of users authorized to use this
      * cursor. This function should check whether the current client is also authorized to use this
@@ -442,8 +434,7 @@ private:
      * Intentionally private.  Clients should use public methods on PinnedCursor to check a cursor
      * back in.
      */
-    void checkInCursor(OperationContext* opCtx,
-                       std::unique_ptr<ClusterClientCursor> cursor,
+    void checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
                        CursorState cursorState);
