@@ -138,8 +138,7 @@ private:
     }
 
     void tearDown() final {
-        _manager.killAllCursors();
-        _manager.reapZombieCursors(nullptr);
+        _manager.shutdown(_opCtx.get());
 
         if (_opCtx) {
             _opCtx.reset();
@@ -582,11 +581,7 @@ TEST_F(ClusterCursorManagerTest, KillAllCursors) {
                                                ClusterCursorManager::CursorLifetime::Mortal,
                                                UserNameIterator()));
     }
-    getManager()->killAllCursors();
-    for (size_t i = 0; i < numCursors; ++i) {
-        ASSERT(!isMockCursorKilled(i));
-    }
-    getManager()->reapZombieCursors(nullptr);
+    getManager()->killAllCursors(_opCtx.get());
     for (size_t i = 0; i < numCursors; ++i) {
         ASSERT(isMockCursorKilled(i));
     }
@@ -1057,7 +1052,7 @@ TEST_F(ClusterCursorManagerTest, CannotRegisterCursorDuringShutdown) {
                                            UserNameIterator()));
     ASSERT(!isMockCursorKilled(0));
 
-    getManager()->shutdown(nullptr);
+    getManager()->shutdown(_opCtx.get());
 
     ASSERT(isMockCursorKilled(0));
 
@@ -1080,7 +1075,7 @@ TEST_F(ClusterCursorManagerTest, CannotCheckoutCursorDuringShutdown) {
                                                UserNameIterator()));
     ASSERT(!isMockCursorKilled(0));
 
-    getManager()->shutdown(nullptr);
+    getManager()->shutdown(_opCtx.get());
 
     ASSERT(isMockCursorKilled(0));
 

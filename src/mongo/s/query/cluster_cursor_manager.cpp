@@ -203,7 +203,7 @@ void ClusterCursorManager::shutdown(OperationContext* opCtx) {
         stdx::lock_guard<stdx::mutex> lk(_mutex);
         _inShutdown = true;
     }
-    killAllCursors();
+    killAllCursors(opCtx);
     reapZombieCursors(opCtx);
 }
 
@@ -437,13 +437,29 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {
     }
 }
 
-void ClusterCursorManager::killAllCursors() {
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
+void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
+    struct CursorDescriptor {
+        CursorDescriptor(NamespaceString ns, CursorId cursorId)
+            : ns(std::move(ns)), cursorId(cursorId) {}
 
+        NamespaceString ns;
+        CursorId cursorId;
+    };
+
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
+    std::vector<CursorDescriptor> descriptors;
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            cursorIdEntryPair.second.setKillPending();
+            descriptors.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
         }
+    }
+
+    // The calls to killCursor() must happen outside of the lock. This is is because other threads
+    // need the lock in order to check in (and destroy) cursors that were in use.
+    lk.unlock();
+
+    for (auto&& descriptor : descriptors) {
+        killCursor(opCtx, descriptor.ns, descriptor.cursorId);
     }
 }
 

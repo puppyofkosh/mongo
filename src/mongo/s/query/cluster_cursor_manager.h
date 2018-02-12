@@ -353,9 +353,9 @@ public:
      * Informs the manager that all currently-registered cursors should be killed (regardless of
      * pinned status or lifetime type).
      *
-     * Does not block.
+     * Does not block on the network, though may block on other threads.
      */
-    void killAllCursors();
+    void killAllCursors(OperationContext* opCtx);
 
     /**
      * Attempts to performs a blocking kill and deletion of all non-pinned cursors that are marked
