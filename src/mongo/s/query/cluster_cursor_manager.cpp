@@ -343,23 +343,25 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     invariant(entry);
+    const bool killPending = entry->getKillPending();
 
     entry->setLastActive(now);
     entry->returnCursor(std::move(cursor));
 
-    // TODO: Deal with case where unexhausted, but killed!
-    if (cursorState == CursorState::NotExhausted) {
-        // The caller may be back to check the cursor out again.
+    if (cursorState == CursorState::NotExhausted && !killPending) {
+        // The caller may need the cursor again.
         return;
     }
 
     // If the caller is not coming back for the cursor, we may destroy it.
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
+    // After detaching the cursor, the entry will be destroyed.
+    entry = nullptr;
     invariantOK(detachedCursor.getStatus());
 
     // Deletion of the cursor can happen out of the lock.
     lk.unlock();
-    if (!remotesExhausted) {
+    if (!remotesExhausted || killPending) {
         // The cursor still has open remote cursors that need to be cleaned up.
         detachedCursor.getValue()->kill(opCtx);
     }
