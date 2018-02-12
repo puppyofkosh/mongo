@@ -409,24 +409,33 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     return Status::OK();
 }
 
-void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {
+void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx,
+                                                          Date_t cutoff) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
 
-    for (auto& nsContainerPair : _namespaceToContainerMap) {
-        for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            CursorEntry& entry = cursorIdEntryPair.second;
-            if (entry.getLifetimeType() == CursorLifetime::Mortal &&
-                !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff) {
-                entry.setInactive();
-                log() << "Marking cursor id " << cursorIdEntryPair.first
-                      << " for deletion, idle since " << entry.getLastActive().toString();
-                entry.setKillPending();
-            }
-        }
-    }
+    auto pred = [cutoff](CursorId cursorId, const CursorEntry& entry) -> bool {
+        bool res = entry.getLifetimeType() == CursorLifetime::Mortal &&
+        !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff;
+
+        log() << "Marking cursor id " << cursorId
+        << " for deletion, idle since " << entry.getLastActive().toString();
+
+        return res;
+    };
+
+    killCursorsSatisfying(opCtx, pred);
 }
 
 void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
+    auto pred = [](CursorId, const CursorEntry&) -> bool {
+        return true;
+    };
+
+    killCursorsSatisfying(opCtx, pred);
+}
+
+void ClusterCursorManager::killCursorsSatisfying(OperationContext* opCtx,
+                                                 std::function<bool(CursorId, const CursorEntry&)> pred) {
     struct CursorDescriptor {
         CursorDescriptor(NamespaceString ns, CursorId cursorId)
             : ns(std::move(ns)), cursorId(cursorId) {}
@@ -439,7 +448,9 @@ void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
     std::vector<CursorDescriptor> descriptors;
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            descriptors.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
+            if (pred(cursorIdEntryPair.first, cursorIdEntryPair.second)) {
+                descriptors.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
+            }
         }
     }
 
