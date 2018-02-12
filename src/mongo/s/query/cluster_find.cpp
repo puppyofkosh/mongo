@@ -492,8 +492,8 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
     // Upon successful completion, we need to detach from the operation and transfer ownership of
     // the cursor back to the cursor manager.
     cursorDetach.Dismiss();
-    pinnedCursor.getValue().detachFromOperationContext();
     pinnedCursor.getValue().returnCursor(cursorState);
+    pinnedCursor.getValue().detachFromOperationContext();
 
     CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
         ? CursorId(0)
