@@ -348,15 +348,16 @@ public:
      *
      * Does not block.
      */
-    void killMortalCursorsInactiveSince(Date_t cutoff);
+    std::size_t killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff);
 
     /**
-     * Informs the manager that all currently-registered cursors should be killed (regardless of
-     * pinned status or lifetime type).
+     * Kills all cursors which are registered at the time of the call. If a cursor is registered
+     * while this function is running, it may not be killed. If the caller wants to guarantee that
+     * all cursors are killed, shutdown() should be used instead.
      *
      * Does not block.
      */
-    void killAllCursors();
+    void killAllCursors(OperationContext* opCtx);
 
     /**
      * Attempts to performs a blocking kill and deletion of all non-pinned cursors that are marked
@@ -419,7 +420,10 @@ public:
 
 private:
     class CursorEntry;
+    class CursorEntryContainer;
     using CursorEntryMap = stdx::unordered_map<CursorId, CursorEntry>;
+    using CursorEntryContainerMap =
+        stdx::unordered_map<NamespaceString, CursorEntryContainer, NamespaceString::Hasher>;
 
     /**
      * Transfers ownership of the given pinned cursor back to the manager, and moves the cursor to
@@ -468,6 +472,21 @@ private:
     StatusWith<std::unique_ptr<ClusterClientCursor>> _detachCursor(WithLock,
                                                                    NamespaceString const& nss,
                                                                    CursorId cursorId);
+
+    /**
+     * Interrupts the OperationContext that's using the given cursor.
+     */
+    void killInUseCursor(WithLock, CursorEntry* entry);
+
+    /**
+     * Kill the cursors satisfying the given predicate. Will unlock the given lock in order
+     * to perform calls to kill() outside of the lock.
+     *
+     * Returns the number of cursors killed.
+     */
+    std::size_t killCursorsSatisfying(stdx::unique_lock<stdx::mutex> lk,
+                                      OperationContext* opCtx,
+                                      std::function<bool(CursorId, const CursorEntry&)> pred);
 
     /**
      * CursorEntry is a moveable, non-copyable container for a single cursor.
@@ -586,9 +605,10 @@ private:
      * CursorEntryContainer is a moveable, non-copyable container for a set of cursors, where all
      * contained cursors share the same 32-bit prefix of their cursor id.
      */
-    struct CursorEntryContainer {
+    class CursorEntryContainer {
         MONGO_DISALLOW_COPYING(CursorEntryContainer);
 
+    public:
         CursorEntryContainer(uint32_t containerPrefix) : containerPrefix(containerPrefix) {}
 
         CursorEntryContainer(CursorEntryContainer&& other) = default;
@@ -600,6 +620,12 @@ private:
         // Map from cursor id to cursor entry.
         CursorEntryMap entryMap;
     };
+
+    /**
+     * Erase the container that 'it' points to and return the next one. Assumes 'it' is an
+     * iterator in '_namespaceToContainerMap'.
+     */
+    CursorEntryContainerMap::iterator eraseContainer(CursorEntryContainerMap::iterator it);
 
     // Clock source.  Used when the 'last active' time for a cursor needs to be set/updated.  May be
     // concurrently accessed by multiple threads.
@@ -629,8 +655,7 @@ private:
     //
     // Entries are added when the first cursor on the given namespace is registered, and removed
     // when the last cursor on the given namespace is destroyed.
-    stdx::unordered_map<NamespaceString, CursorEntryContainer, NamespaceString::Hasher>
-        _namespaceToContainerMap;
+    CursorEntryContainerMap _namespaceToContainerMap;
 
     size_t _cursorsTimedOut = 0;
 };
