@@ -928,8 +928,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhausted) {
 }
 
 // Test that when a cursor is returned as exhausted but is still managing non-exhausted remote
-// cursors, the cursor is not destroyed immediately. Instead, it should be marked kill pending, and
-// should be killed and destroyed by reapZombieCursors().
+// cursors, the cursor is destroyed immediately.
 TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaustedRemotes) {
     auto mockCursor = allocateMockCursor();
 
@@ -953,11 +952,9 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaust
     registeredCursor.getValue().returnCursor(ClusterCursorManager::CursorState::Exhausted);
     ASSERT_EQ(0, registeredCursor.getValue().getCursorId());
 
-    // Cursor should be kill pending, so it will be killed during reaping.
+    // Cursor should be killed as soon as it's checked in.
     ASSERT_NOT_OK(
         getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker).getStatus());
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 

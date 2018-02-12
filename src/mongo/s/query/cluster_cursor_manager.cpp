@@ -146,9 +146,11 @@ boost::optional<ReadPreferenceSetting> ClusterCursorManager::PinnedCursor::getRe
 
 void ClusterCursorManager::PinnedCursor::returnCursor(CursorState cursorState) {
     invariant(_cursor);
+    invariant(_cursor->getCurrentOperationContext());
     // Note that unpinning a cursor transfers ownership of the underlying ClusterClientCursor object
     // back to the manager.
-    _manager->checkInCursor(std::move(_cursor), _nss, _cursorId, cursorState);
+    OperationContext* opCtx = _cursor->getCurrentOperationContext();
+    _manager->checkInCursor(opCtx, std::move(_cursor), _nss, _cursorId, cursorState);
     *this = PinnedCursor();
 }
 
@@ -178,6 +180,10 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
+
+    // TODO: necessary?
+    // If the cursor is currently attached to an OperationContext, it shouldn't be anymore.
+    // _cursor->detachFromOperationContext();
 
     // Inform the manager that the cursor should be killed. The cursor is checked out by this
     // thread, so we pass a null opCtx.
@@ -323,10 +329,12 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
         LogicalSessionCache::get(opCtx)->vivify(opCtx, cursor->getLsid().get());
     }
 
+    cursor->reattachToOperationContext(opCtx);
     return PinnedCursor(this, std::move(cursor), nss, cursorId);
 }
 
-void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
+void ClusterCursorManager::checkInCursor(OperationContext* opCtx,
+                                         std::unique_ptr<ClusterClientCursor> cursor,
                                          const NamespaceString& nss,
                                          CursorId cursorId,
                                          CursorState cursorState) {
@@ -345,24 +353,22 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     entry->setLastActive(now);
     entry->returnCursor(std::move(cursor));
 
-    if (cursorState == CursorState::NotExhausted || entry->getKillPending()) {
+    if (cursorState == CursorState::NotExhausted) {
+        // The caller may be back to check the cursor out again.
         return;
     }
 
-    if (!remotesExhausted) {
-        // The cursor still has open remote cursors that need to be cleaned up. Schedule for
-        // deletion by the reaper thread by setting the kill pending flag.
-        entry->setKillPending();
-        return;
-    }
-
-    // The cursor is exhausted, is not already scheduled for deletion, and does not have any
-    // remote cursor state left to clean up. We can delete the cursor right away.
+    // If the caller is not coming back for the cursor, we may destroy it.
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
     invariantOK(detachedCursor.getStatus());
 
     // Deletion of the cursor can happen out of the lock.
     lk.unlock();
+    if (!remotesExhausted) {
+        // The cursor still has open remote cursors that need to be cleaned up.
+        detachedCursor.getValue()->kill(opCtx);
+    }
+
     detachedCursor.getValue().reset();
 }
 
@@ -382,7 +388,7 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
     return authChecker(entry->getAuthenticatedUsers());
 }
 
-Status ClusterCursorManager::killCursor(OperationContext *opCtx,
+Status ClusterCursorManager::killCursor(OperationContext* opCtx,
                                         const NamespaceString& nss,
                                         CursorId cursorId) {
     stdx::unique_lock<stdx::mutex> lk(_mutex);
