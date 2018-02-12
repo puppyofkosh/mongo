@@ -173,7 +173,8 @@ public:
         void reattachToOperationContext(OperationContext* opCtx);
 
         /**
-         * Detaches the cursor from its current OperationContext.
+         * Detaches the cursor from its current OperationContext. A PinnedCursor must be attached to
+         * OperationContext when it destroyed, unless if returnCursor() is used.
          */
         void detachFromOperationContext();
 
@@ -441,7 +442,8 @@ private:
      * Intentionally private.  Clients should use public methods on PinnedCursor to check a cursor
      * back in.
      */
-    void checkInCursor(std::unique_ptr<ClusterClientCursor> cursor,
+    void checkInCursor(OperationContext* opCtx,
+                       std::unique_ptr<ClusterClientCursor> cursor,
                        const NamespaceString& nss,
                        CursorId cursorId,
                        CursorState cursorState);

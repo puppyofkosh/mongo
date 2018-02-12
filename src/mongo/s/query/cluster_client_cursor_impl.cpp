@@ -128,6 +128,10 @@ void ClusterClientCursorImpl::detachFromOperationContext() {
     _root->detachFromOperationContext();
 }
 
+OperationContext* ClusterClientCursorImpl::getCurrentOperationContext() const {
+    return _opCtx;
+}
+
 bool ClusterClientCursorImpl::isTailable() const {
     return _params.tailableMode != TailableMode::kNormal;
 }
