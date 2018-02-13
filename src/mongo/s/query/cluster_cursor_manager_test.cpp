@@ -511,8 +511,6 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceBasic) {
                                            ClusterCursorManager::CursorLifetime::Mortal,
                                            UserNameIterator()));
     getManager()->killMortalCursorsInactiveSince(_opCtx.get(), getClockSource()->now());
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
@@ -564,8 +562,6 @@ TEST_F(ClusterCursorManagerTest, ShouldNotKillPinnedCursors) {
     ASSERT(!isMockCursorKilled(0));
     pin.returnCursor(ClusterCursorManager::CursorState::NotExhausted);
     getManager()->killMortalCursorsInactiveSince(_opCtx.get(), getClockSource()->now());
-    ASSERT(!isMockCursorKilled(0));
-    getManager()->reapZombieCursors(nullptr);
     ASSERT(isMockCursorKilled(0));
 }
 
@@ -588,10 +584,6 @@ TEST_F(ClusterCursorManagerTest, KillMortalCursorsInactiveSinceMultipleCursors) 
         getClockSource()->advance(Milliseconds(1));
     }
     getManager()->killMortalCursorsInactiveSince(_opCtx.get(), cutoff);
-    for (size_t i = 0; i < numCursors; ++i) {
-        ASSERT(!isMockCursorKilled(i));
-    }
-    getManager()->reapZombieCursors(nullptr);
     for (size_t i = 0; i < numCursors; ++i) {
         if (i < numKilledCursorsExpected) {
             ASSERT(isMockCursorKilled(i));
