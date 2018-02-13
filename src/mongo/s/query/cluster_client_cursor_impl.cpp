@@ -73,7 +73,9 @@ ClusterClientCursorImpl::ClusterClientCursorImpl(OperationContext* opCtx,
                                                  executor::TaskExecutor* executor,
                                                  ClusterClientCursorParams&& params,
                                                  boost::optional<LogicalSessionId> lsid)
-    : _params(std::move(params)), _root(buildMergerPlan(opCtx, executor, &_params)), _lsid(lsid),
+    : _params(std::move(params)),
+      _root(buildMergerPlan(opCtx, executor, &_params)),
+      _lsid(lsid),
       _opCtx(opCtx) {
     dassert(!_params.compareWholeSortKey ||
             SimpleBSONObjComparator::kInstance.evaluate(

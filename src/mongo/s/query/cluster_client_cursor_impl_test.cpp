@@ -210,7 +210,8 @@ TEST_F(ClusterClientCursorImplTest, LogicalSessionIdsOnCursors) {
     // Make a cursor with no lsid
     auto mockStage = stdx::make_unique<RouterStageMock>(_opCtx.get());
     ClusterClientCursorParams params(NamespaceString("test"), {});
-    ClusterClientCursorImpl cursor{_opCtx.get(), std::move(mockStage), std::move(params), boost::none};
+    ClusterClientCursorImpl cursor{
+        _opCtx.get(), std::move(mockStage), std::move(params), boost::none};
     ASSERT(!cursor.getLsid());
 
     // Make a cursor with an lsid
