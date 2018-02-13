@@ -417,7 +417,8 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     return Status::OK();
 }
 
-void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff) {
+std::size_t ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx,
+                                                                 Date_t cutoff) {
     stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     auto pred = [cutoff](CursorId cursorId, const CursorEntry& entry) -> bool {
@@ -430,7 +431,7 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCt
         return res;
     };
 
-    killCursorsSatisfying(std::move(lk), opCtx, pred);
+    return killCursorsSatisfying(std::move(lk), opCtx, pred);
 }
 
 void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
@@ -440,7 +441,7 @@ void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
     killCursorsSatisfying(std::move(lk), opCtx, pred);
 }
 
-void ClusterCursorManager::killCursorsSatisfying(
+std::size_t ClusterCursorManager::killCursorsSatisfying(
     std::unique_lock<stdx::mutex> lk,
     OperationContext* opCtx,
     std::function<bool(CursorId, const CursorEntry&)> pred) {
@@ -451,6 +452,8 @@ void ClusterCursorManager::killCursorsSatisfying(
         NamespaceString ns;
         CursorId cursorId;
     };
+
+    std::size_t nKilled = 0;
 
     // TODO: Make this use a detachCursor(iter, iter) function!
 
@@ -469,6 +472,7 @@ void ClusterCursorManager::killCursorsSatisfying(
                 // which cursors we need to destroy in a list.
                 cursorsToDetach.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
             }
+            nKilled++;
         }
     }
 
@@ -491,6 +495,8 @@ void ClusterCursorManager::killCursorsSatisfying(
         cursor->kill(opCtx);
         cursor.reset();
     }
+
+    return nKilled;
 }
 
 std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
