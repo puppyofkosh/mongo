@@ -461,6 +461,8 @@ private:
                                                                    NamespaceString const& nss,
                                                                    CursorId cursorId);
 
+    void killInUseCursor(WithLock, CursorEntry* entry);
+
     /**
      * Kill the cursors satisfying the given predicate.
      */

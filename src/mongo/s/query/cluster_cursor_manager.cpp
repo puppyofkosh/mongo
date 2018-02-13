@@ -320,7 +320,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     const auto now = _clockSource->now();
 
     // Detach the cursor from the operation which had checked it out.
-    OperationContext *opCtx = cursor->getCurrentOperationContext();
+    OperationContext* opCtx = cursor->getCurrentOperationContext();
     invariant(opCtx);
     cursor->detachFromOperationContext();
 
@@ -374,6 +374,18 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
     return authChecker(entry->getAuthenticatedUsers());
 }
 
+void ClusterCursorManager::killInUseCursor(WithLock, CursorEntry* entry) {
+    invariant(entry->getOperationUsingCursor());
+    // Interrupt any operation currently using the cursor.
+    entry->setKillPending();
+    OperationContext* opUsingCursor = entry->getOperationUsingCursor();
+    stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
+    opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
+
+    // Don't delete the cursor, as an operation is using it. It will be cleaned up when the
+    // operation is done.
+}
+
 Status ClusterCursorManager::killCursor(OperationContext* opCtx,
                                         const NamespaceString& nss,
                                         CursorId cursorId) {
@@ -385,17 +397,13 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     }
 
     // Interrupt any operation currently using the cursor.
-    OperationContext* opUsingCursor = entry->getOperationUsingCursor();
-    entry->setKillPending();
-    if (opUsingCursor) {
-        stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
-        opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
-        // Don't delete the cursor, as an operation is using it. It will be cleaned up when the
-        // operation is done.
+    if (entry->getOperationUsingCursor()) {
+        killInUseCursor(lk, entry);
         return Status::OK();
     }
 
     invariant(opCtx);
+    entry->setKillPending();
 
     // No one is using the cursor, so we destroy it.
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
@@ -409,16 +417,15 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     return Status::OK();
 }
 
-void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx,
-                                                          Date_t cutoff) {
+void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
 
     auto pred = [cutoff](CursorId cursorId, const CursorEntry& entry) -> bool {
         bool res = entry.getLifetimeType() == CursorLifetime::Mortal &&
-        !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff;
+            !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff;
 
-        log() << "Marking cursor id " << cursorId
-        << " for deletion, idle since " << entry.getLastActive().toString();
+        log() << "Marking cursor id " << cursorId << " for deletion, idle since "
+              << entry.getLastActive().toString();
 
         return res;
     };
@@ -427,15 +434,13 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCt
 }
 
 void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
-    auto pred = [](CursorId, const CursorEntry&) -> bool {
-        return true;
-    };
+    auto pred = [](CursorId, const CursorEntry&) -> bool { return true; };
 
     killCursorsSatisfying(opCtx, pred);
 }
 
-void ClusterCursorManager::killCursorsSatisfying(OperationContext* opCtx,
-                                                 std::function<bool(CursorId, const CursorEntry&)> pred) {
+void ClusterCursorManager::killCursorsSatisfying(
+    OperationContext* opCtx, std::function<bool(CursorId, const CursorEntry&)> pred) {
     struct CursorDescriptor {
         CursorDescriptor(NamespaceString ns, CursorId cursorId)
             : ns(std::move(ns)), cursorId(cursorId) {}
@@ -444,26 +449,45 @@ void ClusterCursorManager::killCursorsSatisfying(OperationContext* opCtx,
         CursorId cursorId;
     };
 
+    // TODO: Make this use a detachCursor(iter, iter) function!
+
     stdx::unique_lock<stdx::mutex> lk(_mutex);
-    std::vector<CursorDescriptor> descriptors;
+    std::vector<CursorDescriptor> cursorsToDetach;
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            if (pred(cursorIdEntryPair.first, cursorIdEntryPair.second)) {
+            auto& entry = cursorIdEntryPair.second;
+            if (!pred(cursorIdEntryPair.first, entry)) {
+                continue;
+            }
 
-                // TODO: Set killPending so that no one can check out the cursor in between
-                // now and the time we destroy it!
-
-                descriptors.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
+            if (entry.getOperationUsingCursor()) {
+                killInUseCursor(lk, &entry);
+            } else {
+                // We can't erase from the map while we're iterating over it, so instead save
+                // which cursors we need to destroy in a list.
+                cursorsToDetach.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
             }
         }
+    }
+
+    // Now detach all of the cursors that we plan on destroying, and save them in a list so we can
+    // kill them outside of the lock.
+    std::vector<std::unique_ptr<ClusterClientCursor>> cursorsToDestroy;
+    for (auto&& descriptor : cursorsToDetach) {
+        auto cursor = _detachCursor(lk, descriptor.ns, descriptor.cursorId);
+        invariantOK(cursor.getStatus());
+        cursorsToDestroy.push_back(std::move(cursor.getValue()));
     }
 
     // The calls to killCursor() must happen outside of the lock. This is is because other threads
     // need the lock in order to check in (and destroy) cursors that were in use.
     lk.unlock();
 
-    for (auto&& descriptor : descriptors) {
-        killCursor(opCtx, descriptor.ns, descriptor.cursorId);
+    for (auto&& cursor : cursorsToDestroy) {
+        invariant(cursor.get());
+        invariant(opCtx);
+        cursor->kill(opCtx);
+        cursor.reset();
     }
 }
 
