@@ -965,9 +965,9 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaust
     ASSERT_EQ(0, registeredCursor.getValue().getCursorId());
 
     // Cursor should be killed as soon as it's checked in.
+    ASSERT(isMockCursorKilled(0));
     ASSERT_NOT_OK(
         getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker).getStatus());
-    ASSERT(isMockCursorKilled(0));
 }
 
 // Test that the PinnedCursor move assignment operator correctly kills the cursor if it has not yet

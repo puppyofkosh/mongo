@@ -118,16 +118,6 @@ StatusWith<ClusterQueryResult> ClusterCursorManager::PinnedCursor::next(
     return _cursor->next(execContext);
 }
 
-// void ClusterCursorManager::PinnedCursor::reattachToOperationContext(OperationContext* opCtx) {
-//     invariant(_cursor);
-//     _cursor->reattachToOperationContext(opCtx);
-// }
-
-// void ClusterCursorManager::PinnedCursor::detachFromOperationContext() {
-//     invariant(_cursor);
-//     _cursor->detachFromOperationContext();
-// }
-
 bool ClusterCursorManager::PinnedCursor::isTailable() const {
     invariant(_cursor);
     return _cursor->isTailable();
