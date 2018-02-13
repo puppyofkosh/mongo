@@ -169,9 +169,8 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
 
-    // Inform the manager that the cursor should be killed. The cursor is checked out by this
-    // thread, so it will not be killed immediately, meaning we can pass a null OperationContext.
-    invariantOK(_manager->killCursor(nullptr, _nss, _cursorId));
+    // Inform the manager that the cursor should be killed.
+    invariantOK(_manager->killCursor(_cursor->getCurrentOperationContext(), _nss, _cursorId));
 
     // Return the cursor to the manager. It will be deleted immediately.
     returnCursor(CursorState::NotExhausted);
