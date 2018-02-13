@@ -449,6 +449,10 @@ void ClusterCursorManager::killCursorsSatisfying(OperationContext* opCtx,
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             if (pred(cursorIdEntryPair.first, cursorIdEntryPair.second)) {
+
+                // TODO: Set killPending so that no one can check out the cursor in between
+                // now and the time we destroy it!
+
                 descriptors.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
             }
         }
