@@ -418,7 +418,7 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
 }
 
 void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff) {
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     auto pred = [cutoff](CursorId cursorId, const CursorEntry& entry) -> bool {
         bool res = entry.getLifetimeType() == CursorLifetime::Mortal &&
@@ -430,17 +430,20 @@ void ClusterCursorManager::killMortalCursorsInactiveSince(OperationContext* opCt
         return res;
     };
 
-    killCursorsSatisfying(opCtx, pred);
+    killCursorsSatisfying(std::move(lk), opCtx, pred);
 }
 
 void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
     auto pred = [](CursorId, const CursorEntry&) -> bool { return true; };
 
-    killCursorsSatisfying(opCtx, pred);
+    killCursorsSatisfying(std::move(lk), opCtx, pred);
 }
 
 void ClusterCursorManager::killCursorsSatisfying(
-    OperationContext* opCtx, std::function<bool(CursorId, const CursorEntry&)> pred) {
+    std::unique_lock<stdx::mutex> lk,
+    OperationContext* opCtx,
+    std::function<bool(CursorId, const CursorEntry&)> pred) {
     struct CursorDescriptor {
         CursorDescriptor(NamespaceString ns, CursorId cursorId)
             : ns(std::move(ns)), cursorId(cursorId) {}
@@ -451,7 +454,6 @@ void ClusterCursorManager::killCursorsSatisfying(
 
     // TODO: Make this use a detachCursor(iter, iter) function!
 
-    stdx::unique_lock<stdx::mutex> lk(_mutex);
     std::vector<CursorDescriptor> cursorsToDetach;
     for (auto& nsContainerPair : _namespaceToContainerMap) {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {

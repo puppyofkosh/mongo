@@ -464,9 +464,11 @@ private:
     void killInUseCursor(WithLock, CursorEntry* entry);
 
     /**
-     * Kill the cursors satisfying the given predicate.
+     * Kill the cursors satisfying the given predicate. Will unlock the given lock in order
+     * to perform calls to kill() outside of the lock.
      */
-    void killCursorsSatisfying(OperationContext* opCtx,
+    void killCursorsSatisfying(std::unique_lock<stdx::mutex> lk,
+                               OperationContext* opCtx,
                                std::function<bool(CursorId, const CursorEntry&)> pred);
 
     /**
