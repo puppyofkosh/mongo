@@ -335,7 +335,7 @@ public:
      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
      *
-     * If the cursor is checked out, 'opCtx' may be nullptr.
+     * 'opCtx' will only be used if the cursor is not checked out.
      *
      * Does not block.
      */
