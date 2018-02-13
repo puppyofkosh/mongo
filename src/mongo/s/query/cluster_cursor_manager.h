@@ -419,7 +419,10 @@ public:
 
 private:
     class CursorEntry;
+    class CursorEntryContainer;
     using CursorEntryMap = stdx::unordered_map<CursorId, CursorEntry>;
+    using CursorEntryContainerMap =
+        stdx::unordered_map<NamespaceString, CursorEntryContainer, NamespaceString::Hasher>;
 
     /**
      * Transfers ownership of the given pinned cursor back to the manager, and moves the cursor to
@@ -605,6 +608,12 @@ private:
         CursorEntryMap entryMap;
     };
 
+    /**
+     * Erase the container that 'it' points to and return the next one. Assumes 'it' is an
+     * iterator in '_namespaceToContainerMap'.
+     */
+    CursorEntryContainerMap::iterator eraseContainer(CursorEntryContainerMap::iterator it);
+
     // Clock source.  Used when the 'last active' time for a cursor needs to be set/updated.  May be
     // concurrently accessed by multiple threads.
     ClockSource* _clockSource;
@@ -633,8 +642,7 @@ private:
     //
     // Entries are added when the first cursor on the given namespace is registered, and removed
     // when the last cursor on the given namespace is destroyed.
-    stdx::unordered_map<NamespaceString, CursorEntryContainer, NamespaceString::Hasher>
-        _namespaceToContainerMap;
+    CursorEntryContainerMap _namespaceToContainerMap;
 
     size_t _cursorsTimedOut = 0;
 };
