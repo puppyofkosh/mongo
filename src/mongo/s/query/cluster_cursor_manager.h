@@ -345,7 +345,7 @@ public:
      *
      * Does not block.
      */
-    void killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff);
+    std::size_t killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff);
 
     /**
      * Kills all cursors which are registered at the time of the call. If a cursor is registered
@@ -464,10 +464,12 @@ private:
     /**
      * Kill the cursors satisfying the given predicate. Will unlock the given lock in order
      * to perform calls to kill() outside of the lock.
+     *
+     * Returns the number of cursors killed.
      */
-    void killCursorsSatisfying(std::unique_lock<stdx::mutex> lk,
-                               OperationContext* opCtx,
-                               std::function<bool(CursorId, const CursorEntry&)> pred);
+    std::size_t killCursorsSatisfying(std::unique_lock<stdx::mutex> lk,
+                                      OperationContext* opCtx,
+                                      std::function<bool(CursorId, const CursorEntry&)> pred);
 
     /**
      * CursorEntry is a moveable, non-copyable container for a single cursor.
