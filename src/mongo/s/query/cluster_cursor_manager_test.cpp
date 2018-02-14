@@ -436,7 +436,7 @@ TEST_F(ClusterCursorManagerTest, KillPinnedCursorFromOwnOpCtx) {
     auto pinnedCursor =
         getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
     ASSERT_OK(pinnedCursor.getStatus());
-    getManager()->killCursor(_opCtx.get(), nss, cursorId);
+    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
 
     // When the cursor is pinned the operation which checked out the cursor should be interrupted.
     ASSERT_OK(_opCtx->checkForInterruptNoAssert());
