@@ -462,6 +462,9 @@ private:
                                                                    NamespaceString const& nss,
                                                                    CursorId cursorId);
 
+    /**
+     * Interrupts the OperationContext that's using the given cursor.
+     */
     void killInUseCursor(WithLock, CursorEntry* entry);
 
     /**
