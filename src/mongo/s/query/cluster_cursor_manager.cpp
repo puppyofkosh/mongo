@@ -445,7 +445,7 @@ void ClusterCursorManager::killAllCursors(OperationContext* opCtx) {
 }
 
 std::size_t ClusterCursorManager::killCursorsSatisfying(
-    std::unique_lock<stdx::mutex> lk,
+    stdx::unique_lock<stdx::mutex> lk,
     OperationContext* opCtx,
     std::function<bool(CursorId, const CursorEntry&)> pred) {
 
@@ -537,16 +537,7 @@ std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
             continue;
         }
 
-        lk.unlock();
-        // Pass opCtx to kill(), since a cursor which wraps an underlying aggregation pipeline is
-        // obliged to call Pipeline::dispose with a valid OperationContext prior to deletion.
-        zombieCursor.getValue()->kill(opCtx);
-        zombieCursor.getValue().reset();
-        lk.lock();
-
-        if (cursorDescriptor.isInactive) {
-            ++cursorsTimedOut;
-        }
+        MONGO_UNREACHABLE;
     }
     return cursorsTimedOut;
 }

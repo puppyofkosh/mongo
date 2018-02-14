@@ -473,7 +473,7 @@ private:
      *
      * Returns the number of cursors killed.
      */
-    std::size_t killCursorsSatisfying(std::unique_lock<stdx::mutex> lk,
+    std::size_t killCursorsSatisfying(stdx::unique_lock<stdx::mutex> lk,
                                       OperationContext* opCtx,
                                       std::function<bool(CursorId, const CursorEntry&)> pred);
 
@@ -594,9 +594,10 @@ private:
      * CursorEntryContainer is a moveable, non-copyable container for a set of cursors, where all
      * contained cursors share the same 32-bit prefix of their cursor id.
      */
-    struct CursorEntryContainer {
+    class CursorEntryContainer {
         MONGO_DISALLOW_COPYING(CursorEntryContainer);
 
+    public:
         CursorEntryContainer(uint32_t containerPrefix) : containerPrefix(containerPrefix) {}
 
         CursorEntryContainer(CursorEntryContainer&& other) = default;
