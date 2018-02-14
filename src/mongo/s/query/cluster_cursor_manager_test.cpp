@@ -419,6 +419,7 @@ TEST_F(ClusterCursorManagerTest, KillPinnedCursorBasic) {
     // When the cursor is pinned the operation which checked out the cursor should be interrupted.
     ASSERT_EQ(_opCtx->checkForInterruptNoAssert(), ErrorCodes::CursorKilled);
 
+    ASSERT(!isMockCursorKilled(0));
     pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
     ASSERT(isMockCursorKilled(0));
 }

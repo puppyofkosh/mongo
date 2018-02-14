@@ -317,7 +317,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     const auto now = _clockSource->now();
 
     // Detach the cursor from the operation which had checked it out.
-    OperationContext *opCtx = cursor->getCurrentOperationContext();
+    OperationContext* opCtx = cursor->getCurrentOperationContext();
     invariant(opCtx);
     cursor->detachFromOperationContext();
 
@@ -329,6 +329,9 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     invariant(entry);
+
+    // killPending will be true if killCursor() was called while the cursor was in use or if the
+    // ClusterCursorCleanupJob decided that it expired.
     const bool killPending = entry->getKillPending();
 
     entry->setLastActive(now);
@@ -339,7 +342,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
         return;
     }
 
-    // If the caller is not coming back for the cursor, we may destroy it.
+    // If the caller is not coming back for the cursor, it's safe to destroy it.
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
     // After detaching the cursor, the entry will be destroyed.
     entry = nullptr;

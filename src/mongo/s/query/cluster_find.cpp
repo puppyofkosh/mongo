@@ -480,7 +480,8 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         batch.push_back(std::move(*next.getValue().getResult()));
     }
 
-    // Upon successful completion, transfer ownership of the cursor back to the cursor manager.
+    // Upon successful completion, transfer ownership of the cursor back to the cursor manager. If
+    // the cursor has been exhausted, the cursor manager will clean it up for us.
     pinnedCursor.getValue().returnCursor(cursorState);
 
     CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
