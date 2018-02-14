@@ -169,11 +169,8 @@ Status ClusterCursorManager::PinnedCursor::setAwaitDataTimeout(Milliseconds awai
 void ClusterCursorManager::PinnedCursor::returnAndKillCursor() {
     invariant(_cursor);
 
-    // Inform the manager that the cursor should be killed.
-    invariantOK(_manager->killCursor(_cursor->getCurrentOperationContext(), _nss, _cursorId));
-
-    // Return the cursor to the manager. It will be deleted immediately.
-    returnCursor(CursorState::NotExhausted);
+    // Return the cursor as exhausted so that it's deleted immediately.
+    returnCursor(CursorState::Exhausted);
 }
 
 ClusterCursorManager::ClusterCursorManager(ClockSource* clockSource)
@@ -350,7 +347,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
 
     // Deletion of the cursor can happen out of the lock.
     lk.unlock();
-    if (!remotesExhausted || killPending) {
+    if (!remotesExhausted) {
         // The cursor still has open remote cursors that need to be cleaned up.
         detachedCursor.getValue()->kill(opCtx);
     }
@@ -377,6 +374,8 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
 Status ClusterCursorManager::killCursor(OperationContext* opCtx,
                                         const NamespaceString& nss,
                                         CursorId cursorId) {
+    invariant(opCtx);
+
     stdx::unique_lock<stdx::mutex> lk(_mutex);
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
@@ -384,18 +383,18 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    // Interrupt any operation currently using the cursor.
+    // Interrupt any operation currently using the cursor, unless if it's the current operation.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     entry->setKillPending();
-    if (opUsingCursor) {
+    if (opUsingCursor == opCtx) {
+        return Status::OK();
+    } else if (opUsingCursor) {
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
         // Don't delete the cursor, as an operation is using it. It will be cleaned up when the
         // operation is done.
         return Status::OK();
     }
-
-    invariant(opCtx);
 
     // No one is using the cursor, so we destroy it.
     auto detachedCursor = _detachCursor(lk, nss, cursorId);

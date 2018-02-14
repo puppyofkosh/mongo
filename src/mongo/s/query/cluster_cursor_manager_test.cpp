@@ -96,6 +96,15 @@ protected:
     }
 
     /**
+     * Return a mock cursor which doesn't have exhausted remotes.
+     */
+    std::unique_ptr<ClusterClientCursorMock> allocateMockCursorUnexhausted() {
+        auto ret = allocateMockCursor();
+        ret->markRemotesNotExhausted();
+        return ret;
+    }
+
+    /**
      * Returns whether or not the i-th allocated cursor been killed.  'i' should be zero-indexed,
      * i.e. the initial allocated cursor can be checked for a kill with 'isMockCursorKilled(0)'.
      */
@@ -117,7 +126,7 @@ protected:
 
         auto killCursorOpCtx = killCursorClient->makeOperationContext();
         invariant(killCursorOpCtx);
-        ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
+        ASSERT_OK(getManager()->killCursor(killCursorOpCtx.get(), nss, cursorId));
 
         // Restore the old client. We don't need 'killCursorClient' anymore.
         killCursorOpCtx.reset();
@@ -397,7 +406,7 @@ TEST_F(ClusterCursorManagerTest, KillUnpinnedCursorBasic) {
 TEST_F(ClusterCursorManagerTest, KillPinnedCursorBasic) {
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
+                                               allocateMockCursorUnexhausted(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
@@ -409,6 +418,27 @@ TEST_F(ClusterCursorManagerTest, KillPinnedCursorBasic) {
 
     // When the cursor is pinned the operation which checked out the cursor should be interrupted.
     ASSERT_EQ(_opCtx->checkForInterruptNoAssert(), ErrorCodes::CursorKilled);
+
+    pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
+    ASSERT(isMockCursorKilled(0));
+}
+
+// Test that killing a pinned cursor from the current OperationContext doesn't interrupt anything.
+TEST_F(ClusterCursorManagerTest, KillPinnedCursorFromOwnOpCtx) {
+    auto cursorId =
+        assertGet(getManager()->registerCursor(_opCtx.get(),
+                                               allocateMockCursorUnexhausted(),
+                                               nss,
+                                               ClusterCursorManager::CursorType::SingleTarget,
+                                               ClusterCursorManager::CursorLifetime::Mortal,
+                                               UserNameIterator()));
+    auto pinnedCursor =
+        getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
+    ASSERT_OK(pinnedCursor.getStatus());
+    getManager()->killCursor(_opCtx.get(), nss, cursorId);
+
+    // When the cursor is pinned the operation which checked out the cursor should be interrupted.
+    ASSERT_OK(_opCtx->checkForInterruptNoAssert());
 
     pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
     ASSERT(isMockCursorKilled(0));
@@ -975,7 +1005,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorReturnCursorExhaustedWithNonExhaust
 TEST_F(ClusterCursorManagerTest, PinnedCursorMoveAssignmentKill) {
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
+                                               allocateMockCursorUnexhausted(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
@@ -991,7 +1021,7 @@ TEST_F(ClusterCursorManagerTest, PinnedCursorDestructorKill) {
     {
         auto cursorId =
             assertGet(getManager()->registerCursor(_opCtx.get(),
-                                                   allocateMockCursor(),
+                                                   allocateMockCursorUnexhausted(),
                                                    nss,
                                                    ClusterCursorManager::CursorType::SingleTarget,
                                                    ClusterCursorManager::CursorLifetime::Mortal,
@@ -1025,7 +1055,7 @@ TEST_F(ClusterCursorManagerTest, RemotesExhausted) {
 TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
+                                               allocateMockCursorUnexhausted(),
                                                nss,
                                                ClusterCursorManager::CursorType::SingleTarget,
                                                ClusterCursorManager::CursorLifetime::Mortal,
