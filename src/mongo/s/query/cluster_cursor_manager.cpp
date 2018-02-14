@@ -190,7 +190,6 @@ void ClusterCursorManager::shutdown(OperationContext* opCtx) {
         _inShutdown = true;
     }
     killAllCursors(opCtx);
-    reapZombieCursors(opCtx);
 }
 
 StatusWith<CursorId> ClusterCursorManager::registerCursor(
@@ -497,58 +496,6 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
     }
 
     return nKilled;
-}
-
-std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
-    struct CursorDescriptor {
-        CursorDescriptor(NamespaceString ns, CursorId cursorId, bool isInactive)
-            : ns(std::move(ns)), cursorId(cursorId), isInactive(isInactive) {}
-
-        NamespaceString ns;
-        CursorId cursorId;
-        bool isInactive;
-    };
-
-    // List all zombie cursors under the manager lock, and kill them one-by-one while not holding
-    // the lock (ClusterClientCursor::kill() is blocking, so we don't want to hold a lock while
-    // issuing the kill).
-
-    stdx::unique_lock<stdx::mutex> lk(_mutex);
-    std::vector<CursorDescriptor> zombieCursorDescriptors;
-    for (auto& nsContainerPair : _namespaceToContainerMap) {
-        const NamespaceString& nss = nsContainerPair.first;
-        for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            CursorId cursorId = cursorIdEntryPair.first;
-            const CursorEntry& entry = cursorIdEntryPair.second;
-            if (!entry.getKillPending()) {
-                continue;
-            }
-            zombieCursorDescriptors.emplace_back(nss, cursorId, entry.isInactive());
-        }
-    }
-
-    std::size_t cursorsTimedOut = 0;
-
-    for (auto& cursorDescriptor : zombieCursorDescriptors) {
-        StatusWith<std::unique_ptr<ClusterClientCursor>> zombieCursor =
-            _detachCursor(lk, cursorDescriptor.ns, cursorDescriptor.cursorId);
-        if (!zombieCursor.isOK()) {
-            // Cursor in use, or has already been deleted.
-            continue;
-        }
-
-        lk.unlock();
-        // Pass opCtx to kill(), since a cursor which wraps an underlying aggregation pipeline is
-        // obliged to call Pipeline::dispose with a valid OperationContext prior to deletion.
-        zombieCursor.getValue()->kill(opCtx);
-        zombieCursor.getValue().reset();
-        lk.lock();
-
-        if (cursorDescriptor.isInactive) {
-            ++cursorsTimedOut;
-        }
-    }
-    return cursorsTimedOut;
 }
 
 ClusterCursorManager::Stats ClusterCursorManager::stats() const {
