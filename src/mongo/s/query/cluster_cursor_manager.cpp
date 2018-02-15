@@ -313,6 +313,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
                                          const NamespaceString& nss,
                                          CursorId cursorId,
                                          CursorState cursorState) {
+    invariant(cursor);
     // Read the clock out of the lock.
     const auto now = _clockSource->now();
 
@@ -322,10 +323,6 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     cursor->detachFromOperationContext();
 
     stdx::unique_lock<stdx::mutex> lk(_mutex);
-
-    invariant(cursor);
-
-    const bool remotesExhausted = cursor->remotesExhausted();
 
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     invariant(entry);
@@ -342,20 +339,9 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
         return;
     }
 
-    // If the caller is not coming back for the cursor, it's safe to destroy it.
-    auto detachedCursor = _detachCursor(lk, nss, cursorId);
     // After detaching the cursor, the entry will be destroyed.
     entry = nullptr;
-    invariantOK(detachedCursor.getStatus());
-
-    // Deletion of the cursor can happen out of the lock.
-    lk.unlock();
-    if (!remotesExhausted) {
-        // The cursor still has open remote cursors that need to be cleaned up.
-        detachedCursor.getValue()->kill(opCtx);
-    }
-
-    detachedCursor.getValue().reset();
+    detachAndKillCursor(std::move(lk), opCtx, nss, cursorId);
 }
 
 Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
@@ -400,6 +386,17 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     }
 
     // No one is using the cursor, so we destroy it.
+    detachAndKillCursor(std::move(lk), opCtx, nss, cursorId);
+
+    // We no longer hold the lock here.
+
+    return Status::OK();
+}
+
+void ClusterCursorManager::detachAndKillCursor(stdx::unique_lock<stdx::mutex> lk,
+                                               OperationContext* opCtx,
+                                               NamespaceString nss,
+                                               CursorId cursorId) {
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
     invariantOK(detachedCursor.getStatus());
 
@@ -407,8 +404,6 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     lk.unlock();
     detachedCursor.getValue()->kill(opCtx);
     detachedCursor.getValue().reset();
-
-    return Status::OK();
 }
 
 void ClusterCursorManager::killMortalCursorsInactiveSince(Date_t cutoff) {

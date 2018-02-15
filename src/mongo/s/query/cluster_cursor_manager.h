@@ -438,6 +438,14 @@ private:
                        CursorState cursorState);
 
     /**
+     * Will detach a cursor, release the lock and then call kill() on it.
+     */
+    void detachAndKillCursor(stdx::unique_lock<stdx::mutex> lk,
+                             OperationContext* opCtx,
+                             NamespaceString nss,
+                             CursorId cursorId);
+
+    /**
      * Returns a pointer to the CursorEntry for the given cursor.  If the given cursor is not
      * registered, returns null.
      *
