@@ -375,9 +375,10 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     // Interrupt any operation currently using the cursor, unless if it's the current operation.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     entry->setKillPending();
-    if (opUsingCursor == opCtx) {
-        return Status::OK();
-    } else if (opUsingCursor) {
+    if (opUsingCursor) {
+        // The caller shouldn't need to call killCursor on their own cursor.
+        invariant(opUsingCursor != opCtx);
+
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
         // Don't delete the cursor, as an operation is using it. It will be cleaned up when the

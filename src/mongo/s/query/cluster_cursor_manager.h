@@ -335,6 +335,9 @@ public:
      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
      *
+     * It's illegal for an operation to call killCursor() on a cursor which is attached to the
+     * current OperationContext.
+     *
      * Does not block.
      */
     Status killCursor(OperationContext* opCtx, const NamespaceString& nss, CursorId cursorId);

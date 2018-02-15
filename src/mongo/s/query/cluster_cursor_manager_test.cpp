@@ -415,27 +415,6 @@ TEST_F(ClusterCursorManagerTest, KillPinnedCursorBasic) {
     ASSERT(isMockCursorKilled(0));
 }
 
-// Test that killing a pinned cursor from the current OperationContext doesn't interrupt anything.
-TEST_F(ClusterCursorManagerTest, KillPinnedCursorFromOwnOpCtx) {
-    auto cursorId =
-        assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
-                                               nss,
-                                               ClusterCursorManager::CursorType::SingleTarget,
-                                               ClusterCursorManager::CursorLifetime::Mortal,
-                                               UserNameIterator()));
-    auto pinnedCursor =
-        getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
-    ASSERT_OK(pinnedCursor.getStatus());
-    ASSERT_OK(getManager()->killCursor(_opCtx.get(), nss, cursorId));
-
-    // When the cursor is pinned the operation which checked out the cursor should be interrupted.
-    ASSERT_OK(_opCtx->checkForInterruptNoAssert());
-
-    pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
-    ASSERT(isMockCursorKilled(0));
-}
-
 // Test that killing a cursor by id successfully kills the correct cursor, when multiple cursors are
 // registered.
 TEST_F(ClusterCursorManagerTest, KillCursorMultipleCursors) {
