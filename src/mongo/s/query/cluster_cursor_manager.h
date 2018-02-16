@@ -131,7 +131,7 @@ public:
      * the underlying cursor is attached to the current OperationContext.
      *
      * Invoking the PinnedCursor's destructor while it owns a cursor will kill, detach from the
-     * current OperationContext and return the cursor.
+     * current OperationContext, and return the cursor.
      */
     class PinnedCursor {
         MONGO_DISALLOW_COPYING(PinnedCursor);
@@ -335,8 +335,8 @@ public:
      * If the given cursor is not registered, returns an error Status with code CursorNotFound.
      * Otherwise, marks the cursor as 'kill pending' and returns Status::OK().
      *
-     * It's illegal for an operation to call killCursor() on a cursor which is attached to the
-     * current OperationContext.
+     * A thread which is currently using a cursor may not call killCursor() on it, but rather
+     * should kill the cursor by checking it back into the manager in the exhausted state.
      *
      * Does not block.
      */
@@ -445,7 +445,7 @@ private:
      */
     void detachAndKillCursor(stdx::unique_lock<stdx::mutex> lk,
                              OperationContext* opCtx,
-                             NamespaceString nss,
+                             const NamespaceString& nss,
                              CursorId cursorId);
 
     /**

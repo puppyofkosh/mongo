@@ -329,6 +329,7 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
 
     // killPending will be true if killCursor() was called while the cursor was in use or if the
     // ClusterCursorCleanupJob decided that it expired.
+    // TODO SERVER-32957: Remove the killPending flag.
     const bool killPending = entry->getKillPending();
 
     entry->setLastActive(now);
@@ -377,7 +378,7 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
     entry->setKillPending();
     if (opUsingCursor) {
         // The caller shouldn't need to call killCursor on their own cursor.
-        invariant(opUsingCursor != opCtx);
+        invariant(opUsingCursor != opCtx, "Cannot call killCursor() on your own cursor");
 
         stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
         opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
@@ -396,7 +397,7 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
 
 void ClusterCursorManager::detachAndKillCursor(stdx::unique_lock<stdx::mutex> lk,
                                                OperationContext* opCtx,
-                                               NamespaceString nss,
+                                               const NamespaceString& nss,
                                                CursorId cursorId) {
     auto detachedCursor = _detachCursor(lk, nss, cursorId);
     invariantOK(detachedCursor.getStatus());
