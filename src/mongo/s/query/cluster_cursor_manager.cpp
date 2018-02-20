@@ -190,7 +190,6 @@ void ClusterCursorManager::shutdown(OperationContext* opCtx) {
         _inShutdown = true;
     }
     killAllCursors(opCtx);
-    reapZombieCursors(opCtx);
 }
 
 StatusWith<CursorId> ClusterCursorManager::registerCursor(
@@ -476,7 +475,7 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
         }
     }
 
-    // Call kill() outside of the lock, as it may require waiting to callbacks to finish.
+    // Call kill() outside of the lock, as it may require waiting for callbacks to finish.
     lk.unlock();
 
     for (auto&& cursor : cursorsToDestroy) {
@@ -487,11 +486,6 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
     }
 
     return nKilled;
-}
-
-std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
-    // TODO SERVER-32957: this code does nothing. Remove it!
-    return 0;
 }
 
 ClusterCursorManager::Stats ClusterCursorManager::stats() const {

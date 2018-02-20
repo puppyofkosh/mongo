@@ -63,8 +63,7 @@ class StatusWith;
  * the manager by calling PinnedCursor::returnCursor().
  *
  * The manager supports killing of registered cursors, either through the PinnedCursor object or
- * with the kill*() suite of methods.  These simply mark the affected cursors as 'kill pending',
- * which can be cleaned up by later calls to the reapZombieCursors() method.
+ * with the kill*() suite of methods.
  *
  * No public methods throw exceptions, and all public methods are thread-safe.
  *
@@ -355,22 +354,11 @@ public:
      * while this function is running, it may not be killed. If the caller wants to guarantee that
      * all cursors are killed, shutdown() should be used instead.
      *
-     * Does not block.
+     * This function may block on other threads when calling kill() on cursors to be destroyed. It
+     * will not block on the network.
      */
     void killAllCursors(OperationContext* opCtx);
 
-    /**
-     * Attempts to performs a blocking kill and deletion of all non-pinned cursors that are marked
-     * as 'kill pending'. Returns the number of cursors that were marked as inactive.
-     *
-     * If no other non-const methods are called simultaneously, it is guaranteed that this method
-     * will delete all non-pinned cursors marked as 'kill pending'. Otherwise, no such guarantee is
-     * made (this is due to the fact that the blocking kill for each cursor is performed outside of
-     * the cursor manager lock).
-     *
-     * Can block.
-     */
-    std::size_t reapZombieCursors(OperationContext* opCtx);
 
     /**
      * Returns the number of open cursors on a ClusterCursorManager, broken down by type.
@@ -429,10 +417,7 @@ private:
      * Transfers ownership of the given pinned cursor back to the manager, and moves the cursor to
      * the 'idle' state.
      *
-     * If 'cursorState' is 'Exhausted', the cursor will be destroyed.  However, destruction will be
-     * delayed until reapZombieCursors() is called under the following circumstances:
-     *   - The cursor is already marked as 'kill pending'.
-     *   - The cursor is managing open remote cursors which still need to be cleaned up.
+     * If 'cursorState' is 'Exhausted', the cursor will be destroyed.
      *
      * Thread-safe.
      *
