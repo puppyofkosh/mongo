@@ -461,7 +461,7 @@ private:
     /**
      * Interrupts the OperationContext that's using the given cursor.
      */
-    void killInUseCursor(WithLock, CursorEntry* entry);
+    void killOperationUsingCursor(WithLock, CursorEntry* entry);
 
     /**
      * Kill the cursors satisfying the given predicate. Will unlock the given lock in order

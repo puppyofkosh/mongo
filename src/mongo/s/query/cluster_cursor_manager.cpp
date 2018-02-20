@@ -356,7 +356,7 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
     return authChecker(entry->getAuthenticatedUsers());
 }
 
-void ClusterCursorManager::killInUseCursor(WithLock, CursorEntry* entry) {
+void ClusterCursorManager::killOperationUsingCursor(WithLock, CursorEntry* entry) {
     invariant(entry->getOperationUsingCursor());
     // Interrupt any operation currently using the cursor.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
@@ -379,12 +379,11 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
         return cursorNotFoundStatus(nss, cursorId);
     }
 
-    // Interrupt any operation currently using the cursor, unless it's the current operation.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     if (opUsingCursor) {
         // The caller shouldn't need to call killCursor on their own cursor.
         invariant(opUsingCursor != opCtx, "Cannot call killCursor() on your own cursor");
-        killInUseCursor(lk, entry);
+        killOperationUsingCursor(lk, entry);
         return Status::OK();
     }
 
@@ -417,8 +416,10 @@ std::size_t ClusterCursorManager::killMortalCursorsInactiveSince(OperationContex
         bool res = entry.getLifetimeType() == CursorLifetime::Mortal &&
             !entry.getOperationUsingCursor() && entry.getLastActive() <= cutoff;
 
-        log() << "Marking cursor id " << cursorId << " for deletion, idle since "
-              << entry.getLastActive().toString();
+        if (res) {
+            log() << "Marking cursor id " << cursorId << " for deletion, idle since "
+                  << entry.getLastActive().toString();
+        }
 
         return res;
     };
@@ -457,7 +458,7 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
 
             if (entry.getOperationUsingCursor()) {
                 // Mark the OperationContext using the cursor as killed, and move on.
-                killInUseCursor(lk, &entry);
+                killOperationUsingCursor(lk, &entry);
                 cursorIdEntryIt++;
                 continue;
             }
