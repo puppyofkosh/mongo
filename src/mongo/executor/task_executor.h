@@ -191,7 +191,7 @@ public:
      */
     virtual StatusWith<stdx::cv_status> waitForEvent(OperationContext* opCtx,
                                                      const EventHandle& event,
-                                                     Date_t deadline) = 0;
+                                                     Date_t deadline = Date_t::max()) = 0;
 
     /**
      * Schedules "work" to be run by the executor ASAP.

@@ -52,6 +52,7 @@ StatusWith<ClusterQueryResult> RouterStageMerge::next(ExecContext execCtx) {
 
 StatusWith<ClusterQueryResult> RouterStageMerge::blockForNextNoTimeout(ExecContext execCtx) {
     invariant(_params->tailableMode != TailableMode::kTailableAndAwaitData);
+    invariant(_arm.getCurrentOperationContext());
     while (!_arm.ready()) {
         auto nextEventStatus = _arm.nextEvent();
         if (!nextEventStatus.isOK()) {
@@ -60,7 +61,7 @@ StatusWith<ClusterQueryResult> RouterStageMerge::blockForNextNoTimeout(ExecConte
         auto event = nextEventStatus.getValue();
 
         // Block until there are further results to return.
-        _executor->waitForEvent(event);
+        _executor->waitForEvent(_arm.getCurrentOperationContext(), event);
     }
 
     return _arm.nextReady();
@@ -116,7 +117,7 @@ void RouterStageMerge::kill(OperationContext* opCtx) {
         // Mongos is shutting down.
         return;
     }
-    _executor->waitForEvent(killEvent);
+    _executor->waitForEvent(_arm.getCurrentOperationContext(), killEvent);
 }
 
 bool RouterStageMerge::remotesExhausted() {

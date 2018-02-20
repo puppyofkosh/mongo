@@ -126,6 +126,11 @@ public:
     void reattachToOperationContext(OperationContext* opCtx);
 
     /**
+     * Returns the current OperationContext, or nullptr if the ARM has been detached.
+     */
+    OperationContext* getCurrentOperationContext() const;
+
+    /**
      * Returns true if there is no need to schedule remote work in order to take the next action.
      * This means that either
      *   --there is a buffered result which we can return,
