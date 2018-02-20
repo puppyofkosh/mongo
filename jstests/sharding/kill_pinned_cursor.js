@@ -65,14 +65,17 @@
         assert.eq(cmdRes.cursorsAlive, []);
         assert.eq(cmdRes.cursorsNotFound, []);
         assert.eq(cmdRes.cursorsUnknown, []);
+        print("KILLCURSORS done");
     } finally {
+        print("Disabling failpoint");
         assert.commandWorked(
-            shard0DB.adminCommand({configureFailPoint: kFailPointName, mode: "off"}));
+        shard0DB.adminCommand({configureFailPoint: kFailPointName, mode: "off"}));
         if (cleanup) {
             cleanup();
         }
     }
 
+    print("Waiting for cursor to be cleaned up");
     // Eventually the cursor on the mongod should be cleaned up, now that we've disabled the
     // failpoint.
     assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned == 0);
