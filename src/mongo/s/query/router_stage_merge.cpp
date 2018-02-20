@@ -61,7 +61,11 @@ StatusWith<ClusterQueryResult> RouterStageMerge::blockForNextNoTimeout(ExecConte
         auto event = nextEventStatus.getValue();
 
         // Block until there are further results to return.
-        _executor->waitForEvent(_arm.getCurrentOperationContext(), event);
+        auto status = _executor->waitForEvent(_arm.getCurrentOperationContext(), event);
+        invariant(!status.isOK() || status.getValue() == stdx::cv_status::no_timeout);
+        if (!status.isOK()) {
+            return status.getStatus();
+        }
     }
 
     return _arm.nextReady();
@@ -117,7 +121,7 @@ void RouterStageMerge::kill(OperationContext* opCtx) {
         // Mongos is shutting down.
         return;
     }
-    _executor->waitForEvent(opCtx, killEvent);
+    _executor->waitForEvent(killEvent);
 }
 
 bool RouterStageMerge::remotesExhausted() {
