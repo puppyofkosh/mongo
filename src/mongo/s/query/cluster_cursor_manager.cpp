@@ -271,9 +271,6 @@ StatusWith<ClusterCursorManager::PinnedCursor> ClusterCursorManager::checkOutCur
     if (!entry) {
         return cursorNotFoundStatus(nss, cursorId);
     }
-    if (entry->getKillPending()) {
-        return cursorNotFoundStatus(nss, cursorId);
-    }
 
     // Check if the user is coauthorized to access this cursor.
     auto authCheckStatus = authChecker(entry->getAuthenticatedUsers());
@@ -329,7 +326,6 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
 
     // killPending will be true if killCursor() was called while the cursor was in use or if the
     // ClusterCursorCleanupJob decided that it expired.
-    // TODO SERVER-32957: Remove the killPending flag.
     const bool killPending = entry->getKillPending();
 
     entry->setLastActive(now);
@@ -364,7 +360,6 @@ Status ClusterCursorManager::checkAuthForKillCursors(OperationContext* opCtx,
 void ClusterCursorManager::killInUseCursor(WithLock, CursorEntry* entry) {
     invariant(entry->getOperationUsingCursor());
     // Interrupt any operation currently using the cursor.
-    entry->setKillPending();
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     stdx::lock_guard<Client> lk(*opUsingCursor->getClient());
     opUsingCursor->getServiceContext()->killOperation(opUsingCursor, ErrorCodes::CursorKilled);
@@ -387,7 +382,6 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
 
     // Interrupt any operation currently using the cursor, unless it's the current operation.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
-    entry->setKillPending();
     if (opUsingCursor) {
         // The caller shouldn't need to call killCursor on their own cursor.
         invariant(opUsingCursor != opCtx, "Cannot call killCursor() on your own cursor");
@@ -496,46 +490,8 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
 }
 
 std::size_t ClusterCursorManager::reapZombieCursors(OperationContext* opCtx) {
-    struct CursorDescriptor {
-        CursorDescriptor(NamespaceString ns, CursorId cursorId, bool isInactive)
-            : ns(std::move(ns)), cursorId(cursorId), isInactive(isInactive) {}
-
-        NamespaceString ns;
-        CursorId cursorId;
-        bool isInactive;
-    };
-
-    // List all zombie cursors under the manager lock, and kill them one-by-one while not holding
-    // the lock (ClusterClientCursor::kill() is blocking, so we don't want to hold a lock while
-    // issuing the kill).
-
-    stdx::unique_lock<stdx::mutex> lk(_mutex);
-    std::vector<CursorDescriptor> zombieCursorDescriptors;
-    for (auto& nsContainerPair : _namespaceToContainerMap) {
-        const NamespaceString& nss = nsContainerPair.first;
-        for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            CursorId cursorId = cursorIdEntryPair.first;
-            const CursorEntry& entry = cursorIdEntryPair.second;
-            if (!entry.getKillPending()) {
-                continue;
-            }
-            zombieCursorDescriptors.emplace_back(nss, cursorId, entry.isInactive());
-        }
-    }
-
-    std::size_t cursorsTimedOut = 0;
-
-    for (auto& cursorDescriptor : zombieCursorDescriptors) {
-        StatusWith<std::unique_ptr<ClusterClientCursor>> zombieCursor =
-            _detachCursor(lk, cursorDescriptor.ns, cursorDescriptor.cursorId);
-        if (!zombieCursor.isOK()) {
-            // Cursor in use, or has already been deleted.
-            continue;
-        }
-
-        MONGO_UNREACHABLE;
-    }
-    return cursorsTimedOut;
+    // TODO SERVER-32957: this code does nothing. Remove it!
+    return 0;
 }
 
 ClusterCursorManager::Stats ClusterCursorManager::stats() const {

@@ -516,7 +516,10 @@ private:
         CursorEntry& operator=(CursorEntry&& other) = default;
 
         bool getKillPending() const {
-            return _killPending;
+            // A cursor is kill pending if it's checked out by an OperationContext that was
+            // interrupted.
+            return _operationUsingCursor &&
+                !_operationUsingCursor->checkForInterruptNoAssert().isOK();
         }
 
         bool isInactive() const {
@@ -569,10 +572,6 @@ private:
             _operationUsingCursor = nullptr;
         }
 
-        void setKillPending() {
-            _killPending = true;
-        }
-
         void setInactive() {
             _isInactive = true;
         }
@@ -587,7 +586,6 @@ private:
 
     private:
         std::unique_ptr<ClusterClientCursor> _cursor;
-        bool _killPending = false;
         bool _isInactive = false;
         CursorType _cursorType = CursorType::SingleTarget;
         CursorLifetime _cursorLifetime = CursorLifetime::Mortal;
