@@ -507,10 +507,6 @@ private:
                 !_operationUsingCursor->checkForInterruptNoAssert().isOK();
         }
 
-        bool isInactive() const {
-            return _isInactive;
-        }
-
         CursorType getCursorType() const {
             return _cursorType;
         }
@@ -557,10 +553,6 @@ private:
             _operationUsingCursor = nullptr;
         }
 
-        void setInactive() {
-            _isInactive = true;
-        }
-
         void setLastActive(Date_t lastActive) {
             _lastActive = lastActive;
         }
@@ -571,7 +563,6 @@ private:
 
     private:
         std::unique_ptr<ClusterClientCursor> _cursor;
-        bool _isInactive = false;
         CursorType _cursorType = CursorType::SingleTarget;
         CursorLifetime _cursorLifetime = CursorLifetime::Mortal;
         Date_t _lastActive;
