@@ -570,33 +570,6 @@ TEST_F(ClusterCursorManagerTest, KillAllCursors) {
     }
 }
 
-// Test that reaping does not call kill() on the underlying ClusterClientCursor for a killed cursor
-// that is still pinned.
-TEST_F(ClusterCursorManagerTest, ReapZombieCursorsSkipPinned) {
-    auto cursorId =
-        assertGet(getManager()->registerCursor(_opCtx.get(),
-                                               allocateMockCursor(),
-                                               nss,
-                                               ClusterCursorManager::CursorType::SingleTarget,
-                                               ClusterCursorManager::CursorLifetime::Mortal,
-                                               UserNameIterator()));
-    auto pinnedCursor =
-        getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
-    ASSERT(!isMockCursorKilled(0));
-}
-
-// Test that reaping does not call kill() on the underlying ClusterClientCursor for cursors that
-// haven't been killed.
-TEST_F(ClusterCursorManagerTest, ReapZombieCursorsSkipNonZombies) {
-    ASSERT_OK(getManager()->registerCursor(_opCtx.get(),
-                                           allocateMockCursor(),
-                                           nss,
-                                           ClusterCursorManager::CursorType::SingleTarget,
-                                           ClusterCursorManager::CursorLifetime::Mortal,
-                                           UserNameIterator()));
-    ASSERT(!isMockCursorKilled(0));
-}
-
 // Test that a new ClusterCursorManager's stats() is initially zero for the cursor counts.
 TEST_F(ClusterCursorManagerTest, StatsInitAsZero) {
     ASSERT_EQ(0U, getManager()->stats().cursorsMultiTarget);
