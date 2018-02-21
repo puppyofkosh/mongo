@@ -337,7 +337,7 @@ public:
      * A thread which is currently using a cursor may not call killCursor() on it, but rather
      * should kill the cursor by checking it back into the manager in the exhausted state.
      *
-     * Does not block.
+     * May block waiting for other threads to finish, but does not block on the network.
      */
     Status killCursor(OperationContext* opCtx, const NamespaceString& nss, CursorId cursorId);
 
@@ -345,7 +345,9 @@ public:
      * Informs the manager that all mortal cursors with a 'last active' time equal to or earlier
      * than 'cutoff' should be killed.  The cursors need not necessarily be in the 'idle' state.
      *
-     * Does not block.
+     * May block waiting for other threads to finish, but does not block on the network.
+     *
+     * Returns the number of cursors that were inactive and thus, killed.
      */
     std::size_t killMortalCursorsInactiveSince(OperationContext* opCtx, Date_t cutoff);
 
@@ -354,8 +356,7 @@ public:
      * while this function is running, it may not be killed. If the caller wants to guarantee that
      * all cursors are killed, shutdown() should be used instead.
      *
-     * This function may block on other threads when calling kill() on cursors to be destroyed. It
-     * will not block on the network.
+     * May block waiting for other threads to finish, but does not block on the network.
      */
     void killAllCursors(OperationContext* opCtx);
 
@@ -408,9 +409,9 @@ public:
 
 private:
     class CursorEntry;
-    class CursorEntryContainer;
+    struct CursorEntryContainer;
     using CursorEntryMap = stdx::unordered_map<CursorId, CursorEntry>;
-    using CursorEntryContainerMap =
+    using NssToCursorContainerMap =
         stdx::unordered_map<NamespaceString, CursorEntryContainer, NamespaceString::Hasher>;
 
     /**
@@ -464,8 +465,8 @@ private:
     void killOperationUsingCursor(WithLock, CursorEntry* entry);
 
     /**
-     * Kill the cursors satisfying the given predicate. Will unlock the given lock in order
-     * to perform calls to kill() outside of the lock.
+     * Kill the cursors satisfying the given predicate. Assumes that 'lk' is held upon entry. Will
+     * unlock 'lk' in order to perform calls to kill() outside of the lock.
      *
      * Returns the number of cursors killed.
      */
@@ -500,7 +501,7 @@ private:
         CursorEntry(CursorEntry&& other) = default;
         CursorEntry& operator=(CursorEntry&& other) = default;
 
-        bool getKillPending() const {
+        bool isKillPending() const {
             // A cursor is kill pending if it's checked out by an OperationContext that was
             // interrupted.
             return _operationUsingCursor &&
@@ -579,10 +580,9 @@ private:
      * CursorEntryContainer is a moveable, non-copyable container for a set of cursors, where all
      * contained cursors share the same 32-bit prefix of their cursor id.
      */
-    class CursorEntryContainer {
+    struct CursorEntryContainer {
         MONGO_DISALLOW_COPYING(CursorEntryContainer);
 
-    public:
         CursorEntryContainer(uint32_t containerPrefix) : containerPrefix(containerPrefix) {}
 
         CursorEntryContainer(CursorEntryContainer&& other) = default;
@@ -599,7 +599,7 @@ private:
      * Erase the container that 'it' points to and return the next one. Assumes 'it' is an
      * iterator in '_namespaceToContainerMap'.
      */
-    CursorEntryContainerMap::iterator eraseContainer(CursorEntryContainerMap::iterator it);
+    NssToCursorContainerMap::iterator eraseContainer(NssToCursorContainerMap::iterator it);
 
     // Clock source.  Used when the 'last active' time for a cursor needs to be set/updated.  May be
     // concurrently accessed by multiple threads.
@@ -629,7 +629,7 @@ private:
     //
     // Entries are added when the first cursor on the given namespace is registered, and removed
     // when the last cursor on the given namespace is destroyed.
-    CursorEntryContainerMap _namespaceToContainerMap;
+    NssToCursorContainerMap _namespaceToContainerMap;
 
     size_t _cursorsTimedOut = 0;
 };

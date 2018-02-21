@@ -991,8 +991,9 @@ TEST_F(ClusterCursorManagerTest, RemotesExhausted) {
     ASSERT_FALSE(pinnedCursor.getValue().remotesExhausted());
 }
 
-// Test that killed cursors which are still pinned are not reaped.
-TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
+// Test that killed cursors which are still pinned are not destroyed immediately.
+TEST_F(ClusterCursorManagerTest, DoNotDestroyKilledPinnedCursors) {
+    const Date_t cutoff = getClockSource()->now();
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
                                                allocateMockCursor(),
@@ -1007,6 +1008,10 @@ TEST_F(ClusterCursorManagerTest, DoNotReapKilledPinnedCursors) {
     killCursorFromDifferentOpCtx(nss, cursorId);
 
     ASSERT_EQ(_opCtx->checkForInterruptNoAssert(), ErrorCodes::CursorKilled);
+    ASSERT(!isMockCursorKilled(0));
+
+    // The cursor cleanup system should not destroy the cursor either.
+    getManager()->killMortalCursorsInactiveSince(_opCtx.get(), cutoff);
     ASSERT(!isMockCursorKilled(0));
 
     // The cursor can be destroyed once it is returned to the manager.

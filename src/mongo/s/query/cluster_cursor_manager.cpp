@@ -323,9 +323,8 @@ void ClusterCursorManager::checkInCursor(std::unique_ptr<ClusterClientCursor> cu
     CursorEntry* entry = _getEntry(lk, nss, cursorId);
     invariant(entry);
 
-    // killPending will be true if killCursor() was called while the cursor was in use or if the
-    // ClusterCursorCleanupJob decided that it expired.
-    const bool killPending = entry->getKillPending();
+    // killPending will be true if killCursor() was called while the cursor was in use.
+    const bool killPending = entry->isKillPending();
 
     entry->setLastActive(now);
     entry->returnCursor(std::move(cursor));
@@ -379,6 +378,7 @@ Status ClusterCursorManager::killCursor(OperationContext* opCtx,
         return cursorNotFoundStatus(nss, cursorId);
     }
 
+    // Interrupt any operation currently using the cursor, unless if it's the current operation.
     OperationContext* opUsingCursor = entry->getOperationUsingCursor();
     if (opUsingCursor) {
         // The caller shouldn't need to call killCursor on their own cursor.
@@ -438,7 +438,9 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
     stdx::unique_lock<stdx::mutex> lk,
     OperationContext* opCtx,
     std::function<bool(CursorId, const CursorEntry&)> pred) {
+    invariant(lk.owns_lock());
     std::size_t nKilled = 0;
+
 
     std::vector<std::unique_ptr<ClusterClientCursor>> cursorsToDestroy;
     auto nsContainerIt = _namespaceToContainerMap.begin();
@@ -498,7 +500,7 @@ ClusterCursorManager::Stats ClusterCursorManager::stats() const {
         for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             const CursorEntry& entry = cursorIdEntryPair.second;
 
-            if (entry.getKillPending()) {
+            if (entry.isKillPending()) {
                 // Killed cursors do not count towards the number of pinned cursors or the number of
                 // open cursors.
                 continue;
@@ -529,7 +531,7 @@ void ClusterCursorManager::appendActiveSessions(LogicalSessionIdSet* lsids) cons
         for (const auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             const CursorEntry& entry = cursorIdEntryPair.second;
 
-            if (entry.getKillPending()) {
+            if (entry.isKillPending()) {
                 // Don't include sessions for killed cursors.
                 continue;
             }
@@ -551,7 +553,7 @@ std::vector<GenericCursor> ClusterCursorManager::getAllCursors() const {
         for (const auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             const CursorEntry& entry = cursorIdEntryPair.second;
 
-            if (entry.getKillPending()) {
+            if (entry.isKillPending()) {
                 // Don't include sessions for killed cursors.
                 continue;
             }
@@ -588,7 +590,7 @@ stdx::unordered_set<CursorId> ClusterCursorManager::getCursorsForSession(
         for (auto&& cursorIdEntryPair : nsContainerPair.second.entryMap) {
             const CursorEntry& entry = cursorIdEntryPair.second;
 
-            if (entry.getKillPending()) {
+            if (entry.isKillPending()) {
                 // Don't include sessions for killed cursors.
                 continue;
             }
@@ -630,8 +632,8 @@ auto ClusterCursorManager::_getEntry(WithLock, NamespaceString const& nss, Curso
     return &entryMapIt->second;
 }
 
-auto ClusterCursorManager::eraseContainer(CursorEntryContainerMap::iterator it)
-    -> CursorEntryContainerMap::iterator {
+auto ClusterCursorManager::eraseContainer(NssToCursorContainerMap::iterator it)
+    -> NssToCursorContainerMap::iterator {
     auto* container = &it->second;
     auto* entryMap = &container->entryMap;
     invariant(entryMap->empty());
