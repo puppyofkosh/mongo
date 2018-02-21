@@ -441,7 +441,6 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
     invariant(lk.owns_lock());
     std::size_t nKilled = 0;
 
-
     std::vector<std::unique_ptr<ClusterClientCursor>> cursorsToDestroy;
     auto nsContainerIt = _namespaceToContainerMap.begin();
     while (nsContainerIt != _namespaceToContainerMap.end()) {
