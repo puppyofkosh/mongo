@@ -438,44 +438,47 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
     stdx::unique_lock<stdx::mutex> lk,
     OperationContext* opCtx,
     std::function<bool(CursorId, const CursorEntry&)> pred) {
-    struct CursorDescriptor {
-        CursorDescriptor(NamespaceString ns, CursorId cursorId)
-            : ns(std::move(ns)), cursorId(cursorId) {}
-        NamespaceString ns;
-        CursorId cursorId;
-    };
     invariant(lk.owns_lock());
     std::size_t nKilled = 0;
 
-    std::vector<CursorDescriptor> cursorsToDetach;
-    for (auto& nsContainerPair : _namespaceToContainerMap) {
-        for (auto& cursorIdEntryPair : nsContainerPair.second.entryMap) {
-            auto& entry = cursorIdEntryPair.second;
-            if (!pred(cursorIdEntryPair.first, entry)) {
+
+    std::vector<std::unique_ptr<ClusterClientCursor>> cursorsToDestroy;
+    auto nsContainerIt = _namespaceToContainerMap.begin();
+    while (nsContainerIt != _namespaceToContainerMap.end()) {
+        auto* entryMap = &nsContainerIt->second.entryMap;
+        auto cursorIdEntryIt = entryMap->begin();
+        while (cursorIdEntryIt != entryMap->end()) {
+            auto cursorId = cursorIdEntryIt->first;
+            auto& entry = cursorIdEntryIt->second;
+
+            if (!pred(cursorId, entry)) {
+                cursorIdEntryIt++;
                 continue;
             }
+
             nKilled++;
 
             if (entry.getOperationUsingCursor()) {
+                // Mark the OperationContext using the cursor as killed, and move on.
                 killOperationUsingCursor(lk, &entry);
-            } else {
-                // Save which cursors we need to destroy. Note that we could find and detach the
-                // cursors in one pass, but this would probably not have any performance benefit.
-                cursorsToDetach.emplace_back(nsContainerPair.first, cursorIdEntryPair.first);
+                cursorIdEntryIt++;
+                continue;
             }
+
+            cursorsToDestroy.push_back(entry.releaseCursor(nullptr));
+
+            // Destroy the entry and set the iterator to the next element.
+            cursorIdEntryIt = entryMap->erase(cursorIdEntryIt);
+        }
+
+        if (entryMap->empty()) {
+            nsContainerIt = eraseContainer(nsContainerIt);
+        } else {
+            nsContainerIt++;
         }
     }
 
-    // Now detach all of the cursors that we plan on destroying, and save them in a list so we can
-    // kill them outside of the lock.
-    std::vector<std::unique_ptr<ClusterClientCursor>> cursorsToDestroy;
-    for (auto&& descriptor : cursorsToDetach) {
-        auto cursor = _detachCursor(lk, descriptor.ns, descriptor.cursorId);
-        invariantOK(cursor.getStatus());
-        cursorsToDestroy.push_back(std::move(cursor.getValue()));
-    }
-
-    // The calls to killCursor() don't need to happen inside of the lock.
+    // Call kill() outside of the lock, as it may require waiting for callbacks to finish.
     lk.unlock();
 
     for (auto&& cursor : cursorsToDestroy) {
@@ -484,6 +487,7 @@ std::size_t ClusterCursorManager::killCursorsSatisfying(
         cursor->kill(opCtx);
         cursor.reset();
     }
+
     return nKilled;
 }
 
