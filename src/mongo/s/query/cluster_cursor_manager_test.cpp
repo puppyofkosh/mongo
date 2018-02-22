@@ -1014,6 +1014,29 @@ TEST_F(ClusterCursorManagerTest, CannotRegisterCursorDuringShutdown) {
                                                UserNameIterator()));
 }
 
+TEST_F(ClusterCursorManagerTest, PinnedCursorNotKilledOnShutdown) {
+    auto cursorId =
+        assertGet(getManager()->registerCursor(_opCtx.get(),
+                                               allocateMockCursor(),
+                                               nss,
+                                               ClusterCursorManager::CursorType::SingleTarget,
+                                               ClusterCursorManager::CursorLifetime::Mortal,
+                                               UserNameIterator()));
+
+    auto pinnedCursor =
+        getManager()->checkOutCursor(nss, cursorId, _opCtx.get(), successAuthChecker);
+    getManager()->shutdown(_opCtx.get());
+
+    ASSERT_EQ(_opCtx->checkForInterruptNoAssert(), ErrorCodes::CursorKilled);
+    ASSERT(!isMockCursorKilled(0));
+
+
+    // Even if it's checked back in as not exhausted, it should be destroyed now that the
+    // CursorManager is shutdown.
+    pinnedCursor.getValue().returnCursor(ClusterCursorManager::CursorState::NotExhausted);
+    ASSERT(isMockCursorKilled(0));
+}
+
 TEST_F(ClusterCursorManagerTest, CannotCheckoutCursorDuringShutdown) {
     auto cursorId =
         assertGet(getManager()->registerCursor(_opCtx.get(),
