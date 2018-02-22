@@ -164,10 +164,6 @@ void AsyncResultsMerger::reattachToOperationContext(OperationContext* opCtx) {
     _opCtx = opCtx;
 }
 
-OperationContext* AsyncResultsMerger::getCurrentOperationContext() const {
-    return _opCtx;
-}
-
 void AsyncResultsMerger::addNewShardCursors(
     const std::vector<ClusterClientCursorParams::RemoteCursor>& newCursors) {
     stdx::lock_guard<stdx::mutex> lk(_mutex);

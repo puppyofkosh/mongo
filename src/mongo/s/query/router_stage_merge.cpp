@@ -52,7 +52,7 @@ StatusWith<ClusterQueryResult> RouterStageMerge::next(ExecContext execCtx) {
 
 StatusWith<ClusterQueryResult> RouterStageMerge::blockForNextNoTimeout(ExecContext execCtx) {
     invariant(_params->tailableMode != TailableMode::kTailableAndAwaitData);
-    invariant(_arm.getCurrentOperationContext());
+    invariant(getOpCtx());
     while (!_arm.ready()) {
         auto nextEventStatus = _arm.nextEvent();
         if (!nextEventStatus.isOK()) {
@@ -61,11 +61,15 @@ StatusWith<ClusterQueryResult> RouterStageMerge::blockForNextNoTimeout(ExecConte
         auto event = nextEventStatus.getValue();
 
         // Block until there are further results to return.
-        auto status = _executor->waitForEvent(_arm.getCurrentOperationContext(), event);
-        invariant(!status.isOK() || status.getValue() == stdx::cv_status::no_timeout);
+        auto status = _executor->waitForEvent(getOpCtx(), event);
+
         if (!status.isOK()) {
             return status.getStatus();
         }
+
+        // We have not provided a deadline, so if the wait returns without interruption, we do not
+        // expect to have timed out.
+        invariant(status.getValue() == stdx::cv_status::no_timeout);
     }
 
     return _arm.nextReady();
