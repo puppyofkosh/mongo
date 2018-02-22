@@ -985,6 +985,9 @@ TEST_F(ClusterCursorManagerTest, DoNotDestroyKilledPinnedCursors) {
 
     // The cursor cleanup system should not destroy the cursor either.
     getManager()->killMortalCursorsInactiveSince(_opCtx.get(), cutoff);
+
+    // The cursor's operation context should be marked as interrupted, but the cursor itself should
+    // not have been destroyed.
     ASSERT(!isMockCursorKilled(0));
 
     // The cursor can be destroyed once it is returned to the manager.
