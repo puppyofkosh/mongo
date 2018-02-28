@@ -123,7 +123,8 @@ var $config = (function() {
         dropDatabase: function dropDatabase(db, collName) {
             if (isMongos(db)) {
                 // SERVER-17397: Drops in a sharded cluster may not fully succeed. It is not safe
-                // to drop and then recreate a collection with the same name.
+                // to drop and then recreate a collection with the same name, so we skip dropping
+                // and recreating the database.
                 return;
             }
 
@@ -143,7 +144,7 @@ var $config = (function() {
         dropCollection: function dropCollection(db, collName) {
             if (isMongos(db)) {
                 // SERVER-17397: Drops in a sharded cluster may not fully succeed. It is not safe
-                // to drop and then recreate a collection with the same name.
+                // to drop and then recreate a collection with the same name, so we skip it.
                 return;
             }
 
