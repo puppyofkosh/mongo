@@ -193,10 +193,14 @@
         // This function ignores the mongos cursor id, since it instead uses listLocalSessions
         // to obtain the session id of the session running the getMore.
         killFunc: function() {
+            // Must sort by 'lastUse' because there may be sessions left over on the server from
+            // the previous runs. We will only call killSessions on the most recently used one.
             const localSessions =
-                  mongosDB.aggregate([{ $listLocalSessions: { allUsers: true } }]).toArray();
+                  mongosDB.aggregate([
+                      {$listLocalSessions: { allUsers: true }},
+                      {$sort: {"lastUse": -1}},
+                  ]).toArray();
 
-            assert.eq(1, localSessions.length);
             const sessionUUID = localSessions[0]._id.id;
             assert.commandWorked(mongosDB.runCommand({ killSessions: [{id: sessionUUID}]}));
         },
