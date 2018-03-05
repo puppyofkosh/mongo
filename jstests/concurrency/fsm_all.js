@@ -10,5 +10,5 @@ var blacklist = [].map(function(file) {
 });
 
 runWorkloadsSerially(ls(dir).filter(function(file) {
-    return !Array.contains(blacklist, file);
+    return !Array.contains(blacklist, file) && file.indexOf("invalidated_cursors.js") > -1;
 }));

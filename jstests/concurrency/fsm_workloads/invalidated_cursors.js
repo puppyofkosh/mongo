@@ -81,6 +81,17 @@ var $config = (function() {
             assertAlways.commandWorked(res);
         },
 
+        kill: function kill(unusedDB, unusedCollName) {
+            const admin = unusedDB.getSiblingDB("admin");
+            const getMores = admin.aggregate(
+                [{$currentOp: {}},
+                 {$match: {"command.getMore": {$exists: true}}}]).toArray();
+            print("In kill...");
+            for (var m of getMores) {
+                printjson(m);
+            }
+        },
+
         killCursor: function killCursor(unusedDB, unusedCollName) {
             if (this.hasOwnProperty('cursor')) {
                 this.cursor.close();
@@ -185,10 +196,12 @@ var $config = (function() {
             dropIndex: 0.1,
         },
 
-        query: {killCursor: 0.1, getMore: 0.9},
+        query: {kill: 0.1, getMore: 0.9},
         explain: {explain: 0.1, init: 0.9},
+        kill: {killOp: 0.5, killCursor: 0.5},
+        killOp: {init: 1},
         killCursor: {init: 1},
-        getMore: {killCursor: 0.2, getMore: 0.6, init: 0.2},
+        getMore: {kill: 0.2, getMore: 0.6, init: 0.2},
         dropDatabase: {init: 1},
         dropCollection: {init: 1},
         dropIndex: {init: 1}
