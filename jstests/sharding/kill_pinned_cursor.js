@@ -27,6 +27,39 @@
     st.shardColl(coll, {_id: 1}, {_id: 5}, {_id: 6}, kDBName, false);
     st.ensurePrimaryShard(kDBName, st.shard0.name);
 
+    // The startParallelShell function will take the string it's given and serialize it into a
+    // string. This means that we can't pass it functions which capture variables. Instead we use
+    // the trick below, by putting the values for the variables we'd like to capture inside the
+    // string. Kudos to Dave Storch for coming up with this idea.
+    function makeParallelShellFunctionString(cursorId, getMoreErrCode, useSession) {
+        let code = `const cursorId = ${cursorId.toString()};`;
+        code += `const kDBName = "${kDBName}";`;
+        code += `let collName = "${coll.getName()}";`;
+        code += `let getMoreErrCode = ${getMoreErrCode};`;
+        code += `const useSession = ${useSession};`;
+
+        const runGetMore = function() {
+            let dbToUse = db;
+            let session = null;
+            if (useSession) {
+                session = db.getMongo().startSession();
+                dbToUse = session.getDatabase(kDBName);
+            }
+            let response =
+                dbToUse.runCommand({getMore: cursorId, collection: collName, batchSize: 4});
+
+            // We expect that the operation will get interrupted and fail.
+            assert.commandFailedWithCode(response, getMoreErrCode);
+
+            if (session) {
+                session.endSession();
+            }
+        };
+
+        code += `(${runGetMore.toString()})();`;
+        return code;
+    }
+
     // Tests that the various cursors involved in a sharded query can be killed, even when pinned.
     //
     // Sets up a sharded cursor, opens a mongos cursor, and uses failpoints to cause the mongos
@@ -56,33 +89,10 @@
             cursorId = cmdRes.cursor.id;
             assert.neq(cursorId, NumberLong(0));
 
-            // Now run a getMore in a parallel shell. This will require issuing getMores to the
-            // shards, which hang due to the fail point. In turn, mongos hangs waiting for the
-            // shards.
-            const runGetMore = function() {
-                let dbToUse = db;
-                let session = null;
-                if (useSession) {
-                    session = db.getMongo().startSession();
-                    dbToUse = session.getDatabase(kDBName);
-                }
-                let response =
-                    dbToUse.runCommand({getMore: cursorId, collection: collName, batchSize: 4});
-
-                // We expect that the operation will get interrupted and fail.
-                assert.commandFailedWithCode(response, getMoreErrCode);
-
-                if (session) {
-                    session.endSession();
-                }
-            };
-            let code = `const cursorId = ${cursorId.toString()};`;
-            code += `const kDBName = "${kDBName}";`;
-            code += `let collName = "${coll.getName()}";`;
-            code += `let getMoreErrCode = ${getMoreErrCode};`;
-            code += `const useSession = ${useSession};`;
-            code += `(${runGetMore.toString()})();`;
-            getMoreJoiner = startParallelShell(code, st.s.port);
+            const parallelShellFn = makeParallelShellFunctionString(cursorId,
+                                                                    getMoreErrCode,
+                                                                    useSession);
+            getMoreJoiner = startParallelShell(parallelShellFn, st.s.port);
 
             // Sleep until we know the mongod cursors are pinned.
             assert.soon(() => shard0DB.serverStatus().metrics.cursor.open.pinned > 0);
