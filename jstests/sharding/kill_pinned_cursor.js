@@ -74,7 +74,7 @@
 
                 if (session) {
                     session.endSession();
-                }                    
+                }
             };
             let code = `const cursorId = ${cursorId.toString()};`;
             code += `const kDBName = "${kDBName}";`;
