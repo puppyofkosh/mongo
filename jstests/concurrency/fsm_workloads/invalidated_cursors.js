@@ -46,21 +46,20 @@ var $config = (function() {
         },
 
         /**
-         * Return a random getMore currently running, or undefined if none are running.
+         * Return a random getMore currently running, or null if none are running.
          */
         getRandomGetMore: function getCurrentGetMores(someDB) {
             const admin = someDB.getSiblingDB("admin");
             const getMores = admin
-                                 .aggregate(
+                                 .aggregate([
                                      // idleConnections true so we can also kill cursors which are
                                      // not currently active.
-                                     [
-                                       {$currentOp: {idleConnections: true}},
-                                       // We only about getMores.
-                                       {$match: {"command.getMore": {$exists: true}}},
-                                       // Only find getMores running on the database for this test.
-                                       {$match: {"ns": this.uniqueDBName + ".$cmd"}}
-                                     ])
+                                     {$currentOp: {idleConnections: true}},
+                                     // We only about getMores.
+                                     {$match: {"command.getMore": {$exists: true}}},
+                                     // Only find getMores running on the database for this test.
+                                     {$match: {"ns": this.uniqueDBName + ".$cmd"}}
+                                 ])
                                  .toArray();
 
             if (getMores.length === 0) {
