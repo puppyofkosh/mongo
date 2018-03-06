@@ -44,6 +44,31 @@ var $config = (function() {
                 assertAlways.commandWorked(db[collName].createIndex(indexSpec));
             });
         },
+
+        /**
+         * Return a random getMore currently running, or undefined if none are running.
+         */
+        getRandomGetMore: function getCurrentGetMores(someDB) {
+            const admin = someDB.getSiblingDB("admin");
+            const getMores = admin
+                                 .aggregate(
+                                     // idleConnections true so we can also kill cursors which are
+                                     // not currently active.
+                                     [
+                                       {$currentOp: {idleConnections: true}},
+                                       // We only about getMores.
+                                       {$match: {"command.getMore": {$exists: true}}},
+                                       // Only find getMores running on the database for this test.
+                                       {$match: {"ns": this.uniqueDBName + ".$cmd"}}
+                                     ])
+                                 .toArray();
+
+            if (getMores.length === 0) {
+                return null;
+            }
+
+            return this.chooseRandomlyFrom(getMores);
+        }
     };
 
     let states = {
@@ -81,21 +106,37 @@ var $config = (function() {
             assertAlways.commandWorked(res);
         },
 
-        kill: function kill(unusedDB, unusedCollName) {
-            const admin = unusedDB.getSiblingDB("admin");
-            const getMores = admin.aggregate(
-                [{$currentOp: {}},
-                 {$match: {"command.getMore": {$exists: true}}}]).toArray();
-            print("In kill...");
-            for (var m of getMores) {
-                printjson(m);
+        /**
+         * This is just a transition state.
+         */
+        kill: function kill(unusedDB, unusedCollName) {},
+
+        /**
+         * Choose a random cursor that's open and kill it.
+         */
+        killCursor: function killCursor(unusedDB, unusedCollName) {
+            // TODO: check if mongos
+            const toKill = this.getRandomGetMore(unusedDB);
+            if (toKill === null) {
+                return;
             }
+
+            const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
+
+            // Not checking the return value, since the cursor may be closed on it's own
+            // before this has a chance to run.
+            myDB.runCommand(
+                {killCursors: toKill.command.collection, cursors: [toKill.command.getMore]});
         },
 
-        killCursor: function killCursor(unusedDB, unusedCollName) {
-            if (this.hasOwnProperty('cursor')) {
-                this.cursor.close();
+        killOp: function killOp(unusedDB, unusedCollName) {
+            const toKill = this.getRandomGetMore(unusedDB);
+            if (toKill === null) {
+                return;
             }
+
+            const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
+            myDB.killOp(toKill.opid);
         },
 
         /**
@@ -115,12 +156,15 @@ var $config = (function() {
                     this.cursor.next();
                 } catch (e) {
                     // The getMore request can fail if the database, a collection, or an index was
-                    // dropped.
+                    // dropped. It can also fail if another thread kills it through killCursor or
+                    // killOp.
                     assertAlways.contains(e.code,
                                           [
                                             ErrorCodes.OperationFailed,
                                             ErrorCodes.QueryPlanKilled,
-                                            ErrorCodes.CursorNotFound
+                                            ErrorCodes.CursorNotFound,
+                                            ErrorCodes.CursorKilled,
+                                            ErrorCodes.Interrupted,
                                           ],
                                           'unexpected error code: ' + e.code + ': ' + e.message);
                 }
