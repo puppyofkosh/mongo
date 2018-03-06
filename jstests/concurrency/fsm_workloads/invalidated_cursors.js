@@ -115,7 +115,11 @@ var $config = (function() {
          * Choose a random cursor that's open and kill it.
          */
         killCursor: function killCursor(unusedDB, unusedCollName) {
-            // TODO: check if mongos
+            if (isMongos(unusedDB)) {
+                // SERVER-18094: We can't list operations running locally on a mongos.
+                return;
+            }
+
             const toKill = this.getRandomGetMore(unusedDB);
             if (toKill === null) {
                 return;
@@ -130,6 +134,11 @@ var $config = (function() {
         },
 
         killOp: function killOp(unusedDB, unusedCollName) {
+            if (isMongos(unusedDB)) {
+                // SERVER-18094: We can't list operations running locally on a mongos.
+                return;
+            }
+
             const toKill = this.getRandomGetMore(unusedDB);
             if (toKill === null) {
                 return;
