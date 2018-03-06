@@ -107,7 +107,8 @@ var $config = (function() {
         },
 
         /**
-         * This is just a transition state.
+         * This is just a transition state that serves as a placeholder to delegate to one of the
+         * specific kill types like 'killOp' or 'killCursors'.
          */
         kill: function kill(unusedDB, unusedCollName) {},
 
@@ -116,7 +117,7 @@ var $config = (function() {
          */
         killCursor: function killCursor(unusedDB, unusedCollName) {
             if (isMongos(unusedDB)) {
-                // SERVER-18094: We can't list operations running locally on a mongos.
+                // SERVER-33700: We can't list operations running locally on a mongos.
                 return;
             }
 
@@ -125,14 +126,15 @@ var $config = (function() {
             // Not checking the return value, since the cursor may be closed on its own
             // before this has a chance to run.
             this.killRandomGetMore(myDB, function(toKill) {
-                myDB.runCommand(
+                const res = myDB.runCommand(
                     {killCursors: toKill.command.collection, cursors: [toKill.command.getMore]});
+                assertAlways.commandWorked(res);
             });
         },
 
         killOp: function killOp(unusedDB, unusedCollName) {
             if (isMongos(unusedDB)) {
-                // SERVER-18094: We can't list operations running locally on a mongos.
+                // SERVER-33700: We can't list operations running locally on a mongos.
                 return;
             }
 
@@ -140,7 +142,7 @@ var $config = (function() {
             // Not checking return value since the operation may end on its own before we have
             // a chance to kill it.
             this.killRandomGetMore(myDB, function(toKill) {
-                myDB.killOp(toKill.opid)
+                assertAlways.commandWorked(myDB.killOp(toKill.opid));
             });
         },
 
