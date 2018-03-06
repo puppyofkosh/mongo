@@ -46,9 +46,9 @@ var $config = (function() {
         },
 
         /**
-         * Return a random getMore currently running, or null if none are running.
+         * Calls 'killFn' on a random getMore that's currently running.
          */
-        getRandomGetMore: function getCurrentGetMores(someDB) {
+        killRandomGetMore: function killRandomGetMore(someDB, killFn) {
             const admin = someDB.getSiblingDB("admin");
             const getMores = admin
                                  .aggregate([
@@ -63,10 +63,11 @@ var $config = (function() {
                                  .toArray();
 
             if (getMores.length === 0) {
-                return null;
+                return;
             }
 
-            return this.chooseRandomlyFrom(getMores);
+            const toKill = this.chooseRandomlyFrom(getMores);
+            return killFn(toKill);
         }
     };
 
@@ -119,17 +120,14 @@ var $config = (function() {
                 return;
             }
 
-            const toKill = this.getRandomGetMore(unusedDB);
-            if (toKill === null) {
-                return;
-            }
-
             const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
 
-            // Not checking the return value, since the cursor may be closed on it's own
+            // Not checking the return value, since the cursor may be closed on its own
             // before this has a chance to run.
-            myDB.runCommand(
-                {killCursors: toKill.command.collection, cursors: [toKill.command.getMore]});
+            this.killRandomGetMore(myDB, function(toKill) {
+                myDB.runCommand(
+                    {killCursors: toKill.command.collection, cursors: [toKill.command.getMore]});
+            });
         },
 
         killOp: function killOp(unusedDB, unusedCollName) {
@@ -138,13 +136,12 @@ var $config = (function() {
                 return;
             }
 
-            const toKill = this.getRandomGetMore(unusedDB);
-            if (toKill === null) {
-                return;
-            }
-
             const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
-            myDB.killOp(toKill.opid);
+            // Not checking return value since the operation may end on its own before we have
+            // a chance to kill it.
+            this.killRandomGetMore(myDB, function(toKill) {
+                myDB.killOp(toKill.opid)
+            });
         },
 
         /**
