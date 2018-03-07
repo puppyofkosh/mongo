@@ -11,34 +11,40 @@
 (function() {
     "use strict";
 
-    const s = new ShardingTest({shards: 2});
+    const st = new ShardingTest({shards: 2});
+    const shards = st.s.getCollection("config.shards").find().toArray();
     const kNs = "test.slowcount";
-
-    assert.commandWorked(s.getDB("admin").runCommand({enableSharding: "test"}));
-    assert.commandWorked(s.getDB("admin").runCommand({shardCollection: kNs, key: {x: 1}}));
-
+    const shard0Coll = st.shard0.getCollection(kNs);
+    const admin = st.getDB("admin");
     const num = 10000;
-    assert.commandWorked(s.s.adminCommand({split: kNs, middle: {x: num / 2}}));
-    for (let i = 0; i < num; i++) {
-        assert.writeOK(s.getDB("test").slowcount.insert({_id: i, one: 1, x: i}));
+    const middle = num / 2;
+
+    assert.commandWorked(admin.runCommand({enableSharding: "test"}));
+    assert.commandWorked(admin.runCommand({movePrimary: "test", to: shards[0]._id}));
+    assert.commandWorked(admin.runCommand({shardCollection: kNs, key: {x: 1}}));
+
+    assert.commandWorked(admin.runCommand({split: kNs, middle: {x: middle}}));
+    assert.commandWorked(admin.runCommand(
+        {moveChunk: kNs, find: {x: middle}, to: shards[1]._id, _waitForDelete: true}));
+
+    function getNthDocument(n) {
+        return {_id: n, one: 1, x: n};
     }
-    s.startBalancer();
 
-    // The balancer should move one of the chunks off of the primary shard.
-    assert.soon(function() {
-        var d0Chunks = s.getDB("config").chunks.count({ns: kNs, shard: "shard0000"});
-        var d1Chunks = s.getDB("config").chunks.count({ns: kNs, shard: "shard0001"});
-        var totalChunks = s.getDB("config").chunks.count({ns: kNs});
+    // Insert some docs.
+    for (let i = 0; i < num; i++) {
+        assert.writeOK(st.getDB("test").slowcount.insert(getNthDocument(i)));
+    }
 
-        print("chunks: " + d0Chunks + " " + d1Chunks + " " + totalChunks);
+    // Insert some orphan documents to shard 0. These are just documents outside the range
+    // which shard 0 owns.
+    for (let i = middle + 1; i < middle + 11; i++) {
+        assert.writeOK(shard0Coll.insert(getNthDocument(i)));
+    }
 
-        // Run a non-"fast count" (a count with a predicate). In this case the predicate is always
-        // true, so we should get the total number of documents. The count should be accurate even
-        // while the moveChunk is happening. This check is the crux of the test.
-        assert.eq(s.getDB("test").slowcount.count({one: 1}), num);
+    // Run a count on the whole collection. The orphaned documents on shard 0 shouldn't be double
+    // counted.
+    assert.eq(st.getDB("test").slowcount.count({one: 1}), num);
 
-        return d0Chunks > 0 && d1Chunks > 0 && (d0Chunks + d1Chunks == totalChunks);
-    }, "Chunks failed to balance", 60000, 500);
-
-    s.stop();
+    st.stop();
 })();
