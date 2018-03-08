@@ -11,7 +11,8 @@
 
     const st = new ShardingTest({shards: 2});
     const shards = st.s.getCollection("config.shards").find().toArray();
-    const kNs = "test.slowcount";
+    const kCollName = "slowcount";
+    const kNs = "test." + kCollName;
     const shard0Coll = st.shard0.getCollection(kNs);
     const admin = st.getDB("admin");
     const num = 10;
@@ -25,7 +26,7 @@
     // from [middle, num).
     assert.commandWorked(admin.runCommand({enableSharding: "test"}));
     st.ensurePrimaryShard("test", st.shard0.name);
-    st.shardColl("slowcount", {x: 1}, {x: middle}, {x: middle + 1}, "test", true);
+    st.shardColl(kCollName, {x: 1}, {x: middle}, {x: middle + 1}, "test", true);
 
     // Insert some docs.
     for (let i = 0; i < num; i++) {
