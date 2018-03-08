@@ -10,11 +10,7 @@
     "use strict";
 
     const st = new ShardingTest({shards: 2});
-    const shards = st.s.getCollection("config.shards").find().toArray();
-    const kCollName = "slowcount";
-    const kNs = "test." + kCollName;
-    const shard0Coll = st.shard0.getCollection(kNs);
-    const admin = st.getDB("admin");
+    const shard0Coll = st.shard0.getCollection("test.slowcount");
     const num = 10;
     const middle = num / 2;
 
@@ -24,9 +20,9 @@
 
     // Shard the collection. Shard 0 will get keys from [0, middle) and shard 1 will get everything
     // from [middle, num).
-    assert.commandWorked(admin.runCommand({enableSharding: "test"}));
+    assert.commandWorked(st.s.getDB("admin").runCommand({enableSharding: "test"}));
     st.ensurePrimaryShard("test", st.shard0.name);
-    st.shardColl(kCollName, {x: 1}, {x: middle}, {x: middle + 1}, "test", true);
+    st.shardColl(shard0Coll.getName(), {x: 1}, {x: middle}, {x: middle + 1}, "test", true);
 
     // Insert some docs.
     for (let i = 0; i < num; i++) {
