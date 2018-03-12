@@ -4,6 +4,8 @@
  */
 
 load("jstests/libs/analyze_plan.js");  // For 'planHasStage'.
+load("jstests/libs/fixture_helpers.js"); // For isMongos.
+
 
 (function() {
     "use strict";
@@ -28,15 +30,44 @@ load("jstests/libs/analyze_plan.js");  // For 'planHasStage'.
     //
     // A non-empty query predicate should prevent the use of the record store's count.
     //
-    explain = coll.explain().find({x: 0}).count();
-    assert(planHasStage(db, explain.queryPlanner.winningPlan, "COUNT_SCAN"));
 
-    explain = coll.explain().find({x: 0, $comment: "hi"}).count();
-    assert(planHasStage(db, explain.queryPlanner.winningPlan, "COUNT_SCAN"));
+    function checkPlan(plan, expectedStages, unexpectedStages) {
+        for (let stage of expectedStages) {
+            assert(planHasStage(db, plan, stage));
+        }
+        for (let stage of unexpectedStages) {
+            assert(!planHasStage(db, plan, stage));
+        }
+    }
 
-    explain = coll.explain().find({x: 0}).hint({x: 1}).count();
-    assert(planHasStage(db, explain.queryPlanner.winningPlan, "COUNT_SCAN"));
+    function testExplainAndExpectStage(expectedStages, unexpectedStages, hintIndex) {
+        explain = coll.explain().find({x: 0}).count();
+        checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
 
-    explain = coll.explain().find({x: 0, $comment: "hi"}).hint({x: 1}).count();
-    assert(planHasStage(db, explain.queryPlanner.winningPlan, "COUNT_SCAN"));
+        explain = coll.explain().find({x: 0, $comment: "hi"}).count();
+        checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
+
+        explain = coll.explain().find({x: 0}).hint(hintIndex).count();
+        checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
+
+        explain = coll.explain().find({x: 0, $comment: "hi"}).hint(hintIndex).count();
+        checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
+    };
+
+    if (!isMongos(db)) {
+        // In an unsharded environment we can use the COUNT_SCAN stage.
+        testExplainAndExpectStage(["COUNT_SCAN"], [], {x: 1});
+        return;
+    }
+
+    // The remainder of the test is only relevant for sharded clusters.
+
+    // Without an index on the shard key, the entire document will have to be fetched.
+    testExplainAndExpectStage(["SHARDING_FILTER", "FETCH"], [], {x: 1});
+
+    // Add an index which includes the shard key. This means the FETCH should no longer be necesary
+    // since the SHARDING_FILTER can get the shard key straight from the index.
+    const kNewIndexSpec = {x:1, _id: 1};
+    assert.commandWorked(coll.ensureIndex(kNewIndexSpec));
+    testExplainAndExpectStage(["SHARDING_FILTER"], ["FETCH"], kNewIndexSpec);
 })();

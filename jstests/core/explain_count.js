@@ -79,6 +79,8 @@ explain = db.runCommand(
 assertExplainCount({explainResults: explain, expectedCount: 0});
 
 // Now add a bit of data to the collection.
+// On sharded clusters, we'll want the shard key to be indexed, so we make _id part of the index.
+// This means counts will not have to fetch from the document in order to get the shard key.
 t.ensureIndex({a: 1, _id: 1});
 for (var i = 0; i < 10; i++) {
     t.insert({_id: i, a: 1});
@@ -115,6 +117,7 @@ assert.eq(10, db.runCommand({count: collName, query: {a: 1}}).n);
 explain = db.runCommand({explain: {count: collName, query: {a: 1}}, verbosity: "executionStats"});
 assertExplainCount({explainResults: explain, expectedCount: 10});
 checkIndexedCountWithPred(db, explain, "a", [1.0, 1.0]);
+print("ian: the explain is " + tojson(explain));
 
 // With a query and skip.
 assert.eq(7, db.runCommand({count: collName, query: {a: 1}, skip: 3}).n);
