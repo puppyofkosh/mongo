@@ -51,7 +51,7 @@ load("jstests/libs/fixture_helpers.js");  // For isMongos.
 
         explain = coll.explain().find({x: 0, $comment: "hi"}).hint(hintIndex).count();
         checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
-    };
+    }
 
     if (!isMongos(db)) {
         // In an unsharded environment we can use the COUNT_SCAN stage.
