@@ -184,6 +184,7 @@ std::set<ShardId> getTargetedShards(OperationContext* opCtx,
         // The pipeline begins with a stage which must be run on all shards.
         std::vector<ShardId> shardIds;
         Grid::get(opCtx)->shardRegistry()->getAllShardIds(&shardIds);
+        log() << "ian: getTargetedShards all shards";
         return {shardIds.begin(), shardIds.end()};
     }
 
@@ -192,9 +193,11 @@ std::set<ShardId> getTargetedShards(OperationContext* opCtx,
         // based on the query and collation.
         std::set<ShardId> shardIds;
         routingInfo.cm()->getShardIdsForQuery(opCtx, shardQuery, collation, &shardIds);
+        log() << "ian: getTargetedShards some shards";
         return shardIds;
     }
 
+    log() << "ian: getTargetedShards one shard";
     // The collection is unsharded. Target only the primary shard for the database.
     return {routingInfo.primaryId()};
 }
@@ -276,6 +279,7 @@ StatusWith<std::vector<ClusterClientCursorParams::RemoteCursor>> establishShardC
         for (auto&& shardId : shardIds) {
             requests.emplace_back(std::move(shardId), cmdObj);
         }
+        log() << "ian: establishShardCursors all shards";
     } else if (routingInfo->cm()) {
         // The collection is sharded. Use the routing table to decide which shards to target
         // based on the query and collation, and build versioned requests for them.
@@ -283,7 +287,9 @@ StatusWith<std::vector<ClusterClientCursorParams::RemoteCursor>> establishShardC
             auto versionedCmdObj =
                 appendShardVersion(cmdObj, routingInfo->cm()->getVersion(shardId));
             requests.emplace_back(std::move(shardId), std::move(versionedCmdObj));
+            log() << "ian: " << shardId;
         }
+        log() << "ian: establishMergingShardCursors some shards";
     } else {
         // The collection is unsharded. Target only the primary shard for the database.
         // Don't append shard version info when contacting the config servers.
@@ -291,6 +297,7 @@ StatusWith<std::vector<ClusterClientCursorParams::RemoteCursor>> establishShardC
                               !routingInfo->primary()->isConfig()
                                   ? appendShardVersion(cmdObj, ChunkVersion::UNSHARDED())
                                   : cmdObj);
+        log() << "ian: establishMergingShardCursors one shard: " << routingInfo->primaryId();
     }
 
     if (MONGO_FAIL_POINT(clusterAggregateHangBeforeEstablishingShardCursors)) {
@@ -432,6 +439,7 @@ StatusWith<DispatchShardPipelineResults> dispatchShardPipeline(
         // to be at least as current as the logical time used when creating the command for
         // $changeStream to work reliably, so we do a "hard" reload.
         if (mustRunOnAllShards(executionNss, executionNsRoutingInfo, liteParsedPipeline)) {
+            log() << "ian dispatchShardPipeline registry reload";
             auto* shardRegistry = Grid::get(opCtx)->shardRegistry();
             if (!shardRegistry->reload(opCtx)) {
                 shardRegistry->reload(opCtx);

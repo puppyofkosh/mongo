@@ -463,10 +463,12 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             Status{ErrorCodes::InternalError, "uninitialized cluster query result"};
         try {
             next = pinnedCursor.getValue().next(context);
-        } catch (const ExceptionFor<ErrorCodes::CloseChangeStream>&) {
+        } catch (const ExceptionFor<ErrorCodes::CloseChangeStream>& e) {
             // This exception is thrown when a $changeStream stage encounters an event
             // that invalidates the cursor. We should close the cursor and return without
             // error.
+            log() << "ian: getMore received a close change stream error: " << e.toString();
+            log() << "ian: exn: " << e;
             cursorState = ClusterCursorManager::CursorState::Exhausted;
             break;
         }

@@ -130,8 +130,10 @@ function ChangeStreamTest(_db, name = "ChangeStreamTest") {
             // Since the first change may be on the original cursor, we need to check for that
             // change on the cursor before we move the cursor forward.
             if (i === 0 && !skipFirstBatch) {
+                print("ian: First change could be on original cursor");
                 changes[0] = getNextDocFromCursor(cursor);
                 if (changes[0]) {
+                    print("ian: changes[0] is " + tojson(changes[0]));
                     assertChangeIsExpected(expectedChanges, 0, changes, expectInvalidate);
                     continue;
                 }
@@ -139,8 +141,11 @@ function ChangeStreamTest(_db, name = "ChangeStreamTest") {
 
             assert.soon(function() {
                 // We need to replace the cursor variable so we return the correct cursor.
+                print("ian: cursor before is " + tojson(cursor));
                 cursor = self.getNextBatch(cursor);
                 changes[i] = getNextDocFromCursor(cursor);
+                print("ian: received document " + tojson(changes[i]));
+                print("ian: cursor after is " + tojson(cursor));
                 return changes[i] !== null;
             }, "timed out waiting for another result from the change stream");
             assertChangeIsExpected(expectedChanges, i, changes, expectInvalidate);

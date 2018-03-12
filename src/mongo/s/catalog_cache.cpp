@@ -220,7 +220,7 @@ StatusWith<CachedCollectionRoutingInfo> CatalogCache::getShardedCollectionRoutin
 void CatalogCache::onStaleConfigError(CachedCollectionRoutingInfo&& ccriToInvalidate) {
     // Ensure the move constructor of CachedCollectionRoutingInfo is invoked in order to clear the
     // input argument so it can't be used anymore
-    auto ccri(ccriToInvalidate);
+    auto ccri(std::move(ccriToInvalidate));
 
     if (!ccri._cm) {
         // Here we received a stale config error for a collection which we previously thought was

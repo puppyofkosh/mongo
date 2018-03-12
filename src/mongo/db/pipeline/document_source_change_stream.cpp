@@ -207,24 +207,29 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
 
     // Close cursor if we have returned an invalidate entry.
     if (_shouldCloseCursor) {
+        log() << "ian: DocSourceCloseCursor 1";
         uasserted(ErrorCodes::CloseChangeStream, "Change stream has been invalidated");
     }
 
     auto nextInput = pSource->getNext();
-    if (!nextInput.isAdvanced())
+    if (!nextInput.isAdvanced()) {
+        log() << "ian: DocSourceCloseCursor 2";
         return nextInput;
+    }
 
     auto doc = nextInput.getDocument();
     const auto& kOperationTypeField = DocumentSourceChangeStream::kOperationTypeField;
     checkValueType(doc[kOperationTypeField], kOperationTypeField, BSONType::String);
     auto operationType = doc[kOperationTypeField].getString();
     if (operationType == DocumentSourceChangeStream::kInvalidateOpType) {
+        log() << "ian: DocSourceCloseCursor 3";
         // Pass the invalidation forward, so that it can be included in the results, or
         // filtered/transformed by further stages in the pipeline, then throw an exception
         // to close the cursor on the next call to getNext().
         _shouldCloseCursor = true;
     }
-
+    log() << "ian: the document is " << doc;
+    
     return nextInput;
 }
 
@@ -423,6 +428,8 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
         invariant(_expCtx->needsMerge);
     }
 
+    log() << "ian: applyTransformation: " << input;
+
     MutableDocument doc;
 
     // Extract the fields we need.
@@ -495,6 +502,7 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
             // Any command that makes it through our filter is an invalidating command such as a
             // drop.
             operationType = kInvalidateOpType;
+            log() << "ian: applyTransformation got invalidate:" << input;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
             break;

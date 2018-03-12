@@ -182,6 +182,7 @@ PlanStage::StageState CollectionScan::doWork(WorkingSetID* out) {
 
     _lastSeenId = record->id;
     if (_params.shouldTrackLatestOplogTimestamp) {
+        //log() << "ian: COLL_SCAN: Examined document: " << record->data.toBson();
         auto status = setLatestOplogEntryTimestamp(*record);
         if (!status.isOK()) {
             *out = WorkingSetCommon::allocateStatusMember(_workingSet, status);
