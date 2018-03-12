@@ -3,9 +3,8 @@
  * logically empty. See SERVER-20536 for more details.
  */
 
-load("jstests/libs/analyze_plan.js");  // For 'planHasStage'.
-load("jstests/libs/fixture_helpers.js"); // For isMongos.
-
+load("jstests/libs/analyze_plan.js");     // For 'planHasStage'.
+load("jstests/libs/fixture_helpers.js");  // For isMongos.
 
 (function() {
     "use strict";
@@ -67,7 +66,7 @@ load("jstests/libs/fixture_helpers.js"); // For isMongos.
 
     // Add an index which includes the shard key. This means the FETCH should no longer be necesary
     // since the SHARDING_FILTER can get the shard key straight from the index.
-    const kNewIndexSpec = {x:1, _id: 1};
+    const kNewIndexSpec = {x: 1, _id: 1};
     assert.commandWorked(coll.ensureIndex(kNewIndexSpec));
     testExplainAndExpectStage(["SHARDING_FILTER"], ["FETCH"], kNewIndexSpec);
 })();
