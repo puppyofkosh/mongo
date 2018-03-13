@@ -15,8 +15,8 @@ function checkCountScanIndexExplain(explain, startKey, endKey, startInclusive, e
 
     assert.eq(countStage.stage, "COUNT_SCAN");
     assert("indexBounds" in countStage);
-    assert.eq(bsonWoCompare(countStage.indexBounds.startKey, startKey), 0);
-    assert.eq(bsonWoCompare(countStage.indexBounds.endKey, endKey), 0);
+    assert.eq(countStage.indexBounds.startKey, startKey);
+    assert.eq(countStage.indexBounds.endKey, endKey);
     assert.eq(countStage.indexBounds.startKeyInclusive, startInclusive);
     assert.eq(countStage.indexBounds.endKeyInclusive, endInclusive);
 }
@@ -45,8 +45,10 @@ function checkIndexedCountWithPred(db, explain, keyName, bounds) {
         // On sharded clusters we have a SHARDING_FILTER with a child that's an IXSCAN.
         checkShardingFilterIndexScanExplain(explain, keyName, bounds);
     } else {
-        // On a standalone we just do a COUNT_SCAN.
-        checkCountScanIndexExplain(explain, {a: bounds[0]}, {a: bounds[1]}, true, true);
+        // On a standalone we just do a COUNT_SCAN over the {a: 1, _id: 1} index.
+        const min = {a: bounds[0], _id: {"$minKey": 1}};
+        const max = {a: bounds[1], _id: {"$maxKey": 1}};
+        checkCountScanIndexExplain(explain, min, max, true, true);
     }
 }
 
