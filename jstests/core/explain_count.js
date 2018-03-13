@@ -41,10 +41,8 @@ function checkShardingFilterIndexScanExplain(explain, keyName, bounds) {
 
 function checkIndexedCountWithPred(db, explain, keyName, bounds) {
     assert.eq(bounds.length, 2);
-    print("The explain is " + tojson(explain));
     if (isMongos(db) && FixtureHelpers.isSharded(db[collName])) {
-        // On sharded clusters with more than one shard we have a SHARDING_FILTER with a child
-        // that's an IXSCAN.
+        // On sharded collections we have a SHARDING_FILTER with a child that's an IXSCAN.
         checkShardingFilterIndexScanExplain(explain, keyName, bounds);
     } else {
         // On a standalone we just do a COUNT_SCAN over the {a: 1, _id: 1} index.

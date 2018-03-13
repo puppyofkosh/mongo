@@ -54,7 +54,7 @@ load("jstests/libs/fixture_helpers.js");  // For isMongos and isSharded.
     }
 
     if (!isMongos(db) || !FixtureHelpers.isSharded(coll)) {
-        // In an environment with at most one shard we can use the COUNT_SCAN stage.
+        // In an unsharded collection we can use the COUNT_SCAN stage.
         testExplainAndExpectStage(["COUNT_SCAN"], [], {x: 1});
         return;
     }
