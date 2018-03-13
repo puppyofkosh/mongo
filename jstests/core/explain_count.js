@@ -1,7 +1,7 @@
 // Test running explains on count commands.
 
-load("jstests/libs/analyze_plan.js");  // For assertExplainCount.
-load("jstests/libs/fixture_helpers.js"); // For isMongos.
+load("jstests/libs/analyze_plan.js");
+load("jstests/libs/fixture_helpers.js");  // For isMongos and isSharded.
 
 var collName = "jstests_explain_count";
 var t = db[collName];
@@ -41,8 +41,10 @@ function checkShardingFilterIndexScanExplain(explain, keyName, bounds) {
 
 function checkIndexedCountWithPred(db, explain, keyName, bounds) {
     assert.eq(bounds.length, 2);
-    if (isMongos(db)) {
-        // On sharded clusters we have a SHARDING_FILTER with a child that's an IXSCAN.
+    print("The explain is " + tojson(explain));
+    if (isMongos(db) && FixtureHelpers.isSharded(db[collName])) {
+        // On sharded clusters with more than one shard we have a SHARDING_FILTER with a child
+        // that's an IXSCAN.
         checkShardingFilterIndexScanExplain(explain, keyName, bounds);
     } else {
         // On a standalone we just do a COUNT_SCAN over the {a: 1, _id: 1} index.

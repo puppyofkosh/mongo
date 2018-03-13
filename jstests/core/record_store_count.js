@@ -4,7 +4,7 @@
  */
 
 load("jstests/libs/analyze_plan.js");     // For 'planHasStage'.
-load("jstests/libs/fixture_helpers.js");  // For isMongos.
+load("jstests/libs/fixture_helpers.js");  // For isMongos and isSharded.
 
 (function() {
     "use strict";
@@ -53,8 +53,8 @@ load("jstests/libs/fixture_helpers.js");  // For isMongos.
         checkPlan(explain.queryPlanner.winningPlan, expectedStages, unexpectedStages);
     }
 
-    if (!isMongos(db)) {
-        // In an unsharded environment we can use the COUNT_SCAN stage.
+    if (!isMongos(db) || !FixtureHelpers.isSharded(coll)) {
+        // In an environment with at most one shard we can use the COUNT_SCAN stage.
         testExplainAndExpectStage(["COUNT_SCAN"], [], {x: 1});
         return;
     }
