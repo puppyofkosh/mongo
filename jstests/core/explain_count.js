@@ -117,7 +117,6 @@ assert.eq(10, db.runCommand({count: collName, query: {a: 1}}).n);
 explain = db.runCommand({explain: {count: collName, query: {a: 1}}, verbosity: "executionStats"});
 assertExplainCount({explainResults: explain, expectedCount: 10});
 checkIndexedCountWithPred(db, explain, "a", [1.0, 1.0]);
-print("ian: the explain is " + tojson(explain));
 
 // With a query and skip.
 assert.eq(7, db.runCommand({count: collName, query: {a: 1}, skip: 3}).n);
