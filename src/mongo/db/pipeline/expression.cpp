@@ -4046,8 +4046,20 @@ Value ExpressionSubstrBytes::evaluate(const Document& root) const {
             (pLength.getType() == NumberInt || pLength.getType() == NumberLong ||
              pLength.getType() == NumberDouble));
 
-    string::size_type lower = static_cast<string::size_type>(pLower.coerceToLong());
-    string::size_type length = static_cast<string::size_type>(pLength.coerceToLong());
+    const long long signedLower = pLower.coerceToLong();
+
+    uassert(50746,
+            str::stream() << getOpName() << ":  starting index must be non-negative (got: "
+                          << signedLower
+                          << ")",
+            signedLower >= 0);
+
+    string::size_type lower = static_cast<string::size_type>(signedLower);
+
+    // If the passed length < 0, we should return the rest of the string.
+    const long long signedLength = pLength.coerceToLong();
+    string::size_type length =
+        signedLength < 0 ? str.length() : static_cast<string::size_type>(signedLength);
 
     uassert(28656,
             str::stream() << getOpName()

@@ -48,6 +48,9 @@ assertSubstring('bc', 'abcd', NumberLong(1), NumberInt(2));
 // Integer component is used.
 assertSubstring('bc', 'abcd', 1.2, 2.2);
 assertSubstring('bc', 'abcd', 1.9, 2.9);
+assertSubstring('cd', 'abcd', 2, -1);
+assertSubstring('abcd', 'abcd', 0, -1);
+assertSubstring('', 'abcd', 4, -1);
 
 // Non numeric types for offset / length.
 assertException('abcd', false, 2);
@@ -56,6 +59,7 @@ assertException('abcd', 'q', 2);
 assertException('abcd', 1, 'r');
 assertException('abcd', null, 3);
 assertException('abcd', 1, undefined);
+assertException('abcd', -1, 2);
 
 // String coercion.
 assertSubstring('123', 123, 0, 3);
