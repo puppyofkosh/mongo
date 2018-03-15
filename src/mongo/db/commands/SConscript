@@ -264,7 +264,7 @@ env.Library(
         'current_op_common',
         'dcommands_fcv',
         'fsync_locked',
-        'killcursors_common',
+        'kill_common',
         'profile_common',
         'write_commands_common',
     ],
@@ -274,10 +274,12 @@ env.Library(
     ],
 )
 
+
 env.Library(
-    target='killcursors_common',
+    target='kill_common',
     source=[
         'killcursors_common.cpp',
+        'kill_op_common.cpp',
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/audit',

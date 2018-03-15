@@ -29,6 +29,7 @@
 #pragma once
 
 #include "mongo/platform/atomic_word.h"
+#include "mongo/util/fail_point_service.h"
 
 namespace mongo {
 

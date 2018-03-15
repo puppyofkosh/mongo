@@ -329,6 +329,9 @@ public:
             return true;
         }
 
+        FindCommon::waitWhileFailPointEnabled(
+            &waitInFindBeforeMakingBatch, opCtx, "waitInFindBeforeMakingBatch");
+
         const QueryRequest& originalQR = exec->getCanonicalQuery()->getQueryRequest();
 
         // Stream query results, adding them to a BSONArray as we go.
