@@ -39,6 +39,12 @@ function checkShardingFilterIndexScanExplain(explain, keyName, bounds) {
     assert.eq(expectedBoundsArr, bounds);
 }
 
+
+/**
+ * Check that the explain from a count command run on a collection with a (usable) index for the
+ * predicate produces a reasonable plan. On sharded collections, we expect to have an IXSCAN
+ * followed by a SHARDING_FILTER. Otherwise, the COUNT_SCAN stage should be used.
+ */
 function checkIndexedCountWithPred(db, explain, keyName, bounds) {
     assert.eq(bounds.length, 2);
     if (isMongos(db) && FixtureHelpers.isSharded(db[collName])) {

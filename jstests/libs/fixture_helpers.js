@@ -55,6 +55,7 @@ var FixtureHelpers = (function() {
      * sharded.
      */
     function isSharded(coll) {
+        const db = coll.getDB();
         return db.getSiblingDB("config").collections.find({_id: coll.getFullName()}).count() > 0;
     }
 
