@@ -338,6 +338,20 @@ void ServiceContext::setKillAllOperations() {
     }
 }
 
+StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+ServiceContext::findOperationContext(unsigned int opId) {
+    for (ServiceContext::LockedClientsCursor cursor(this); Client* opClient = cursor.next();) {
+        stdx::unique_lock<Client> lk(*opClient);
+
+        OperationContext* opCtx = opClient->getOperationContext();
+        if (opCtx && opCtx->getOpID() == opId) {
+            return {std::make_tuple(std::move(lk), opCtx)};
+        }
+    }
+
+    return Status(ErrorCodes::NoSuchKey, str::stream() << "Could not find opID: " << opId);
+}
+
 void ServiceContext::killOperation(OperationContext* opCtx, ErrorCodes::Error killCode) {
     opCtx->markKilled(killCode);
 

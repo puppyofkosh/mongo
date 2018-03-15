@@ -87,6 +87,11 @@ public:
 
         const auto opSepPos = opToKill.find(':');
 
+        if (opSepPos == std::string::npos) {
+            // FIXME: remove
+            log() << "ian: Got a opId without shard identifier opId: " << opToKill;
+        }
+
         uassert(28625,
                 str::stream() << "The op argument to killOp must be of the format shardid:opid"
                               << " but found \""

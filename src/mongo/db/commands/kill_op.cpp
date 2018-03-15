@@ -85,18 +85,13 @@ public:
         Client* client, unsigned int opId) {
         AuthorizationSession* authzSession = AuthorizationSession::get(client);
 
-        for (ServiceContext::LockedClientsCursor cursor(client->getServiceContext());
-             Client* opClient = cursor.next();) {
-            stdx::unique_lock<Client> lk(*opClient);
-
-            OperationContext* opCtx = opClient->getOperationContext();
-            if (opCtx && opCtx->getOpID() == opId) {
-                if (authzSession->isAuthorizedForActionsOnResource(
-                        ResourcePattern::forClusterResource(), ActionType::killop) ||
-                    authzSession->isCoauthorizedWithClient(opClient)) {
-                    return {std::make_tuple(std::move(lk), opCtx)};
-                }
-                break;
+        auto swLockAndOp = client->getServiceContext()->findOperationContext(opId);
+        if (swLockAndOp.isOK()) {
+            OperationContext* opToKill = std::get<1>(swLockAndOp.getValue());
+            if (authzSession->isAuthorizedForActionsOnResource(
+                    ResourcePattern::forClusterResource(), ActionType::killop) ||
+                authzSession->isCoauthorizedWithClient(opToKill->getClient())) {
+                return swLockAndOp;
             }
         }
 
