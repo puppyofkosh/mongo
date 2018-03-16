@@ -47,6 +47,7 @@
 #include "mongo/db/repl/oplog_entry_gen.h"
 #include "mongo/db/repl/replication_coordinator.h"
 #include "mongo/util/log.h"
+#include "mongo/util/stacktrace.h"
 
 namespace mongo {
 
@@ -208,6 +209,7 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
     // Close cursor if we have returned an invalidate entry.
     if (_shouldCloseCursor) {
         log() << "ian: DocSourceCloseCursor 1";
+        printStackTrace();
         uasserted(ErrorCodes::CloseChangeStream, "Change stream has been invalidated");
     }
 
@@ -227,6 +229,7 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
         // filtered/transformed by further stages in the pipeline, then throw an exception
         // to close the cursor on the next call to getNext().
         _shouldCloseCursor = true;
+        printStackTrace();
     }
     log() << "ian: the document is " << doc;
     

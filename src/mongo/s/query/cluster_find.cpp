@@ -462,6 +462,7 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         StatusWith<ClusterQueryResult> next =
             Status{ErrorCodes::InternalError, "uninitialized cluster query result"};
         try {
+            log() << "ian: calling next() on the cursor";
             next = pinnedCursor.getValue().next(context);
         } catch (const ExceptionFor<ErrorCodes::CloseChangeStream>& e) {
             // This exception is thrown when a $changeStream stage encounters an event
@@ -472,12 +473,15 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             cursorState = ClusterCursorManager::CursorState::Exhausted;
             break;
         }
-
+        log() << "ian: calling next didn't throw.";
+        
         if (!next.isOK()) {
+            log() << "ian: next ain't ok: " << next.getStatus();
             return next.getStatus();
         }
 
         if (next.getValue().isEOF()) {
+            log() << "ian: next is eof";
             // We reached end-of-stream. If the cursor is not tailable, then we mark it as
             // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even when
             // we reach end-of-stream. However, if all the remote cursors are exhausted, there is no
@@ -491,6 +495,7 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
 
         if (!FindCommon::haveSpaceForNext(
                 *next.getValue().getResult(), batch.size(), bytesBuffered)) {
+            log() << "ian: not enough space";
             pinnedCursor.getValue().queueResult(*next.getValue().getResult());
             break;
         }
@@ -502,6 +507,7 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         batch.push_back(std::move(*next.getValue().getResult()));
     }
 
+    log() << "ian: returning. Cursor state is " << (int)cursorState;
     // Upon successful completion, we need to detach from the operation and transfer ownership of
     // the cursor back to the cursor manager.
     cursorDetach.Dismiss();

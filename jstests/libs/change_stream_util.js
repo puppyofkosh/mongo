@@ -132,8 +132,8 @@ function ChangeStreamTest(_db, name = "ChangeStreamTest") {
             if (i === 0 && !skipFirstBatch) {
                 print("ian: First change could be on original cursor");
                 changes[0] = getNextDocFromCursor(cursor);
+                print("ian: changes[0] is " + tojson(changes[0]));
                 if (changes[0]) {
-                    print("ian: changes[0] is " + tojson(changes[0]));
                     assertChangeIsExpected(expectedChanges, 0, changes, expectInvalidate);
                     continue;
                 }
