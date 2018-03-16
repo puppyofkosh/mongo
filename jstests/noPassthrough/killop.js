@@ -29,12 +29,12 @@
             failPointName = "waitAfterEstablishingCursorsBeforeMakingBatch";
             connToSetFailPointOn = conn;
         }
-        
+
         assert.commandWorked(connToSetFailPointOn.adminCommand(
             {"configureFailPoint": failPointName, "mode": "alwaysOn"}));
 
         const queryToKill = "assert.commandWorked(db.getSiblingDB('" + dbName +
-              "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
+            "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
         const awaitShell = startParallelShell(queryToKill, conn.port);
 
         function runCurOp() {
@@ -80,8 +80,8 @@
         assert.eq(true, result[0].killPending);
 
         print("ian disabling failpoint");
-        assert.commandWorked(
-            connToSetFailPointOn.adminCommand({"configureFailPoint": failPointName, "mode": "off"}));
+        assert.commandWorked(connToSetFailPointOn.adminCommand(
+            {"configureFailPoint": failPointName, "mode": "off"}));
 
         print("ian awaiting shell");
         const exitCode = awaitShell({checkExitSuccess: false});

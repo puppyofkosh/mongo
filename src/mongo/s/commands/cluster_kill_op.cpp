@@ -85,12 +85,12 @@ class ClusterKillOpCommand : public BasicCommand {
         invariant(opSepPos != std::string::npos);
         uassert(28625,
                 str::stream() << "The op argument to killOp must be of the format shardid:opid"
-                << " but found \""
-                << opToKill
-                << '"',
+                              << " but found \""
+                              << opToKill
+                              << '"',
                 (opToKill.size() >= 3) &&                  // must have at least N:N
-                (opSepPos != 0) &&                     // can't be :NN
-                (opSepPos != (opToKill.size() - 1)));  // can't be NN:
+                    (opSepPos != 0) &&                     // can't be :NN
+                    (opSepPos != (opToKill.size() - 1)));  // can't be NN:
 
         auto shardIdent = opToKill.substr(0, opSepPos);
         log() << "want to kill op: " << redact(opToKill);
@@ -118,7 +118,7 @@ class ClusterKillOpCommand : public BasicCommand {
         // whether the shard reported success or not.
         return true;
     }
-    
+
 public:
     ClusterKillOpCommand() : BasicCommand("killOp") {}
 
