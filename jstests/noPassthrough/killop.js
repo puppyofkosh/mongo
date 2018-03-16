@@ -23,11 +23,18 @@
 
         assert.commandWorked(
             shardConn.adminCommand({setParameter: 1, internalQueryExecYieldIterations: 1}));
-        assert.commandWorked(shardConn.adminCommand(
-            {"configureFailPoint": "setYieldAllLocksHang", "mode": "alwaysOn"}));
+        let failPointName = "setYieldAllLocksHang";
+        let connToSetFailPointOn = shardConn;
+        if (killLocalOp) {
+            failPointName = "waitAfterEstablishingCursorsBeforeMakingBatch";
+            connToSetFailPointOn = conn;
+        }
+        
+        assert.commandWorked(connToSetFailPointOn.adminCommand(
+            {"configureFailPoint": failPointName, "mode": "alwaysOn"}));
 
         const queryToKill = "assert.commandWorked(db.getSiblingDB('" + dbName +
-            "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
+              "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
         const awaitShell = startParallelShell(queryToKill, conn.port);
 
         function runCurOp() {
@@ -63,19 +70,24 @@
             opId = opId.toString();
         }
 
+        print("ian Running killOp");
         assert.commandWorked(db.killOp(opId));
 
+        print("ian Running curOp");
         let result = runCurOp();
         assert(result.length === 1, tojson(result));
         assert(result[0].hasOwnProperty("killPending"));
         assert.eq(true, result[0].killPending);
 
+        print("ian disabling failpoint");
         assert.commandWorked(
-            shardConn.adminCommand({"configureFailPoint": "setYieldAllLocksHang", "mode": "off"}));
+            connToSetFailPointOn.adminCommand({"configureFailPoint": failPointName, "mode": "off"}));
 
+        print("ian awaiting shell");
         const exitCode = awaitShell({checkExitSuccess: false});
         assert.neq(0, exitCode, "Expected shell to exit with failure due to operation kill");
 
+        print("ian rerun curop shell");
         result = runCurOp();
         assert(result.length === 0, tojson(result));
     }
@@ -90,6 +102,7 @@
     runTest(st.s, shardConn, false);
 
     // Test killOp against mongos, killing the mongos opId.
+    print("ian: part 3");
     runTest(st.s, shardConn, true);
 
     st.stop();

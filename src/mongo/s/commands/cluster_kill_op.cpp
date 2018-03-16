@@ -52,6 +52,73 @@ namespace mongo {
 namespace {
 
 class ClusterKillOpCommand : public BasicCommand {
+    bool killLocalOperation(OperationContext* opCtx,
+                            const std::string& opToKill,
+                            BSONObjBuilder& result) {
+        unsigned int opId;
+        uassertStatusOK(parseNumberFromStringWithBase(opToKill, 10, &opId));
+
+        auto swLkAndOp = opCtx->getServiceContext()->findOperationContext(opId);
+        if (swLkAndOp.isOK()) {
+            AuthorizationSession* authzSession = AuthorizationSession::get(opCtx->getClient());
+            stdx::unique_lock<Client> lk;
+            OperationContext* opCtxToKill;
+            std::tie(lk, opCtxToKill) = std::move(swLkAndOp.getValue());
+            if (authzSession->isAuthorizedForActionsOnResource(
+                    ResourcePattern::forClusterResource(), ActionType::killop) ||
+                authzSession->isCoauthorizedWithClient(opCtxToKill->getClient())) {
+                opCtx->getServiceContext()->killOperation(opCtxToKill);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool killShardOperation(OperationContext* opCtx,
+                            const std::string& opToKill,
+                            size_t opSepPos,
+                            BSONObjBuilder& result) {
+        // If there's no :, we are killing a local operation.
+        invariant(opSepPos != std::string::npos);
+        uassert(28625,
+                str::stream() << "The op argument to killOp must be of the format shardid:opid"
+                << " but found \""
+                << opToKill
+                << '"',
+                (opToKill.size() >= 3) &&                  // must have at least N:N
+                (opSepPos != 0) &&                     // can't be :NN
+                (opSepPos != (opToKill.size() - 1)));  // can't be NN:
+
+        auto shardIdent = opToKill.substr(0, opSepPos);
+        log() << "want to kill op: " << redact(opToKill);
+
+        // Will throw if shard id is not found
+        auto shardStatus = grid.shardRegistry()->getShard(opCtx, shardIdent);
+        if (!shardStatus.isOK()) {
+            return CommandHelpers::appendCommandStatus(result, shardStatus.getStatus());
+        }
+        auto shard = shardStatus.getValue();
+
+        unsigned int opId;
+        uassertStatusOK(parseNumberFromStringWithBase(opToKill.substr(opSepPos + 1), 10, &opId));
+
+        // shardid is actually the opid - keeping for backwards compatibility.
+        result.append("shard", shardIdent);
+        result.append("shardid", opId);
+
+        ScopedDbConnection conn(shard->getConnString());
+        // intentionally ignore return value - that is how legacy killOp worked.
+        conn->runCommand(OpMsgRequest::fromDBAndBody("admin", BSON("killOp" << 1 << "op" << opId)));
+        conn.done();
+
+        // The original behavior of killOp on mongos is to always return success, regardless of
+        // whether the shard reported success or not.
+        return true;
+    }
+    
 public:
     ClusterKillOpCommand() : BasicCommand("killOp") {}
 
@@ -88,45 +155,12 @@ public:
         const auto opSepPos = opToKill.find(':');
 
         if (opSepPos == std::string::npos) {
-            // FIXME: remove
+            // Caller is trying to kill a local operation.
             log() << "ian: Got a opId without shard identifier opId: " << opToKill;
+            return killLocalOperation(opCtx, opToKill, result);
         }
 
-        uassert(28625,
-                str::stream() << "The op argument to killOp must be of the format shardid:opid"
-                              << " but found \""
-                              << opToKill
-                              << '"',
-                (opToKill.size() >= 3) &&                  // must have at least N:N
-                    (opSepPos != std::string::npos) &&     // must have ':' as separator
-                    (opSepPos != 0) &&                     // can't be :NN
-                    (opSepPos != (opToKill.size() - 1)));  // can't be NN:
-
-        auto shardIdent = opToKill.substr(0, opSepPos);
-        log() << "want to kill op: " << redact(opToKill);
-
-        // Will throw if shard id is not found
-        auto shardStatus = grid.shardRegistry()->getShard(opCtx, shardIdent);
-        if (!shardStatus.isOK()) {
-            return CommandHelpers::appendCommandStatus(result, shardStatus.getStatus());
-        }
-        auto shard = shardStatus.getValue();
-
-        int opId;
-        uassertStatusOK(parseNumberFromStringWithBase(opToKill.substr(opSepPos + 1), 10, &opId));
-
-        // shardid is actually the opid - keeping for backwards compatibility.
-        result.append("shard", shardIdent);
-        result.append("shardid", opId);
-
-        ScopedDbConnection conn(shard->getConnString());
-        // intentionally ignore return value - that is how legacy killOp worked.
-        conn->runCommand(OpMsgRequest::fromDBAndBody("admin", BSON("killOp" << 1 << "op" << opId)));
-        conn.done();
-
-        // The original behavior of killOp on mongos is to always return success, regardless of
-        // whether the shard reported success or not.
-        return true;
+        return killShardOperation(opCtx, opToKill, opSepPos, result);
     }
 
 } clusterKillOpCommand;
