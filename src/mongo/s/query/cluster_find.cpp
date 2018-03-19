@@ -273,8 +273,6 @@ CursorId runQueryWithoutRetrying(OperationContext* opCtx,
     // Retrieve enough data from the ClusterClientCursor for the first batch of results.
 
     while (MONGO_FAIL_POINT(waitAfterEstablishingCursorsBeforeMakingBatch)) {
-        log() << "ian: Waiting for fp";
-        sleepsecs(5);
     }
 
     auto cursorState = ClusterCursorManager::CursorState::NotExhausted;

@@ -69,10 +69,10 @@ class ClusterKillOpCommand : public KillOpCmdBase {
                               << " but found \""
                               << opToKill
                               << '"',
-                (opToKill.size() >= 3) &&              // must have at least N:N
-                (opSepPos != std::string::npos) &&     // must have ':' as separator
-                (opSepPos != 0) &&                     // can't be :NN
-                (opSepPos != (opToKill.size() - 1)));  // can't be NN:
+                (opToKill.size() >= 3) &&                  // must have at least N:N
+                    (opSepPos != std::string::npos) &&     // must have ':' as separator
+                    (opSepPos != 0) &&                     // can't be :NN
+                    (opSepPos != (opToKill.size() - 1)));  // can't be NN:
 
         auto shardIdent = opToKill.substr(0, opSepPos);
         log() << "want to kill op: " << redact(opToKill);
