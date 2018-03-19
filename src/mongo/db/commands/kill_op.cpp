@@ -39,6 +39,7 @@
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/client.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/commands/kill_op_common.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/service_context.h"
 #include "mongo/util/log.h"
@@ -46,9 +47,9 @@
 
 namespace mongo {
 
-class KillOpCommand : public BasicCommand {
+class KillOpCommand : public KillOpCmdBase {
 public:
-    KillOpCommand() : BasicCommand("killOp") {}
+    KillOpCommand() = default;
 
 
     virtual bool supportsWriteConcern(const BSONObj& cmd) const override {
@@ -63,39 +64,10 @@ public:
         return true;
     }
 
-    static long long parseOpId(const BSONObj& cmdObj) {
-        long long op;
-        uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &op));
-
-        // Internally opid is an unsigned 32-bit int, but as BSON only has signed integer types,
-        // we wrap values exceeding 2,147,483,647 to negative numbers. The following undoes this
-        // transformation, so users can use killOp on the (negative) opid they received.
-        if (op >= std::numeric_limits<int>::min() && op < 0)
-            op += 1ull << 32;
-
-        uassert(26823,
-                str::stream() << "invalid op : " << op,
-                (op >= 0) && (op <= std::numeric_limits<unsigned int>::max()));
-
-
-        return op;
-    }
-
-    static StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> _findOp(
-        Client* client, unsigned int opId) {
-        AuthorizationSession* authzSession = AuthorizationSession::get(client);
-
-        auto swLockAndOp = client->getServiceContext()->findOperationContext(opId);
-        if (swLockAndOp.isOK()) {
-            OperationContext* opToKill = std::get<1>(swLockAndOp.getValue());
-            if (authzSession->isAuthorizedForActionsOnResource(
-                    ResourcePattern::forClusterResource(), ActionType::killop) ||
-                authzSession->isCoauthorizedWithClient(opToKill->getClient())) {
-                return swLockAndOp;
-            }
-        }
-
-        return Status(ErrorCodes::NoSuchKey, str::stream() << "Could not access opID: " << opId);
+    static unsigned int parseOpId(const BSONObj& cmdObj) {
+        long long opId;
+        uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &opId));
+        return KillOpCmdBase::convertOpId(opId);
     }
 
     Status checkAuthForCommand(Client* client,
@@ -114,7 +86,7 @@ public:
             AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
         if (isAuthenticated) {
             long long opId = parseOpId(cmdObj);
-            auto swLkAndOp = _findOp(client, opId);
+            auto swLkAndOp = findOp(client, opId);
             if (swLkAndOp.isOK()) {
                 // We were able to find the Operation, and we were authorized to interact with it.
                 return Status::OK();
@@ -131,13 +103,7 @@ public:
 
         log() << "going to kill op: " << opId;
         result.append("info", "attempting to kill op");
-        auto swLkAndOp = _findOp(opCtx->getClient(), opId);
-        if (swLkAndOp.isOK()) {
-            stdx::unique_lock<Client> lk;
-            OperationContext* opCtxToKill;
-            std::tie(lk, opCtxToKill) = std::move(swLkAndOp.getValue());
-            opCtx->getServiceContext()->killOperation(opCtxToKill);
-        }
+        KillOpCmdBase::killLocalOperation(opCtx, opId, result);
 
         return true;
     }

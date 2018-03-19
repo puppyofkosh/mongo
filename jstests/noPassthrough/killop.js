@@ -48,9 +48,7 @@
 
         assert.soon(
             function() {
-                const filter = {"ns": dbName + "." + collName, "command.filter": {x: 1}};
                 const result = runCurOp();
-                print("Current op results are " + tojson(result));
 
                 if (result.length === 1) {
                     opId = result[0].opid;
@@ -64,30 +62,19 @@
                     tojson(db.currentOp({"ns": dbName + "." + collName}));
             });
 
-        print("opId to kill is " + tojson(opId));
-        if (FixtureHelpers.isMongos(db)) {
-            // mongos expects opId to be a string.
-            opId = opId.toString();
-        }
-
-        print("ian Running killOp");
         assert.commandWorked(db.killOp(opId));
 
-        print("ian Running curOp");
         let result = runCurOp();
         assert(result.length === 1, tojson(result));
         assert(result[0].hasOwnProperty("killPending"));
         assert.eq(true, result[0].killPending);
 
-        print("ian disabling failpoint");
         assert.commandWorked(connToSetFailPointOn.adminCommand(
             {"configureFailPoint": failPointName, "mode": "off"}));
 
-        print("ian awaiting shell");
         const exitCode = awaitShell({checkExitSuccess: false});
         assert.neq(0, exitCode, "Expected shell to exit with failure due to operation kill");
 
-        print("ian rerun curop shell");
         result = runCurOp();
         assert(result.length === 0, tojson(result));
     }
@@ -102,7 +89,6 @@
     runTest(st.s, shardConn, false);
 
     // Test killOp against mongos, killing the mongos opId.
-    print("ian: part 3");
     runTest(st.s, shardConn, true);
 
     st.stop();

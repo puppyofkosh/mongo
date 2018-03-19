@@ -41,6 +41,7 @@
 #include "mongo/db/audit.h"
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/commands/kill_op_common.h"
 #include "mongo/rpc/metadata.h"
 #include "mongo/s/client/shard.h"
 #include "mongo/s/client/shard_registry.h"
@@ -51,46 +52,27 @@
 namespace mongo {
 namespace {
 
-class ClusterKillOpCommand : public BasicCommand {
-    bool killLocalOperation(OperationContext* opCtx,
-                            const std::string& opToKill,
-                            BSONObjBuilder& result) {
-        unsigned int opId;
-        uassertStatusOK(parseNumberFromStringWithBase(opToKill, 10, &opId));
-
-        auto swLkAndOp = opCtx->getServiceContext()->findOperationContext(opId);
-        if (swLkAndOp.isOK()) {
-            AuthorizationSession* authzSession = AuthorizationSession::get(opCtx->getClient());
-            stdx::unique_lock<Client> lk;
-            OperationContext* opCtxToKill;
-            std::tie(lk, opCtxToKill) = std::move(swLkAndOp.getValue());
-            if (authzSession->isAuthorizedForActionsOnResource(
-                    ResourcePattern::forClusterResource(), ActionType::killop) ||
-                authzSession->isCoauthorizedWithClient(opCtxToKill->getClient())) {
-                opCtx->getServiceContext()->killOperation(opCtxToKill);
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        return true;
-    }
+class ClusterKillOpCommand : public KillOpCmdBase {
 
     bool killShardOperation(OperationContext* opCtx,
-                            const std::string& opToKill,
-                            size_t opSepPos,
+                            const BSONObj& cmdObj,
                             BSONObjBuilder& result) {
-        // If there's no :, we are killing a local operation.
-        invariant(opSepPos != std::string::npos);
+        // The format of op is shardid:opid
+        // This is different than the format passed to the mongod killOp command.
+        std::string opToKill;
+        uassertStatusOK(bsonExtractStringField(cmdObj, "op", &opToKill));
+
+        const auto opSepPos = opToKill.find(':');
+
         uassert(28625,
                 str::stream() << "The op argument to killOp must be of the format shardid:opid"
-                              << " but found \""
-                              << opToKill
-                              << '"',
-                (opToKill.size() >= 3) &&                  // must have at least N:N
-                    (opSepPos != 0) &&                     // can't be :NN
-                    (opSepPos != (opToKill.size() - 1)));  // can't be NN:
+                << " but found \""
+                << opToKill
+                << '"',
+                (opToKill.size() >= 3) &&              // must have at least N:N
+                (opSepPos != std::string::npos) &&     // must have ':' as separator
+                (opSepPos != 0) &&                     // can't be :NN
+                (opSepPos != (opToKill.size() - 1)));  // can't be NN:
 
         auto shardIdent = opToKill.substr(0, opSepPos);
         log() << "want to kill op: " << redact(opToKill);
@@ -102,7 +84,7 @@ class ClusterKillOpCommand : public BasicCommand {
         }
         auto shard = shardStatus.getValue();
 
-        unsigned int opId;
+        int opId;
         uassertStatusOK(parseNumberFromStringWithBase(opToKill.substr(opSepPos + 1), 10, &opId));
 
         // shardid is actually the opid - keeping for backwards compatibility.
@@ -119,8 +101,9 @@ class ClusterKillOpCommand : public BasicCommand {
         return true;
     }
 
+
 public:
-    ClusterKillOpCommand() : BasicCommand("killOp") {}
+    ClusterKillOpCommand() = default;
 
 
     virtual bool supportsWriteConcern(const BSONObj& cmd) const override {
@@ -147,20 +130,16 @@ public:
              const std::string& db,
              const BSONObj& cmdObj,
              BSONObjBuilder& result) final {
-        // The format of op is shardid:opid
-        // This is different than the format passed to the mongod killOp command.
-        std::string opToKill;
-        uassertStatusOK(bsonExtractStringField(cmdObj, "op", &opToKill));
 
-        const auto opSepPos = opToKill.find(':');
-
-        if (opSepPos == std::string::npos) {
-            // Caller is trying to kill a local operation.
-            log() << "ian: Got a opId without shard identifier opId: " << opToKill;
-            return killLocalOperation(opCtx, opToKill, result);
+        long long opId;
+        auto intExtractStatus = bsonExtractIntegerField(cmdObj, "op", &opId);
+        if (intExtractStatus.isOK()) {
+            // It's an opid for a local operation.
+            unsigned int convertedOpId = KillOpCmdBase::convertOpId(opId);
+            return killLocalOperation(opCtx, convertedOpId, result);
         }
 
-        return killShardOperation(opCtx, opToKill, opSepPos, result);
+        return killShardOperation(opCtx, cmdObj, result);
     }
 
 } clusterKillOpCommand;
