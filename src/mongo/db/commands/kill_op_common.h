@@ -41,9 +41,16 @@ public:
     virtual ~KillOpCmdBase() {}
 
 protected:
-    static StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOp(
+    /**
+     * Find the given operation, and check if we're authorized to kill it. On success, returns the
+     * OperationContext as well as the acquired lock for the associated Client.
+     */
+    static StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOpForKilling(
         Client* client, unsigned int opId);
 
+    /**
+     * Kill an operation running on this instance of mongod or mongos.
+     */
     static bool killLocalOperation(OperationContext* opCtx,
                                    unsigned int opToKill,
                                    BSONObjBuilder& result);

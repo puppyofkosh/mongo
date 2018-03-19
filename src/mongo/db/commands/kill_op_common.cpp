@@ -38,8 +38,8 @@
 
 namespace mongo {
 
-StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> KillOpCmdBase::findOp(
-    Client* client, unsigned int opId) {
+StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+KillOpCmdBase::findOpForKilling(Client* client, unsigned int opId) {
     AuthorizationSession* authzSession = AuthorizationSession::get(client);
 
     auto swLockAndOp = client->getServiceContext()->findOperationContext(opId);
@@ -58,24 +58,15 @@ StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> KillOpCmdBa
 bool KillOpCmdBase::killLocalOperation(OperationContext* opCtx,
                                        unsigned int opToKill,
                                        BSONObjBuilder& result) {
-    auto swLkAndOp = opCtx->getServiceContext()->findOperationContext(opToKill);
-    if (swLkAndOp.isOK()) {
-        AuthorizationSession* authzSession = AuthorizationSession::get(opCtx->getClient());
-        stdx::unique_lock<Client> lk;
-        OperationContext* opCtxToKill;
-        std::tie(lk, opCtxToKill) = std::move(swLkAndOp.getValue());
-        if (authzSession->isAuthorizedForActionsOnResource(ResourcePattern::forClusterResource(),
-                                                           ActionType::killop) ||
-            authzSession->isCoauthorizedWithClient(opCtxToKill->getClient())) {
-            opCtx->getServiceContext()->killOperation(opCtxToKill);
-
-            // TODO: fix
-            return true;
-        } else {
-            return false;
-        }
+    auto swLkAndOp = findOpForKilling(opCtx->getClient(), opToKill);
+    if (!swLkAndOp.isOK()) {
+        return false;
     }
 
+    stdx::unique_lock<Client> lk;
+    OperationContext* opCtxToKill;
+    std::tie(lk, opCtxToKill) = std::move(swLkAndOp.getValue());
+    opCtx->getServiceContext()->killOperation(opCtxToKill);
     return true;
 }
 

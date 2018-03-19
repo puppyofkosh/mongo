@@ -86,7 +86,7 @@ public:
             AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
         if (isAuthenticated) {
             long long opId = parseOpId(cmdObj);
-            auto swLkAndOp = findOp(client, opId);
+            auto swLkAndOp = KillOpCmdBase::findOpForKilling(client, opId);
             if (swLkAndOp.isOK()) {
                 // We were able to find the Operation, and we were authorized to interact with it.
                 return Status::OK();
