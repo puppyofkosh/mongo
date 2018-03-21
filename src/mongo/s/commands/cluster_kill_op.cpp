@@ -54,8 +54,6 @@ namespace {
 
 class ClusterKillOpCommand : public KillOpCmdBase {
 public:
-    ClusterKillOpCommand() = default;
-
     Status checkAuthForCommand(Client* client,
                                const std::string& dbname,
                                const BSONObj& cmdObj) const final {
