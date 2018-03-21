@@ -54,6 +54,7 @@
 #include "mongo/s/query/async_results_merger.h"
 #include "mongo/s/query/cluster_client_cursor_impl.h"
 #include "mongo/s/query/cluster_cursor_manager.h"
+#include "mongo/s/query/cluster_query_knobs.h"
 #include "mongo/s/query/establish_cursors.h"
 #include "mongo/s/query/store_possible_cursor.h"
 #include "mongo/s/stale_exception.h"
@@ -272,7 +273,7 @@ CursorId runQueryWithoutRetrying(OperationContext* opCtx,
 
     // Retrieve enough data from the ClusterClientCursor for the first batch of results.
 
-    while (MONGO_FAIL_POINT(waitAfterEstablishingCursorsBeforeMakingBatch)) {
+    while (MONGO_FAIL_POINT(waitInFindAfterEstablishingCursorsBeforeMakingBatch)) {
     }
 
     auto cursorState = ClusterCursorManager::CursorState::NotExhausted;

@@ -37,4 +37,6 @@ namespace mongo {
 MONGO_EXPORT_SERVER_PARAMETER(internalQueryAlwaysMergeOnPrimaryShard, bool, false);
 MONGO_EXPORT_SERVER_PARAMETER(internalQueryProhibitMergingOnMongoS, bool, false);
 
+MONGO_FP_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
+
 }  // namespace mongo

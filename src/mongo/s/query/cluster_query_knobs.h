@@ -29,6 +29,7 @@
 #pragma once
 
 #include "mongo/platform/atomic_word.h"
+#include "mongo/util/fail_point_service.h"
 
 namespace mongo {
 
@@ -44,5 +45,9 @@ extern AtomicBool internalQueryAlwaysMergeOnPrimaryShard;
 // value of internalQueryAlwaysMergeOnPrimaryShard. False by default, meaning that pipelines capable
 // of merging on mongoS will always do so.
 extern AtomicBool internalQueryProhibitMergingOnMongoS;
+
+// Failpoint for making find hang on mongos.
+MONGO_FP_FORWARD_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
+
 
 }  // namespace mongo
