@@ -123,9 +123,10 @@ public:
     static BSONObj transformSortSpec(const BSONObj& sortSpec);
 
     /**
-     * Helper for waiting in failpoints.
-     * 'curOpMsg' - the string to set the CurOp message to while hanging on the failpoint.
-     * 'whileWaiting' - a function to be called periodically while waiting on the failpoint.
+     * This helper function works much like MONGO_FAIL_POINT_PAUSE_WHILE_SET, but additionally
+     * calls whileWaiting() at regular intervals, in order to allow the caller to release and
+     * reacquire locks if necessary to avoid deadlocks. Finally, it also sets the 'msg' field of
+     * the opCtx's CurOp to the given string while the failpoint is active.
      */
     static void waitWhileFailPointEnabled(FailPoint* failPoint,
                                           OperationContext* opCtx,

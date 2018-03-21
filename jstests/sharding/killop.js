@@ -39,10 +39,8 @@
         function() {
             const result = runCurOp();
 
-            // TODO: Check the message/comment
             if (result.length === 1 &&
                 result[0].msg === "waitInFindAfterEstablishingCursorsBeforeMakingBatch") {
-                print("Result is " + tojson(result[0]));
                 opId = result[0].opid;
                 return true;
             }

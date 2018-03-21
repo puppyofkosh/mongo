@@ -289,7 +289,9 @@ public:
 
         ClientCursor* cursor = ccPin.getValue().getCursor();
 
-        // Only used by the failpoints.
+        // Only used by the failpoints. Releases and re-acquires the collection readLock at regular
+        // intervals, in order to avoid deadlocks caused by the pinned-cursor failpoints in this
+        // file (see SERVER-21997).
         const auto dropAndReaquireReadLock = [&readLock, opCtx, &request]() {
             readLock.reset();
             readLock.emplace(opCtx, request.nss);

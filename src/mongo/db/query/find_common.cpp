@@ -96,10 +96,6 @@ std::string updateCurOpMsg(OperationContext* opCtx, const std::string& newMsg) {
     return oldMsg;
 }
 
-// This helper function works much like MONGO_FAIL_POINT_PAUSE_WHILE_SET, but it additionally
-// releases and re-acquires the collection readLock at regular intervals, in order to avoid
-// deadlocks caused by the pinned-cursor failpoints in this file (see SERVER-21997). Finally, it
-// also sets the 'msg' field of the opCtx's CurOp to the given string while the failpoint is active.
 void FindCommon::waitWhileFailPointEnabled(FailPoint* failPoint,
                                            OperationContext* opCtx,
                                            const std::string& curOpMsg,
