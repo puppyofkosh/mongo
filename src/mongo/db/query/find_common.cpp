@@ -37,6 +37,8 @@
 
 namespace mongo {
 
+MONGO_FP_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
+
 MONGO_FP_DECLARE(disableAwaitDataForGetMoreCmd);
 
 MONGO_FP_DECLARE(waitAfterPinningCursorBeforeGetMoreBatch);

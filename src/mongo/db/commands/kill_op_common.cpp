@@ -39,6 +39,28 @@
 
 namespace mongo {
 
+Status KillOpCmdBase::checkAuthForCommand(Client* client,
+                                          const std::string& dbname,
+                                          const BSONObj& cmdObj) const {
+    AuthorizationSession* authzSession = AuthorizationSession::get(client);
+
+    if (authzSession->isAuthorizedForActionsOnResource(ResourcePattern::forClusterResource(),
+                                                       ActionType::killop)) {
+        // If we have administrative permission to run killop, we don't need to traverse the
+        // Client list to figure out if we own the operation which will be terminated.
+        return Status::OK();
+    }
+
+    bool isAuthenticated = AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
+    if (isAuthenticated) {
+        // A more fine-grained auth check, which will ensure that we're allowed to kill the
+        // given opId, will be performed in the command body.
+        return Status::OK();
+    }
+    return Status(ErrorCodes::Unauthorized, "Unauthorized");
+}
+
+
 StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
 KillOpCmdBase::findOperationContext(ServiceContext* serviceContext, unsigned int opId) {
     for (ServiceContext::LockedClientsCursor cursor(serviceContext);

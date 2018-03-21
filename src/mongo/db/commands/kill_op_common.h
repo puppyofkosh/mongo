@@ -52,6 +52,10 @@ public:
         return true;
     }
 
+    Status checkAuthForCommand(Client* client,
+                               const std::string& dbname,
+                               const BSONObj& cmdObj) const final;
+
 protected:
     /**
      * Given an operation ID, search for an OperationContext with that ID. Returns either an error,

@@ -54,14 +54,6 @@ namespace {
 
 class ClusterKillOpCommand : public KillOpCmdBase {
 public:
-    Status checkAuthForCommand(Client* client,
-                               const std::string& dbname,
-                               const BSONObj& cmdObj) const final {
-        bool isAuthorized = AuthorizationSession::get(client)->isAuthorizedForActionsOnResource(
-            ResourcePattern::forClusterResource(), ActionType::killop);
-        return isAuthorized ? Status::OK() : Status(ErrorCodes::Unauthorized, "Unauthorized");
-    }
-
     bool run(OperationContext* opCtx,
              const std::string& db,
              const BSONObj& cmdObj,

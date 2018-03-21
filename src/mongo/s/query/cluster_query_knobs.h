@@ -46,8 +46,4 @@ extern AtomicBool internalQueryAlwaysMergeOnPrimaryShard;
 // of merging on mongoS will always do so.
 extern AtomicBool internalQueryProhibitMergingOnMongoS;
 
-// Failpoint for making find hang on mongos.
-MONGO_FP_FORWARD_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
-
-
 }  // namespace mongo
