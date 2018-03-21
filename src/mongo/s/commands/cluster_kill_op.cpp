@@ -53,15 +53,47 @@ namespace mongo {
 namespace {
 
 class ClusterKillOpCommand : public KillOpCmdBase {
+public:
+    ClusterKillOpCommand() = default;
 
+    Status checkAuthForCommand(Client* client,
+                               const std::string& dbname,
+                               const BSONObj& cmdObj) const final {
+        bool isAuthorized = AuthorizationSession::get(client)->isAuthorizedForActionsOnResource(
+            ResourcePattern::forClusterResource(), ActionType::killop);
+        return isAuthorized ? Status::OK() : Status(ErrorCodes::Unauthorized, "Unauthorized");
+    }
+
+    bool run(OperationContext* opCtx,
+             const std::string& db,
+             const BSONObj& cmdObj,
+             BSONObjBuilder& result) final {
+
+        BSONElement element = cmdObj.getField("op");
+        uassert(50746, "Did not provide \"op\" field", element.ok());
+
+        if (element.type() == BSONType::String) {
+            // It's a string. Should be of the form shardid:opid.
+            return killShardOperation(opCtx, element.String(), result);
+        } else if (element.isNumber()) {
+            long long opId;
+            uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &opId));
+            // It's an opid for a local operation.
+            const unsigned int convertedOpId = KillOpCmdBase::convertOpId(opId);
+            killLocalOperation(opCtx, convertedOpId, result);
+            return true;
+        }
+
+        uasserted(50747,
+                  str::stream() << "\"op\" field was of unsupported type " << element.type());
+    }
+
+private:
     bool killShardOperation(OperationContext* opCtx,
-                            const BSONObj& cmdObj,
+                            const std::string& opToKill,
                             BSONObjBuilder& result) {
         // The format of op is shardid:opid
         // This is different than the format passed to the mongod killOp command.
-        std::string opToKill;
-        uassertStatusOK(bsonExtractStringField(cmdObj, "op", &opToKill));
-
         const auto opSepPos = opToKill.find(':');
 
         uassert(28625,
@@ -100,48 +132,6 @@ class ClusterKillOpCommand : public KillOpCmdBase {
         // whether the shard reported success or not.
         return true;
     }
-
-
-public:
-    ClusterKillOpCommand() = default;
-
-
-    virtual bool supportsWriteConcern(const BSONObj& cmd) const override {
-        return false;
-    }
-
-    AllowedOnSecondary secondaryAllowed(ServiceContext*) const final {
-        return AllowedOnSecondary::kAlways;
-    }
-
-    bool adminOnly() const final {
-        return true;
-    }
-
-    Status checkAuthForCommand(Client* client,
-                               const std::string& dbname,
-                               const BSONObj& cmdObj) const final {
-        bool isAuthorized = AuthorizationSession::get(client)->isAuthorizedForActionsOnResource(
-            ResourcePattern::forClusterResource(), ActionType::killop);
-        return isAuthorized ? Status::OK() : Status(ErrorCodes::Unauthorized, "Unauthorized");
-    }
-
-    bool run(OperationContext* opCtx,
-             const std::string& db,
-             const BSONObj& cmdObj,
-             BSONObjBuilder& result) final {
-
-        long long opId;
-        auto intExtractStatus = bsonExtractIntegerField(cmdObj, "op", &opId);
-        if (intExtractStatus.isOK()) {
-            // It's an opid for a local operation.
-            unsigned int convertedOpId = KillOpCmdBase::convertOpId(opId);
-            return killLocalOperation(opCtx, convertedOpId, result);
-        }
-
-        return killShardOperation(opCtx, cmdObj, result);
-    }
-
 } clusterKillOpCommand;
 
 }  // namespace

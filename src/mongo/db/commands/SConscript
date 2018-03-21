@@ -263,8 +263,7 @@ env.Library(
         'current_op_common',
         'dcommands_fcv',
         'fsync_locked',
-        'killcursors_common',
-        'kill_op_common',
+        'kill_common',
         'write_commands_common',
     ],
     LIBDEPS_PRIVATE=[
@@ -273,22 +272,11 @@ env.Library(
     ],
 )
 
-env.Library(
-    target='killcursors_common',
-    source=[
-        'killcursors_common.cpp',
-    ],
-    LIBDEPS=[
-        '$BUILD_DIR/mongo/db/audit',
-        '$BUILD_DIR/mongo/db/commands',
-        '$BUILD_DIR/mongo/db/auth/authorization_manager_global',
-        '$BUILD_DIR/mongo/db/query/command_request_response',
-    ],
-)
 
 env.Library(
-    target='kill_op_common',
+    target='kill_common',
     source=[
+        'killcursors_common.cpp',
         'kill_op_common.cpp',
     ],
     LIBDEPS=[

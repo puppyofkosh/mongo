@@ -1003,7 +1003,7 @@ env.Library(
         "cloner",
         "collection_index_usage_tracker",
         "commands/dcommands",
-        "commands/killcursors_common",
+        "commands/kill_common",
         "common",
         "concurrency/lock_manager",
         "concurrency/write_conflict_exception",

@@ -49,21 +49,6 @@ namespace mongo {
 
 class KillOpCommand : public KillOpCmdBase {
 public:
-    KillOpCommand() = default;
-
-
-    virtual bool supportsWriteConcern(const BSONObj& cmd) const override {
-        return false;
-    }
-
-    AllowedOnSecondary secondaryAllowed(ServiceContext*) const override {
-        return AllowedOnSecondary::kAlways;
-    }
-
-    bool adminOnly() const final {
-        return true;
-    }
-
     static unsigned int parseOpId(const BSONObj& cmdObj) {
         long long opId;
         uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &opId));
@@ -85,12 +70,9 @@ public:
         bool isAuthenticated =
             AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
         if (isAuthenticated) {
-            long long opId = parseOpId(cmdObj);
-            auto swLkAndOp = KillOpCmdBase::findOpForKilling(client, opId);
-            if (swLkAndOp.isOK()) {
-                // We were able to find the Operation, and we were authorized to interact with it.
-                return Status::OK();
-            }
+            // A more fine-grained auth check, which will ensure that we're allowed to kill the
+            // given opId, will be performed in the command body.
+            return Status::OK();
         }
         return Status(ErrorCodes::Unauthorized, "Unauthorized");
     }
@@ -102,7 +84,6 @@ public:
         long long opId = parseOpId(cmdObj);
 
         log() << "going to kill op: " << opId;
-        result.append("info", "attempting to kill op");
         KillOpCmdBase::killLocalOperation(opCtx, opId, result);
 
         return true;

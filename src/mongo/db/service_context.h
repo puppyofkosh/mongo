@@ -295,13 +295,6 @@ public:
     }
 
     /**
-     * Given an operation ID, search for an OperationContext with that ID. Returns either an error,
-     * or the OperationContext found, along with the (acquired) lock for the associated Client.
-     */
-    StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOperationContext(
-        unsigned int opId);
-
-    /**
      * Kills the operation "opCtx" with the code "killCode", if opCtx has not already been killed.
      * Caller must own the lock on opCtx->getClient, and opCtx->getServiceContext() must be the same
      *as
