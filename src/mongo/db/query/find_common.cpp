@@ -37,6 +37,19 @@
 
 namespace mongo {
 
+namespace {
+// Helper function which sets the 'msg' field of the opCtx's CurOp to the specified string, and
+// returns the original value of the field.
+std::string updateCurOpMsg(OperationContext* opCtx, const std::string& newMsg) {
+    stdx::lock_guard<Client> lk(*opCtx->getClient());
+    auto oldMsg = CurOp::get(opCtx)->getMessage();
+    CurOp::get(opCtx)->setMessage_inlock(newMsg.c_str());
+    return oldMsg;
+}
+
+}  // namespace
+
+
 MONGO_FP_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
 
 MONGO_FP_DECLARE(disableAwaitDataForGetMoreCmd);
@@ -87,15 +100,6 @@ BSONObj FindCommon::transformSortSpec(const BSONObj& sortSpec) {
     }
 
     return comparatorBob.obj();
-}
-
-// Helper function which sets the 'msg' field of the opCtx's CurOp to the specified string, and
-// returns the original value of the field.
-std::string updateCurOpMsg(OperationContext* opCtx, const std::string& newMsg) {
-    stdx::lock_guard<Client> lk(*opCtx->getClient());
-    auto oldMsg = CurOp::get(opCtx)->getMessage();
-    CurOp::get(opCtx)->setMessage_inlock(newMsg.c_str());
-    return oldMsg;
 }
 
 void FindCommon::waitWhileFailPointEnabled(FailPoint* failPoint,

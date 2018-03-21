@@ -4,29 +4,25 @@
 (function() {
     "use strict";
 
-    const st = new ShardingTest({shards: 2, mongos: 1});
+    const st = new ShardingTest({shards: 2});
     const conn = st.s;
 
-    const dbName = "killop";
-    const collName = "test";
-
-    const db = conn.getDB(dbName);
+    const db = conn.getDB("killOp");
+    const coll = db.test;
     assert.commandWorked(db.dropDatabase());
-    assert.writeOK(db.getCollection(collName).insert({x: 1}));
+    assert.writeOK(db.getCollection(coll.getName()).insert({x: 1}));
 
-    // Decide which node (mongos or mongod) we need to set a failpoint on.
-    let failPointName = "waitInFindAfterEstablishingCursorsBeforeMakingBatch";
-    let connToSetFailPointOn = conn;
-
+    const kFailPointName = "waitInFindAfterEstablishingCursorsBeforeMakingBatch";
     assert.commandWorked(
-        conn.adminCommand({"configureFailPoint": failPointName, "mode": "alwaysOn"}));
+        conn.adminCommand({"configureFailPoint": kFailPointName, "mode": "alwaysOn"}));
 
-    const queryToKill = "assert.commandWorked(db.getSiblingDB('" + dbName +
-        "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
+    const queryToKill = "assert.commandFailedWithCode(db.getSiblingDB('" + db.getName() +
+        "').runCommand({find: '" + coll.getName() + "', " +
+        "filter: {x: 1}}), ErrorCodes.Interrupted);";
     const awaitShell = startParallelShell(queryToKill, conn.port);
 
     function runCurOp() {
-        const filter = {"ns": dbName + "." + collName, "command.filter": {x: 1}};
+        const filter = {"ns": coll.getFullName(), "command.filter": {x: 1}};
         return db.getSiblingDB("admin")
             .aggregate([{$currentOp: {localOps: true}}, {$match: filter}])
             .toArray();
@@ -39,6 +35,7 @@
         function() {
             const result = runCurOp();
 
+            // Check the msg field to be sure that the failpoint has been reached.
             if (result.length === 1 &&
                 result[0].msg === "waitInFindAfterEstablishingCursorsBeforeMakingBatch") {
                 opId = result[0].opid;
@@ -49,7 +46,7 @@
         },
         function() {
             return "Failed to find operation in currentOp() output: " +
-                tojson(db.currentOp({"ns": dbName + "." + collName}));
+                tojson(db.currentOp({"ns": coll.getFullName()}));
         });
 
     // Kill the operation.
@@ -62,10 +59,9 @@
     assert.eq(true, result[0].killPending);
 
     // Release the failpoint. The operation should check for interrupt and then finish.
-    assert.commandWorked(conn.adminCommand({"configureFailPoint": failPointName, "mode": "off"}));
+    assert.commandWorked(conn.adminCommand({"configureFailPoint": kFailPointName, "mode": "off"}));
 
-    const exitCode = awaitShell({checkExitSuccess: false});
-    assert.neq(0, exitCode, "Expected shell to exit with failure due to operation kill");
+    const exitCode = awaitShell();
 
     result = runCurOp();
     assert(result.length === 0, tojson(result));

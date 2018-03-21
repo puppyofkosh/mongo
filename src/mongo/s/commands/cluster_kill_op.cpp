@@ -64,13 +64,10 @@ public:
 
         if (element.type() == BSONType::String) {
             // It's a string. Should be of the form shardid:opid.
-            return killShardOperation(opCtx, element.String(), result);
+            return killShardOperation(opCtx, element.str(), result);
         } else if (element.isNumber()) {
-            long long opId;
-            uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &opId));
-            // It's an opid for a local operation.
-            const unsigned int convertedOpId = KillOpCmdBase::convertOpId(opId);
-            killLocalOperation(opCtx, convertedOpId, result);
+            const unsigned int opId = KillOpCmdBase::parseOpId(cmdObj);
+            killLocalOperation(opCtx, opId, result);
             return true;
         }
 

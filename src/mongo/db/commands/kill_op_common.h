@@ -29,6 +29,7 @@
 #include "mongo/db/commands.h"
 
 namespace mongo {
+class OperationContext;
 
 /**
  * Base class for the killOp command, which attempts to kill a given operation. Contains code
@@ -79,11 +80,11 @@ protected:
                                    BSONObjBuilder& result);
 
     /**
-     * Convert operation from signed long long to unsigned int. Since BSON only supports signed
-     * ints, and an opId is unsigned, we deal with the conversion from a negative signed int to
-     * an unsigned int here.
+     * Extract the "op" field from cmdObj. Will also convert operation from signed long long to
+     * unsigned int. Since BSON only supports signed ints, and an opId is unsigned, we deal with
+     * the conversion from a negative signed int to an unsigned int here.
      */
-    static unsigned int convertOpId(long long op);
+    static unsigned int parseOpId(const BSONObj& cmdObj);
 };
 
 }  // namespace mongo

@@ -49,17 +49,11 @@ namespace mongo {
 
 class KillOpCommand : public KillOpCmdBase {
 public:
-    static unsigned int parseOpId(const BSONObj& cmdObj) {
-        long long opId;
-        uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &opId));
-        return KillOpCmdBase::convertOpId(opId);
-    }
-
     bool run(OperationContext* opCtx,
              const std::string& db,
              const BSONObj& cmdObj,
              BSONObjBuilder& result) final {
-        long long opId = parseOpId(cmdObj);
+        long long opId = KillOpCmdBase::parseOpId(cmdObj);
 
         log() << "going to kill op: " << opId;
         KillOpCmdBase::killLocalOperation(opCtx, opId, result);

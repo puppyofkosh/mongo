@@ -96,21 +96,20 @@ KillOpCmdBase::findOpForKilling(Client* client, unsigned int opId) {
 void KillOpCmdBase::killLocalOperation(OperationContext* opCtx,
                                        unsigned int opToKill,
                                        BSONObjBuilder& result) {
-    auto lkAndOp = uassertStatusOK(findOpForKilling(opCtx->getClient(), opToKill));
-
     stdx::unique_lock<Client> lk;
     OperationContext* opCtxToKill;
-    std::tie(lk, opCtxToKill) = std::move(lkAndOp);
+    std::tie(lk, opCtxToKill) = uassertStatusOK(findOpForKilling(opCtx->getClient(), opToKill));
+
     invariant(lk);
     opCtx->getServiceContext()->killOperation(opCtxToKill);
 }
 
-unsigned int KillOpCmdBase::convertOpId(long long op) {
-    // Internally opid is an unsigned 32-bit int, but as BSON only has signed integer types,
-    // we wrap values exceeding 2,147,483,647 to negative numbers. The following undoes this
-    // transformation, so users can use killOp on the (negative) opid they received.
+unsigned int KillOpCmdBase::parseOpId(const BSONObj& cmdObj) {
+    long long op;
+    uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &op));
+
     uassert(26823,
-            str::stream() << "invalid op : " << op,
+            str::stream() << "invalid op : " << op << ". Op ID is too big for 32 signed bits",
             (op >= std::numeric_limits<int>::min()) && (op <= std::numeric_limits<int>::max()));
 
     return static_cast<unsigned int>(op);

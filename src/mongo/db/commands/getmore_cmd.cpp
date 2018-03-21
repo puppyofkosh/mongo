@@ -289,16 +289,17 @@ public:
 
         ClientCursor* cursor = ccPin.getValue().getCursor();
 
-        // Only used by the failpoints. Releases and re-acquires the collection readLock at regular
-        // intervals, in order to avoid deadlocks caused by the pinned-cursor failpoints in this
-        // file (see SERVER-21997).
+        // Only used by the failpoints.
         const auto dropAndReaquireReadLock = [&readLock, opCtx, &request]() {
             readLock.reset();
             readLock.emplace(opCtx, request.nss);
         };
+
         // If the 'waitAfterPinningCursorBeforeGetMoreBatch' fail point is enabled, set the 'msg'
-        // field of this operation's CurOp to signal that we've hit this point and then spin until
-        // the failpoint is released.
+        // field of this operation's CurOp to signal that we've hit this point and then repeatedly
+        // release and re-acquire the collection readLock at regular intervals until the failpoint
+        // is released. This is done in order to avoid deadlocks caused by the pinned-cursor
+        // failpoints in this file (see SERVER-21997).
         if (MONGO_FAIL_POINT(waitAfterPinningCursorBeforeGetMoreBatch)) {
             FindCommon::waitWhileFailPointEnabled(&waitAfterPinningCursorBeforeGetMoreBatch,
                                                   opCtx,
