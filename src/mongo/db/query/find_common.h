@@ -121,6 +121,16 @@ public:
      * meta-sort specification).
      */
     static BSONObj transformSortSpec(const BSONObj& sortSpec);
+
+    /**
+     * Helper for waiting in failpoints.
+     * 'curOpMsg' - the string to set the CurOp message to while hanging on the failpoint.
+     * 'whileWaiting' - a function to be called periodically while waiting on the failpoint.
+     */
+    static void waitWhileFailPointEnabled(FailPoint* failPoint,
+                                          OperationContext* opCtx,
+                                          const std::string& curOpMsg,
+                                          const std::function<void(void)>& whileWaiting = nullptr);
 };
 
 }  // namespace mongo

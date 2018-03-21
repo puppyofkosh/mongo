@@ -15,14 +15,14 @@
     assert.writeOK(db.getCollection(collName).insert({x: 1}));
 
     // Decide which node (mongos or mongod) we need to set a failpoint on.
-    let failPointName = "waitAfterEstablishingCursorsBeforeMakingBatch";
+    let failPointName = "waitInFindAfterEstablishingCursorsBeforeMakingBatch";
     let connToSetFailPointOn = conn;
 
-    assert.commandWorked(conn.adminCommand(
-        {"configureFailPoint": failPointName, "mode": "alwaysOn"}));
+    assert.commandWorked(
+        conn.adminCommand({"configureFailPoint": failPointName, "mode": "alwaysOn"}));
 
     const queryToKill = "assert.commandWorked(db.getSiblingDB('" + dbName +
-          "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
+        "').runCommand({find: '" + collName + "', filter: {x: 1}}));";
     const awaitShell = startParallelShell(queryToKill, conn.port);
 
     function runCurOp() {
@@ -40,7 +40,9 @@
             const result = runCurOp();
 
             // TODO: Check the message/comment
-            if (result.length === 1) {
+            if (result.length === 1 &&
+                result[0].msg === "waitInFindAfterEstablishingCursorsBeforeMakingBatch") {
+                print("Result is " + tojson(result[0]));
                 opId = result[0].opid;
                 return true;
             }
@@ -62,8 +64,7 @@
     assert.eq(true, result[0].killPending);
 
     // Release the failpoint. The operation should check for interrupt and then finish.
-    assert.commandWorked(conn.adminCommand(
-        {"configureFailPoint": failPointName, "mode": "off"}));
+    assert.commandWorked(conn.adminCommand({"configureFailPoint": failPointName, "mode": "off"}));
 
     const exitCode = awaitShell({checkExitSuccess: false});
     assert.neq(0, exitCode, "Expected shell to exit with failure due to operation kill");
