@@ -273,9 +273,8 @@ CursorId runQueryWithoutRetrying(OperationContext* opCtx,
 
     // Retrieve enough data from the ClusterClientCursor for the first batch of results.
 
-    FindCommon::waitWhileFailPointEnabled(&waitInFindAfterEstablishingCursorsBeforeMakingBatch,
-                                          opCtx,
-                                          "waitInFindAfterEstablishingCursorsBeforeMakingBatch");
+    FindCommon::waitWhileFailPointEnabled(
+        &waitInFindBeforeMakingBatch, opCtx, "waitInFindBeforeMakingBatch");
 
     auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
     int bytesBuffered = 0;

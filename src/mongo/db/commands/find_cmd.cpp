@@ -332,9 +332,7 @@ public:
         }
 
         FindCommon::waitWhileFailPointEnabled(
-            &waitInFindAfterEstablishingCursorsBeforeMakingBatch,
-            opCtx,
-            "waitInFindAfterEstablishingCursorsBeforeMakingBatch");
+            &waitInFindBeforeMakingBatch, opCtx, "waitInFindBeforeMakingBatch");
 
         const QueryRequest& originalQR = exec->getCanonicalQuery()->getQueryRequest();
 

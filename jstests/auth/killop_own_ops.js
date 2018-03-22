@@ -13,7 +13,7 @@
     function runTest(m) {
         var db = m.getDB("foo");
         var admin = m.getDB("admin");
-        const kFailPointName = "waitInFindAfterEstablishingCursorsBeforeMakingBatch";
+        const kFailPointName = "waitInFindBeforeMakingBatch";
 
         admin.createUser({user: 'admin', pwd: 'password', roles: jsTest.adminUserRoles});
         admin.auth('admin', 'password');
@@ -31,7 +31,6 @@
         t.save({x: 1});
 
         admin.logout();
-        print("a");
 
         // Only used for nice error messages.
         function getAllLocalOps() {
@@ -58,7 +57,6 @@
                 if ((o.active || o.waitingForLock) && o.command &&
                     o.command.find === "jstests_killop" && o.command.comment === "kill_own_ops" &&
                     o.msg === kFailPointName) {
-                    print("OP: " + tojson(o));
                     ids.push(o.opid);
                 }
             }
@@ -73,12 +71,10 @@
         assert.commandWorked(
             db.adminCommand({configureFailPoint: kFailPointName, mode: "alwaysOn"}));
         var s1 = startParallelShell(queryAsReader, m.port);
-        print("b");
         jsTestLog("Finding ops in $currentOp output");
         var o = [];
         assert.soon(
             function() {
-                print("c");
                 o = ops();
                 return o.length == 1;
             },
@@ -86,7 +82,6 @@
                 return tojson(getAllLocalOps());
             },
             60000);
-        print("d");
         jsTestLog("Checking that another user cannot see or kill the op");
         db.logout();
         db.auth('otherReader', 'otherReader');
@@ -96,7 +91,6 @@
         db.auth('reader', 'reader');
         assert.eq(1, ops().length);
         db.logout();
-        print("e");
         jsTestLog("Checking that originating user can kill operation");
         var start = new Date();
         db.auth('reader', 'reader');
@@ -122,7 +116,6 @@
         var o2 = [];
         assert.soon(
             function() {
-                print("f");
                 o2 = ops();
                 return o2.length == 1;
             },

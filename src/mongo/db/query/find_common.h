@@ -55,8 +55,7 @@ class BSONObj;
 class QueryRequest;
 
 // Failpoint for making find hang.
-// TODO: rename to not involve "establishCursors"
-MONGO_FP_FORWARD_DECLARE(waitInFindAfterEstablishingCursorsBeforeMakingBatch);
+MONGO_FP_FORWARD_DECLARE(waitInFindBeforeMakingBatch);
 
 // Failpoint for making getMore not wait for an awaitdata cursor. Allows us to avoid waiting during
 // tests.

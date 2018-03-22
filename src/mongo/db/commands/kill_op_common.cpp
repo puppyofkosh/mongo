@@ -42,15 +42,6 @@ namespace mongo {
 Status KillOpCmdBase::checkAuthForCommand(Client* client,
                                           const std::string& dbname,
                                           const BSONObj& cmdObj) const {
-    AuthorizationSession* authzSession = AuthorizationSession::get(client);
-
-    if (authzSession->isAuthorizedForActionsOnResource(ResourcePattern::forClusterResource(),
-                                                       ActionType::killop)) {
-        // If we have administrative permission to run killop, we don't need to traverse the
-        // Client list to figure out if we own the operation which will be terminated.
-        return Status::OK();
-    }
-
     bool isAuthenticated = AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
     if (isAuthenticated) {
         // A more fine-grained auth check, which will ensure that we're allowed to kill the
@@ -109,7 +100,8 @@ unsigned int KillOpCmdBase::parseOpId(const BSONObj& cmdObj) {
     uassertStatusOK(bsonExtractIntegerField(cmdObj, "op", &op));
 
     uassert(26823,
-            str::stream() << "invalid op : " << op << ". Op ID is too big for 32 signed bits",
+            str::stream() << "invalid op : " << op
+                          << ". Op ID cannot be represented with 32 signed bits",
             (op >= std::numeric_limits<int>::min()) && (op <= std::numeric_limits<int>::max()));
 
     return static_cast<unsigned int>(op);

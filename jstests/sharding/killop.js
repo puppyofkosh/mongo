@@ -12,7 +12,7 @@
     assert.commandWorked(db.dropDatabase());
     assert.writeOK(db.getCollection(coll.getName()).insert({x: 1}));
 
-    const kFailPointName = "waitInFindAfterEstablishingCursorsBeforeMakingBatch";
+    const kFailPointName = "waitInFindBeforeMakingBatch";
     assert.commandWorked(
         conn.adminCommand({"configureFailPoint": kFailPointName, "mode": "alwaysOn"}));
 
@@ -35,10 +35,10 @@
         function() {
             const result = runCurOp();
 
-            // Check the msg field to be sure that the failpoint has been reached.
-            if (result.length === 1 &&
-                result[0].msg === "waitInFindAfterEstablishingCursorsBeforeMakingBatch") {
+            // Check the 'msg' field to be sure that the failpoint has been reached.
+            if (result.length === 1 && result[0].msg === kFailPointName) {
                 opId = result[0].opid;
+
                 return true;
             }
 
