@@ -60,7 +60,7 @@ public:
              BSONObjBuilder& result) final {
 
         BSONElement element = cmdObj.getField("op");
-        uassert(50746, "Did not provide \"op\" field", element.ok());
+        uassert(50756, "Did not provide \"op\" field", element.ok());
 
         if (element.type() == BSONType::String) {
             // It's a string. Should be of the form shardid:opid.
@@ -71,7 +71,7 @@ public:
             return true;
         }
 
-        uasserted(50747,
+        uasserted(50757,
                   str::stream() << "\"op\" field was of unsupported type " << element.type());
     }
 
