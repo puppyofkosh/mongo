@@ -52,12 +52,7 @@ Status KillOpCmdBase::checkAuthForCommand(Client* client,
     }
 
     bool isAuthenticated = AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
-    if (isAuthenticated) {
-        if (!isKillingLocalOp(cmdObj.getField("op"))) {
-            // We cannot do any further auth checks since the op being killed is not running here.
-            return Status::OK();
-        }
-
+    if (isAuthenticated && isKillingLocalOp(cmdObj.getField("op"))) {
         // Look up the OperationContext and see if we have permission to kill it. This is done once
         // here and again in the command body. The check here in the checkAuthForCommand() function
         // is necessary because if the check fails, it will be picked up by the auditing system.
@@ -113,7 +108,13 @@ void KillOpCmdBase::killLocalOperation(OperationContext* opCtx,
                                        BSONObjBuilder& result) {
     stdx::unique_lock<Client> lk;
     OperationContext* opCtxToKill;
-    std::tie(lk, opCtxToKill) = uassertStatusOK(findOpForKilling(opCtx->getClient(), opToKill));
+    auto sw = findOpForKilling(opCtx->getClient(), opToKill);
+    if (!sw.isOK()) {
+        // killOp always reports success past the auth check.
+        return;
+    }
+
+    std::tie(lk, opCtxToKill) = std::move(sw.getValue());
 
     invariant(lk);
     opCtx->getServiceContext()->killOperation(opCtxToKill);

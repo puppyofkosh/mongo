@@ -65,6 +65,8 @@ public:
         if (isKillingLocalOp(element)) {
             const unsigned int opId = KillOpCmdBase::parseOpId(cmdObj);
             killLocalOperation(opCtx, opId, result);
+
+            // killOp always reports success once past the auth check.
             return true;
         } else if (element.type() == BSONType::String) {
             // It's a string. Should be of the form shardid:opid.

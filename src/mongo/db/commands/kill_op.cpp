@@ -55,9 +55,12 @@ public:
              BSONObjBuilder& result) final {
         long long opId = KillOpCmdBase::parseOpId(cmdObj);
 
+        // Used by tests to check if auth checks passed.
+        result.append("info", "attempting to kill op");
         log() << "going to kill op: " << opId;
         KillOpCmdBase::killLocalOperation(opCtx, opId, result);
 
+        // killOp always reports success once past the auth check.
         return true;
     }
 } killOpCmd;
