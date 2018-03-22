@@ -85,6 +85,8 @@ protected:
      * the conversion from a negative signed int to an unsigned int here.
      */
     static unsigned int parseOpId(const BSONObj& cmdObj);
+
+    static bool isKillingLocalOp(const BSONElement& opElem);
 };
 
 }  // namespace mongo

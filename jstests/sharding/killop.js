@@ -9,16 +9,14 @@
 
     const db = conn.getDB("killOp");
     const coll = db.test;
-    assert.commandWorked(db.dropDatabase());
     assert.writeOK(db.getCollection(coll.getName()).insert({x: 1}));
 
     const kFailPointName = "waitInFindBeforeMakingBatch";
     assert.commandWorked(
         conn.adminCommand({"configureFailPoint": kFailPointName, "mode": "alwaysOn"}));
 
-    const queryToKill = "assert.commandFailedWithCode(db.getSiblingDB('" + db.getName() +
-        "').runCommand({find: '" + coll.getName() + "', " +
-        "filter: {x: 1}}), ErrorCodes.Interrupted);";
+    const queryToKill = `assert.commandFailedWithCode(db.getSiblingDB('${db.getName()}')` +
+        `.runCommand({find: '${coll.getName()}', filter: {x: 1}}), ErrorCodes.Interrupted);`;
     const awaitShell = startParallelShell(queryToKill, conn.port);
 
     function runCurOp() {
@@ -61,7 +59,7 @@
     // Release the failpoint. The operation should check for interrupt and then finish.
     assert.commandWorked(conn.adminCommand({"configureFailPoint": kFailPointName, "mode": "off"}));
 
-    const exitCode = awaitShell();
+    awaitShell();
 
     result = runCurOp();
     assert(result.length === 0, tojson(result));

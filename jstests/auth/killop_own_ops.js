@@ -34,9 +34,7 @@
 
         // Only used for nice error messages.
         function getAllLocalOps() {
-            db.getSiblingDB("admin")
-                .aggregate([{$currentOp: {allUsers: true, localOps: true}}])
-                .toArray();
+            admin.aggregate([{$currentOp: {allUsers: true, localOps: true}}]).toArray();
         }
 
         /**
@@ -44,16 +42,11 @@
          * the contents of their query object.
          */
         function ops(ownOps = true) {
-            const ops = db.getSiblingDB("admin")
-                            .aggregate([{$currentOp: {allUsers: !ownOps, localOps: true}}])
-                            .toArray();
+            const ops =
+                admin.aggregate([{$currentOp: {allUsers: !ownOps, localOps: true}}]).toArray();
 
             var ids = [];
             for (let o of ops) {
-                // We *can't* check for ns, b/c it's not guaranteed to be there unless the query is
-                // active, which it may not be in our polling cycle - particularly b/c we sleep
-                // every
-                // second in both the query and the assert
                 if ((o.active || o.waitingForLock) && o.command &&
                     o.command.find === "jstests_killop" && o.command.comment === "kill_own_ops" &&
                     o.msg === kFailPointName) {

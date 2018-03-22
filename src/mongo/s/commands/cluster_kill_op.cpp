@@ -62,13 +62,13 @@ public:
         BSONElement element = cmdObj.getField("op");
         uassert(50746, "Did not provide \"op\" field", element.ok());
 
-        if (element.type() == BSONType::String) {
-            // It's a string. Should be of the form shardid:opid.
-            return killShardOperation(opCtx, element.str(), result);
-        } else if (element.isNumber()) {
+        if (isKillingLocalOp(element)) {
             const unsigned int opId = KillOpCmdBase::parseOpId(cmdObj);
             killLocalOperation(opCtx, opId, result);
             return true;
+        } else if (element.type() == BSONType::String) {
+            // It's a string. Should be of the form shardid:opid.
+            return killShardOperation(opCtx, element.str(), result);
         }
 
         uasserted(50747,

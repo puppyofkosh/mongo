@@ -42,15 +42,39 @@ namespace mongo {
 Status KillOpCmdBase::checkAuthForCommand(Client* client,
                                           const std::string& dbname,
                                           const BSONObj& cmdObj) const {
+    AuthorizationSession* authzSession = AuthorizationSession::get(client);
+
+    if (authzSession->isAuthorizedForActionsOnResource(ResourcePattern::forClusterResource(),
+                                                       ActionType::killop)) {
+        // If we have administrative permission to run killop, we don't need to traverse the
+        // Client list to figure out if we own the operation which will be terminated.
+        return Status::OK();
+    }
+
     bool isAuthenticated = AuthorizationSession::get(client)->getAuthenticatedUserNames().more();
     if (isAuthenticated) {
-        // A more fine-grained auth check, which will ensure that we're allowed to kill the
-        // given opId, will be performed in the command body.
-        return Status::OK();
+        if (!isKillingLocalOp(cmdObj.getField("op"))) {
+            // We cannot do any further auth checks since the op being killed is not running here.
+            return Status::OK();
+        }
+
+        // Look up the OperationContext and see if we have permission to kill it. This is done once
+        // here and again in the command body. The check here in the checkAuthForCommand() function
+        // is necessary because if the check fails, it will be picked up by the auditing system.
+        long long opId = parseOpId(cmdObj);
+        auto swLkAndOp = KillOpCmdBase::findOpForKilling(client, opId);
+        if (swLkAndOp.isOK()) {
+            // We were able to find the Operation, and we were authorized to interact with it.
+            return Status::OK();
+        }
     }
     return Status(ErrorCodes::Unauthorized, "Unauthorized");
 }
 
+
+bool KillOpCmdBase::isKillingLocalOp(const BSONElement& opElem) {
+    return opElem.isNumber();
+}
 
 StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
 KillOpCmdBase::findOperationContext(ServiceContext* serviceContext, unsigned int opId) {
