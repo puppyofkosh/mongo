@@ -416,9 +416,14 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             pinnedCursor.getValue().getOriginatingCommand());
     }
 
-    // If the fail point is enabled, busy wait until it is disabled.
-    while (MONGO_FAIL_POINT(waitAfterPinningCursorBeforeGetMoreBatch)) {
+    // If the 'waitAfterPinningCursorBeforeGetMoreBatch' fail point is enabled, set the 'msg'
+    // field of this operation's CurOp to signal that we've hit this point.
+    if (MONGO_FAIL_POINT(waitAfterPinningCursorBeforeGetMoreBatch)) {
+        FindCommon::waitWhileFailPointEnabled(&waitAfterPinningCursorBeforeGetMoreBatch,
+                                              opCtx,
+                                              "waitAfterPinningCursorBeforeGetMoreBatch");
     }
+
 
     if (auto readPref = pinnedCursor.getValue().getReadPreference()) {
         ReadPreferenceSetting::get(opCtx) = *readPref;
@@ -445,6 +450,16 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
     long long batchSize = request.batchSize.value_or(0);
     long long startingFrom = pinnedCursor.getValue().getNumReturnedSoFar();
     auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
+
+    // We're about to begin querying the shards to fill the getMore batch. If the
+    // 'waitWithPinnedCursorDuringGetMoreBatch' failpoint is active, set the 'msg' field of this
+    // operation's CurOp to signal that we've hit this point and then spin until the failpoint is
+    // released.
+    if (MONGO_FAIL_POINT(waitWithPinnedCursorDuringGetMoreBatch)) {
+        FindCommon::waitWhileFailPointEnabled(&waitWithPinnedCursorDuringGetMoreBatch,
+                                              opCtx,
+                                              "waitWithPinnedCursorDuringGetMoreBatch");
+    }
 
     while (!FindCommon::enoughForGetMore(batchSize, batch.size())) {
         auto context = batch.empty()
@@ -499,6 +514,14 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
     CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
         ? CursorId(0)
         : request.cursorid;
+
+    if (MONGO_FAIL_POINT(waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch)) {
+        FindCommon::waitWhileFailPointEnabled(
+            &waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch,
+            opCtx,
+            "waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch");
+    }
+
     return CursorResponse(request.nss, idToReturn, std::move(batch), startingFrom);
 }
 

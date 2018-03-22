@@ -12,15 +12,16 @@
 
 (function() {
     "use strict";
+    load("jstests/libs/fixture_helpers.js");  // For "isMongos".
 
-    const conn = MongoRunner.runMongod();
-    assert.neq(null, conn, "mongod failed to start up");
-    const db = conn.getDB("test");
+    // TODO: SERVER-33444 remove shardAsReplicaSet: false
+    const st = new ShardingTest({shards: 2, other: {shardAsReplicaSet: false}});
 
     // Enables the specified 'failPointName', executes 'runGetMoreFunc' function in a parallel
     // shell, waits for the the failpoint to be hit, then kills the cursor and confirms that the
     // kill was successful.
-    function runPinnedCursorKillTest({failPointName, runGetMoreFunc}) {
+    function runPinnedCursorKillTest({conn, failPointName, runGetMoreFunc}) {
+        const db = conn.getDB("test");
         jsTestLog("Running test with failPoint: " + failPointName);
 
         const coll = db.jstest_kill_pinned_cursor;
@@ -52,7 +53,14 @@
             cleanup = startParallelShell(code, conn.port);
 
             // Wait until we know the failpoint has been reached.
-            assert.soon(() => db.currentOp({msg: failPointName}).inprog.length > 0);
+            assert.soon(function() {
+                const arr =
+                    db.getSiblingDB("admin")
+                        .aggregate(
+                            [{$currentOp: {localOps: true}}, {$match: {"msg": failPointName}}])
+                        .toArray();
+                return arr.length > 0;
+            });
 
             // Kill the cursor associated with the command and assert that the kill succeeded.
             cmdRes = db.runCommand({killCursors: coll.getName(), cursors: [cursorId]});
@@ -80,40 +88,52 @@
         assert.eq(cmdRes.cursorsUnknown, []);
     }
 
-    // Test that killing the pinned cursor before it starts building the batch results in a
-    // CursorKilled exception.
-    const testParameters = {
-        failPointName: "waitAfterPinningCursorBeforeGetMoreBatch",
-        runGetMoreFunc: function() {
-            const response = db.runCommand({getMore: cursorId, collection: collName});
-            // We expect that the operation will get interrupted and fail.
-            assert.commandFailedWithCode(response, ErrorCodes.CursorKilled);
+    // Run the test both on the whole cluster and on a standalone.
+    const connsToRunOn = [st.s, st.shard0];
+    for (let conn of connsToRunOn) {
+        jsTestLog("Running on conn: " + tojson(conn));
+        // Test that killing the pinned cursor before it starts building the batch results in a
+        // CursorKilled exception.
+        const testParameters = {
+            conn: conn,
+            failPointName: "waitAfterPinningCursorBeforeGetMoreBatch",
+            runGetMoreFunc: function() {
+                const response = db.runCommand({getMore: cursorId, collection: collName});
+                // We expect that the operation will get interrupted and fail.
+                assert.commandFailedWithCode(response, ErrorCodes.CursorKilled);
+            }
+        };
+
+        runPinnedCursorKillTest(testParameters);
+
+        // Test that killing the pinned cursor while it is building the batch results in a
+        // CursorKilled exception.
+        testParameters.failPointName = "waitWithPinnedCursorDuringGetMoreBatch";
+
+        // Force yield to occur on every PlanExecutor iteration, so that the getMore is guaranteed
+        // to check for interrupts. Only relevant on mongod.
+        const admin = conn.getDB("admin");
+        if (!FixtureHelpers.isMongos(admin)) {
+            assert.commandWorked(
+                admin.runCommand({setParameter: 1, internalQueryExecYieldIterations: 1}));
         }
-    };
 
-    runPinnedCursorKillTest(testParameters);
+        runPinnedCursorKillTest(testParameters);
 
-    // Test that killing the pinned cursor while it is building the batch results in a CursorKilled
-    // exception.
-    testParameters.failPointName = "waitWithPinnedCursorDuringGetMoreBatch";
+        // Test that, if the pinned cursor is killed after it has finished building a batch, that
+        // batch is returned to the client but a subsequent getMore will fail with a
+        // 'CursorNotFound' error.
+        testParameters.failPointName = "waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch";
+        testParameters.runGetMoreFunc = function() {
+            const getMoreCmd = {getMore: cursorId, collection: collName, batchSize: 2};
+            // We expect that the first getMore will succeed, while the second fails because the
+            // cursor has been killed.
+            assert.commandWorked(db.runCommand(getMoreCmd));
+            assert.commandFailedWithCode(db.runCommand(getMoreCmd), ErrorCodes.CursorNotFound);
+        };
 
-    // Force yield to occur on every PlanExecutor iteration, so that the getMore is guaranteed to
-    // check for interrupts.
-    assert.commandWorked(db.adminCommand({setParameter: 1, internalQueryExecYieldIterations: 1}));
+        runPinnedCursorKillTest(testParameters);
+    }
 
-    runPinnedCursorKillTest(testParameters);
-
-    // Test that, if the pinned cursor is killed after it has finished building a batch, that batch
-    // is returned to the client but a subsequent getMore will fail with a 'CursorNotFound' error.
-    testParameters.failPointName = "waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch";
-    testParameters.runGetMoreFunc = function() {
-        const getMoreCmd = {getMore: cursorId, collection: collName, batchSize: 2};
-        // We expect that the first getMore will succeed, while the second fails because the cursor
-        // has been killed.
-        assert.commandWorked(db.runCommand(getMoreCmd));
-        assert.commandFailedWithCode(db.runCommand(getMoreCmd), ErrorCodes.CursorNotFound);
-    };
-
-    runPinnedCursorKillTest(testParameters);
-    MongoRunner.stopMongod(conn);
+    st.stop();
 })();
