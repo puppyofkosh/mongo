@@ -54,7 +54,10 @@ var $config = (function() {
                                  .aggregate([
                                      // idleConnections true so we can also kill cursors which are
                                      // not currently active.
-                                     {$currentOp: {idleConnections: true}},
+                                     // localOps true so that currentOp reports the mongos
+                                     // operations when run on a sharded cluster, instead of the
+                                     // shard's operations.
+                                     {$currentOp: {idleConnections: true, localOps: true}},
                                      // We only about getMores.
                                      {$match: {"command.getMore": {$exists: true}}},
                                      // Only find getMores running on the database for this test.
@@ -116,11 +119,6 @@ var $config = (function() {
          * Choose a random cursor that's open and kill it.
          */
         killCursor: function killCursor(unusedDB, unusedCollName) {
-            if (isMongos(unusedDB)) {
-                // SERVER-33700: We can't list operations running locally on a mongos.
-                return;
-            }
-
             const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
 
             // Not checking the return value, since the cursor may be closed on its own
@@ -133,11 +131,6 @@ var $config = (function() {
         },
 
         killOp: function killOp(unusedDB, unusedCollName) {
-            if (isMongos(unusedDB)) {
-                // SERVER-33700: We can't list operations running locally on a mongos.
-                return;
-            }
-
             const myDB = unusedDB.getSiblingDB(this.uniqueDBName);
             // Not checking return value since the operation may end on its own before we have
             // a chance to kill it.

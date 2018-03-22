@@ -67,7 +67,6 @@ var blacklist = [
     // failures may be due to SERVER-17397 'drops in a sharded cluster may not fully succeed'
     // because it drops and reuses the same namespaces.
     'kill_multicollection_aggregation.js',
-    'invalidated_cursors.js',
 
     'plan_cache_drop_database.js',  // cannot ensureIndex after dropDatabase without sharding first
     'remove_single_document.js',    // our .remove(query, {justOne: true}) calls lack shard keys
