@@ -40,6 +40,7 @@
 #include "mongo/db/clientcursor.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/curop.h"
+#include "mongo/db/curop_failpoint_helpers.h"
 #include "mongo/db/cursor_manager.h"
 #include "mongo/db/db_raii.h"
 #include "mongo/db/exec/working_set_common.h"
@@ -301,10 +302,10 @@ public:
         // is released. This is done in order to avoid deadlocks caused by the pinned-cursor
         // failpoints in this file (see SERVER-21997).
         if (MONGO_FAIL_POINT(waitAfterPinningCursorBeforeGetMoreBatch)) {
-            FindCommon::waitWhileFailPointEnabled(&waitAfterPinningCursorBeforeGetMoreBatch,
-                                                  opCtx,
-                                                  "waitAfterPinningCursorBeforeGetMoreBatch",
-                                                  dropAndReaquireReadLock);
+            CurOpFailpointHelpers::waitWhileFailPointEnabled(&waitAfterPinningCursorBeforeGetMoreBatch,
+                                                             opCtx,
+                                                             "waitAfterPinningCursorBeforeGetMoreBatch",
+                                                             dropAndReaquireReadLock);
         }
 
         // A user can only call getMore on their own cursor. If there were multiple users
@@ -433,10 +434,10 @@ public:
         // operation's CurOp to signal that we've hit this point and then spin until the failpoint
         // is released.
         if (MONGO_FAIL_POINT(waitWithPinnedCursorDuringGetMoreBatch)) {
-            FindCommon::waitWhileFailPointEnabled(&waitWithPinnedCursorDuringGetMoreBatch,
-                                                  opCtx,
-                                                  "waitWithPinnedCursorDuringGetMoreBatch",
-                                                  dropAndReaquireReadLock);
+            CurOpFailpointHelpers::waitWhileFailPointEnabled(&waitWithPinnedCursorDuringGetMoreBatch,
+                                                             opCtx,
+                                                             "waitWithPinnedCursorDuringGetMoreBatch",
+                                                             dropAndReaquireReadLock);
         }
 
         Status batchStatus = generateBatch(opCtx, cursor, request, &nextBatch, &state, &numResults);
@@ -489,7 +490,7 @@ public:
         // failpoint is active, set the 'msg' field of this operation's CurOp to signal that we've
         // hit this point and then spin until the failpoint is released.
         if (MONGO_FAIL_POINT(waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch)) {
-            FindCommon::waitWhileFailPointEnabled(
+            CurOpFailpointHelpers::waitWhileFailPointEnabled(
                 &waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch,
                 opCtx,
                 "waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch",
