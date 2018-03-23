@@ -282,6 +282,7 @@ env.Library(
         '$BUILD_DIR/mongo/db/rw_concern_d',
         '$BUILD_DIR/mongo/db/s/sharding_catalog_manager',
         '$BUILD_DIR/mongo/s/sharding_legacy_api',
+        'kill_common',
         'mongod_fcv',
         'mongod_fsync',
         'standalone',
