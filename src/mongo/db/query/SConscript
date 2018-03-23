@@ -67,7 +67,6 @@ env.Library(
     ],
     LIBDEPS=[
         "$BUILD_DIR/mongo/base",
-        "$BUILD_DIR/mongo/db/curop",
         "$BUILD_DIR/mongo/util/fail_point",
         "collation/collator_icu",
         "datetime/init_timezone_data",
