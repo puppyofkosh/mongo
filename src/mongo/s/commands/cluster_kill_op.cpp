@@ -60,7 +60,7 @@ public:
              BSONObjBuilder& result) final {
 
         BSONElement element = cmdObj.getField("op");
-        uassert(50746, "Did not provide \"op\" field", element.ok());
+        uassert(50756, "Did not provide \"op\" field", element.ok());
 
         if (isKillingLocalOp(element)) {
             const unsigned int opId = KillOpCmdBase::parseOpId(cmdObj);
@@ -73,7 +73,7 @@ public:
             return killShardOperation(opCtx, element.str(), result);
         }
 
-        uasserted(50747,
+        uasserted(50757,
                   str::stream() << "\"op\" field was of unsupported type " << element.type());
     }
 
