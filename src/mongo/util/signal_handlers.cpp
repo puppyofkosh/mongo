@@ -175,6 +175,7 @@ void signalProcessingThread(LogFileStatus rotate) {
             MONGO_IDLE_THREAD_BLOCK;
             return sigwait(&asyncSignals, &actualSignal);
         }();
+        std::cout << "got signal " << actualSignal << std::endl << std::flush;
         fassert(16781, status == 0);
         switch (actualSignal) {
             case SIGUSR1:
@@ -218,6 +219,8 @@ void setupSignalHandlers() {
     sigaddset(&asyncSignals, SIGTERM);
     sigaddset(&asyncSignals, SIGUSR1);
     sigaddset(&asyncSignals, SIGXCPU);
+
+    sigaddset(&asyncSignals, SIGSTOP);
 #endif
 }
 

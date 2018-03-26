@@ -985,14 +985,16 @@ int killDb(int port, ProcessId _pid, int signal) {
 }
 
 int getSignal(const BSONObj& a) {
-    int ret = SIGTERM;
+    int ret = SIGINT;
     if (a.nFields() >= 2) {
+        log() << "ian: found another field!";
         BSONObjIterator i(a);
         i.next();
         BSONElement e = i.next();
         verify(e.isNumber());
         ret = int(e.number());
     }
+    log() << "ian: signal is " << ret;
     return ret;
 }
 
