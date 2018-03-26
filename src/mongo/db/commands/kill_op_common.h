@@ -27,9 +27,9 @@
  */
 
 #include "mongo/db/commands.h"
+#include "mongo/db/operation_context.h"
 
 namespace mongo {
-class OperationContext;
 
 /**
  * Base class for the killOp command, which attempts to kill a given operation. Contains code
@@ -86,6 +86,13 @@ protected:
      */
     static unsigned int parseOpId(const BSONObj& cmdObj);
 
+    /**
+     * Return whether the operation being killed is "local" or not. All operations on a mongod are
+     * local. On a mongos, killOp may may kill an operation on a shard, or an operation "local" to
+     * the mongos.
+     *
+     * Expects to be passed the "op" field of the command object (cmdObj["op"]).
+     */
     static bool isKillingLocalOp(const BSONElement& opElem);
 };
 
