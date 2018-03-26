@@ -57,8 +57,8 @@ Status KillOpCmdBase::checkAuthForCommand(Client* client,
         // here and again in the command body. The check here in the checkAuthForCommand() function
         // is necessary because if the check fails, it will be picked up by the auditing system.
         long long opId = parseOpId(cmdObj);
-        auto swLkAndOp = KillOpCmdBase::findOpForKilling(client, opId);
-        if (swLkAndOp.isOK()) {
+        auto lkAndOp = KillOpCmdBase::findOpForKilling(client, opId);
+        if (lkAndOp) {
             // We were able to find the Operation, and we were authorized to interact with it.
             return Status::OK();
         }
@@ -71,7 +71,7 @@ bool KillOpCmdBase::isKillingLocalOp(const BSONElement& opElem) {
     return opElem.isNumber();
 }
 
-StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
 KillOpCmdBase::findOperationContext(ServiceContext* serviceContext, unsigned int opId) {
     for (ServiceContext::LockedClientsCursor cursor(serviceContext);
          Client* opClient = cursor.next();) {
@@ -83,24 +83,24 @@ KillOpCmdBase::findOperationContext(ServiceContext* serviceContext, unsigned int
         }
     }
 
-    return Status(ErrorCodes::NoSuchKey, str::stream() << "Could not find opID: " << opId);
+    return boost::none;
 }
 
-StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
 KillOpCmdBase::findOpForKilling(Client* client, unsigned int opId) {
     AuthorizationSession* authzSession = AuthorizationSession::get(client);
 
-    auto swLockAndOp = findOperationContext(client->getServiceContext(), opId);
-    if (swLockAndOp.isOK()) {
-        OperationContext* opToKill = std::get<1>(swLockAndOp.getValue());
+    auto lockAndOpCtx = findOperationContext(client->getServiceContext(), opId);
+    if (lockAndOpCtx) {
+        OperationContext* opToKill = std::get<1>(*lockAndOpCtx);
         if (authzSession->isAuthorizedForActionsOnResource(ResourcePattern::forClusterResource(),
                                                            ActionType::killop) ||
             authzSession->isCoauthorizedWithClient(opToKill->getClient())) {
-            return swLockAndOp;
+            return lockAndOpCtx;
         }
     }
 
-    return Status(ErrorCodes::NoSuchKey, str::stream() << "Could not access opID: " << opId);
+    return boost::none;
 }
 
 void KillOpCmdBase::killLocalOperation(OperationContext* opCtx,
@@ -108,13 +108,13 @@ void KillOpCmdBase::killLocalOperation(OperationContext* opCtx,
                                        BSONObjBuilder& result) {
     stdx::unique_lock<Client> lk;
     OperationContext* opCtxToKill;
-    auto sw = findOpForKilling(opCtx->getClient(), opToKill);
-    if (!sw.isOK()) {
+    auto opCtxLk = findOpForKilling(opCtx->getClient(), opToKill);
+    if (!opCtxLk) {
         // killOp always reports success past the auth check.
         return;
     }
 
-    std::tie(lk, opCtxToKill) = std::move(sw.getValue());
+    std::tie(lk, opCtxToKill) = std::move(*opCtxLk);
 
     invariant(lk);
     opCtx->getServiceContext()->killOperation(opCtxToKill);

@@ -62,14 +62,14 @@ protected:
      * Given an operation ID, search for an OperationContext with that ID. Returns either an error,
      * or the OperationContext found, along with the (acquired) lock for the associated Client.
      */
-    static StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+    static boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
     findOperationContext(ServiceContext* serviceContext, unsigned int opId);
 
     /**
      * Find the given operation, and check if we're authorized to kill it. On success, returns the
      * OperationContext as well as the acquired lock for the associated Client.
      */
-    static StatusWith<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOpForKilling(
+    static boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOpForKilling(
         Client* client, unsigned int opId);
 
     /**
