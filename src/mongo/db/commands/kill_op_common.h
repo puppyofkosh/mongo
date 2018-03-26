@@ -69,8 +69,8 @@ protected:
      * Find the given operation, and check if we're authorized to kill it. On success, returns the
      * OperationContext as well as the acquired lock for the associated Client.
      */
-    static boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>> findOpForKilling(
-        Client* client, unsigned int opId);
+    static boost::optional<std::tuple<stdx::unique_lock<Client>, OperationContext*>>
+    findOpForKilling(Client* client, unsigned int opId);
 
     /**
      * Kill an operation running on this instance of mongod or mongos.

@@ -302,10 +302,11 @@ public:
         // is released. This is done in order to avoid deadlocks caused by the pinned-cursor
         // failpoints in this file (see SERVER-21997).
         if (MONGO_FAIL_POINT(waitAfterPinningCursorBeforeGetMoreBatch)) {
-            CurOpFailpointHelpers::waitWhileFailPointEnabled(&waitAfterPinningCursorBeforeGetMoreBatch,
-                                                             opCtx,
-                                                             "waitAfterPinningCursorBeforeGetMoreBatch",
-                                                             dropAndReaquireReadLock);
+            CurOpFailpointHelpers::waitWhileFailPointEnabled(
+                &waitAfterPinningCursorBeforeGetMoreBatch,
+                opCtx,
+                "waitAfterPinningCursorBeforeGetMoreBatch",
+                dropAndReaquireReadLock);
         }
 
         // A user can only call getMore on their own cursor. If there were multiple users
@@ -434,10 +435,11 @@ public:
         // operation's CurOp to signal that we've hit this point and then spin until the failpoint
         // is released.
         if (MONGO_FAIL_POINT(waitWithPinnedCursorDuringGetMoreBatch)) {
-            CurOpFailpointHelpers::waitWhileFailPointEnabled(&waitWithPinnedCursorDuringGetMoreBatch,
-                                                             opCtx,
-                                                             "waitWithPinnedCursorDuringGetMoreBatch",
-                                                             dropAndReaquireReadLock);
+            CurOpFailpointHelpers::waitWhileFailPointEnabled(
+                &waitWithPinnedCursorDuringGetMoreBatch,
+                opCtx,
+                "waitWithPinnedCursorDuringGetMoreBatch",
+                dropAndReaquireReadLock);
         }
 
         Status batchStatus = generateBatch(opCtx, cursor, request, &nextBatch, &state, &numResults);
