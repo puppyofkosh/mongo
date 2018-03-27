@@ -325,6 +325,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         const set<string>& uris = i->second;
 
         BSONObj currentOpRes;
+        // TODO: Run a $currentOp aggregation here...
         conn->runPseudoCommand("admin", "currentOp", "$cmd.sys.inprog", {}, currentOpRes);
         if (!currentOpRes["inprog"].isABSONObj()) {
             // We don't have permissions (or the call didn't succeed) - go to the next connection.
@@ -362,6 +363,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
                 if (!withPrompt || prompter.confirm()) {
                     BSONObjBuilder cmdBob;
                     BSONObj info;
+                    log() << "ian: Killing op " << op["opid"];
                     cmdBob.appendAs(op["opid"], "op");
                     auto cmdArgs = cmdBob.done();
                     conn->runPseudoCommand("admin", "killOp", "$cmd.sys.killop", cmdArgs, info);
