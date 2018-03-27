@@ -68,10 +68,8 @@ var blacklist = [
     'indexed_insert_eval.js',  // eval doesn't work with sharded collections
     'indexed_insert_eval_nolock.js',  // eval doesn't work with sharded collections
 
-    // These workloads sometimes triggers an 'unable to target write op for collection ... caused by
-    // ... database not found' error. Further investigation still needs to be done, but these
-    // failures may be due to SERVER-17397 'drops in a sharded cluster may not fully succeed'
-    // because it drops and reuses the same namespaces.
+    // These workloads use getMore, which cannot be retried and is incompatible with
+    // {retryWrites: true}.
     'kill_multicollection_aggregation.js',
     'invalidated_cursors.js',
 
