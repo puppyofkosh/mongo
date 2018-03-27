@@ -61,7 +61,7 @@ var $config = (function() {
                                      // We only about getMores.
                                      {$match: {"command.getMore": {$exists: true}}},
                                      // Only find getMores running on the database for this test.
-                                     {$match: {"ns": this.uniqueDBName + ".$cmd"}}
+                                     {$match: {"ns": {$regex: this.uniqueDBName }}}
                                  ])
                                  .toArray();
 
@@ -177,9 +177,11 @@ var $config = (function() {
          */
         dropDatabase: function dropDatabase(unusedDB, unusedCollName) {
             if (isMongos(unusedDB)) {
-                // SERVER-17397: Drops in a sharded cluster may not fully succeed. It is not safe
-                // to drop and then recreate a collection with the same name, so we skip dropping
-                // and recreating the database.
+                // This workload can sometimes triggers an 'unable to target write op for
+                // collection ... caused by ... database not found' error. Further investigation
+                // still needs to be done, but these failures may be due to SERVER-17397 'drops in
+                // a sharded cluster may not fully succeed' because it drops and reuses the same
+                // namespaces. For now, we avoid dropping the collection on a sharded cluster.
                 return;
             }
 
