@@ -304,40 +304,42 @@ void ConnectionRegistry::registerConnection(DBClientBase& client) {
 }
 
 void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
-    log() << "ian: processing op " << op;
     // For sharded clusters, `client_s` is used instead and `client` is not present.
     string client;
     if (auto elem = op["client"]) {
         if (elem.type() != String) {
             warning() << "Ignoring operation " << op["opid"].toString(false)
-                      << "; expected 'client' field in currentOp response to have type "
+                      << "; expected 'client' field in $currentOp response to have type "
                 "string, but found "
                       << typeName(elem.type());
             return;
         }
         client = elem.str();
     } else {
-        // Internal operation, like TTL index.
+        // Malformed results from the server.
+        warning() << "Expected $currentOp response to include 'client' field but it did not: "
+                  << op;
         return;
     }
 
-    if (myUris.count(client)) {
-        // The operation originated from us, so we get rid of it.
-        // TODO: think about weird race
-        BSONObjBuilder cmdBob;
-        BSONObj info;
-        log() << "ian: Killing op " << op["opid"];
-        cmdBob.appendAs(op["opid"], "op");
-        auto cmdArgs = cmdBob.done();
-        const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
-        BSONObj killOpResponse;
-        conn.runCommand("admin", killOp, killOpResponse);
+    // The $currentOp query should have filtered out any operations not started by us.
+    invariant(myUris.count(client));
 
-        if (!killOpResponse["ok"].trueValue()) {
-            // Cannot happen since killOp always returns success...for now.
-            warning() << "Failed to kill op " << op["opid"] <<
-                "Expected ok response but got " << killOpResponse;
-        }
+    // The operation originated from us, so we get rid of it. We run the $currentOp on a separate
+    // connection, so we don't have to worry about killing our own $currentOp.
+    BSONObjBuilder cmdBob;
+    BSONObj info;
+    log() << "Killing op " << op["opid"];
+    cmdBob.appendAs(op["opid"], "op");
+    auto cmdArgs = cmdBob.done();
+    const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
+    BSONObj killOpResponse;
+    conn.runCommand("admin", killOp, killOpResponse);
+
+    if (!killOpResponse["ok"].trueValue()) {
+        // Cannot happen since killOp always returns success...for now.
+        warning() << "Failed to kill op " << op["opid"] <<
+            "Expected ok response but got " << killOpResponse;
     }
 }
 
@@ -366,14 +368,22 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             continue;
         }
 
+        BSONArrayBuilder uriBuilder;
+        for (auto&& a : myUris) {
+            uriBuilder.append(a);
+        }
+
         BSONObj currentOpRes;
         BSONObj cmd = BSON("aggregate" << 1 <<
-                           "pipeline" << BSON_ARRAY(BSON("$currentOp" <<
-                                                         BSON("localOps" << true))) <<
-                           "cursor" << BSONObj());
+                           "pipeline" << BSON_ARRAY(
+                               // 'localOps' true so that when run on a sharded cluster, we get the
+                               // mongos operations.
+                               BSON("$currentOp" << BSON("localOps" << true)) <<
+                               // Match any operations started by us.
+                               BSON("$match" << BSON("client" << BSON("$in" << uriBuilder.arr()))))
+                           // Must be provided for the 'aggregate' command.
+                           << "cursor" << BSONObj());
         conn->runCommand("admin", cmd, currentOpRes);
-
-        log() << "ian: res is " << currentOpRes;
 
         BSONObj cursorObj = currentOpRes["cursor"].Obj();
         BSONObj firstBatch = cursorObj["firstBatch"].Obj();
