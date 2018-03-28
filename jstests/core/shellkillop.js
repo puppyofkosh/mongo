@@ -2,16 +2,18 @@
 
     const baseName = "jstests_shellkillop";
     function getCurOps() {
-        return currentOps = db.getSiblingDB("admin")
-            .aggregate([{$currentOp: {localOps: true}},
-                        {$match: {ns: "test." + baseName}}])
-            .toArray();
+        return currentOps =
+                   db.getSiblingDB("admin")
+                       .aggregate(
+                           [{$currentOp: {localOps: true}}, {$match: {ns: "test." + baseName}}])
+                       .toArray();
     }
     db[baseName].drop();
     db[baseName].insert({_id: 0});
 
     // Run a find that will take forever.
-    const evalFn = function(baseName) {
+    const evalFn =
+        function(baseName) {
         print('SKO subtask started');
         const curs = db[baseName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
         curs.next();
@@ -19,11 +21,10 @@
     }
 
     const evalStr = "(" + evalFn.toString() + ")('" + baseName + "');";
-    print("shellkillop.js evalStr:" + evalStr);
     // mongo --autokillop suppresses the ctrl-c "do you want to kill current operation" message.
     // It's just for testing purposes and thus not in the shell help.
-    spawn = startMongoProgramNoConnect(
-        "mongo", "--autokillop", "--port", myPort(), "--eval", evalStr);
+    spawn =
+        startMongoProgramNoConnect("mongo", "--autokillop", "--port", myPort(), "--eval", evalStr);
 
     sleep(1000);
 

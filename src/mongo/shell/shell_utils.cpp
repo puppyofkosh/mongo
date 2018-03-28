@@ -304,13 +304,12 @@ void ConnectionRegistry::registerConnection(DBClientBase& client) {
 }
 
 void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
-    // For sharded clusters, `client_s` is used instead and `client` is not present.
     string client;
     if (auto elem = op["client"]) {
         if (elem.type() != String) {
             warning() << "Ignoring operation " << op["opid"].toString(false)
                       << "; expected 'client' field in $currentOp response to have type "
-                "string, but found "
+                         "string, but found "
                       << typeName(elem.type());
             return;
         }
@@ -338,8 +337,8 @@ void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
 
     if (!killOpResponse["ok"].trueValue()) {
         // Cannot happen since killOp always returns success...for now.
-        warning() << "Failed to kill op " << op["opid"] <<
-            "Expected ok response but got " << killOpResponse;
+        warning() << "Failed to kill op " << op["opid"] << "Expected ok response but got "
+                  << killOpResponse;
     }
 }
 
@@ -368,21 +367,24 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             continue;
         }
 
-        BSONArrayBuilder uriBuilder;
+        BSONArrayBuilder uriArrBuilder;
         for (auto&& a : myUris) {
-            uriBuilder.append(a);
+            uriArrBuilder.append(a);
         }
 
         BSONObj currentOpRes;
-        BSONObj cmd = BSON("aggregate" << 1 <<
-                           "pipeline" << BSON_ARRAY(
+        BSONObj cmd = BSON(
+            "aggregate" << 1 << "pipeline"
+                        << BSON_ARRAY(
                                // 'localOps' true so that when run on a sharded cluster, we get the
                                // mongos operations.
                                BSON("$currentOp" << BSON("localOps" << true)) <<
                                // Match any operations started by us.
-                               BSON("$match" << BSON("client" << BSON("$in" << uriBuilder.arr()))))
-                           // Must be provided for the 'aggregate' command.
-                           << "cursor" << BSONObj());
+                               BSON("$match"
+                                    << BSON("client" << BSON("$in" << uriArrBuilder.arr()))))
+                        // Must be provided for the 'aggregate' command.
+                        << "cursor"
+                        << BSONObj());
         conn->runCommand("admin", cmd, currentOpRes);
 
         BSONObj cursorObj = currentOpRes["cursor"].Obj();
