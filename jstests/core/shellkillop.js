@@ -12,9 +12,10 @@
     db[baseName].insert({_id: 0});
 
     // Run a find that will take forever.
-    const evalFn = function(baseName) {
+    const evalFn =
+        function(collName) {
         print('SKO subtask started');
-        const curs = db[baseName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
+        const curs = db[collName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
         curs.next();
         print('Subtask finished');
     }
