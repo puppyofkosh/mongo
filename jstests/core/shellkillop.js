@@ -1,9 +1,5 @@
 baseName = "jstests_shellkillop";
 
-// 'retry' should be set to true in contexts where an exception should cause the test to be retried
-// rather than to fail.
-retry = true;
-
 function testShellAutokillop() {
     db[baseName].drop();
     db[baseName].insert({_id: 0});
@@ -21,16 +17,10 @@ function testShellAutokillop() {
     let currentOps0 = db.getSiblingDB("admin")
         .aggregate([{$currentOp: {localOps: true}}])
         .toArray();
-    print("ian: Operations currently are : " + tojson(currentOps0));
 
-    // printjson(spawn);
-    // print("Spawn field is " + spawn[""]);
-    // const toKill = {
-    //     pid: spawn[""],
-    //     signal: 2
-    // };
-
-    stopMongoProgramByPid(spawn);
+    // Send the signal triggered by Ctrl-C
+    const SIGINT = 2;
+    stopMongoProgramByPid(spawn, SIGINT);
 
     sleep(1000);
 
