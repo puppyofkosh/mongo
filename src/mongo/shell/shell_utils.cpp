@@ -391,7 +391,6 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         BSONObjIterator it(firstBatch);
         while (it.more()) {
             BSONElement e = it.next();
-            // TODO: process
             processOp(*conn, e.Obj(), myUris);
         }
 
