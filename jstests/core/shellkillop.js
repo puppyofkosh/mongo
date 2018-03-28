@@ -12,8 +12,7 @@
     db[baseName].insert({_id: 0});
 
     // Run a find that will take forever.
-    const evalFn =
-        function(baseName) {
+    const evalFn = function(baseName) {
         print('SKO subtask started');
         const curs = db[baseName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
         curs.next();
@@ -26,17 +25,15 @@
     spawn =
         startMongoProgramNoConnect("mongo", "--autokillop", "--port", myPort(), "--eval", evalStr);
 
-    sleep(1000);
-
-    let curOps = getCurOps();
-    assert.eq(curOps.length, 1, "Did not find any operations: " + tojson(curOps));
+    assert.soon(function() {
+        return getCurOps().length === 1;
+    }, "Did not find any operations running under namespace.");
 
     // Send SIGINT, the signal triggered by Ctrl-C.
     const SIGINT = 2;
     stopMongoProgramByPid(spawn, SIGINT);
 
-    sleep(1000);
-
-    curOps = getCurOps();
-    assert.eq(curOps.length, 0, "Found operations still running: " + tojson(curOps));
+    assert.soon(function() {
+        return getCurOps().length === 0;
+    }, "Found operations still running after the shell was killed ");
 })();
