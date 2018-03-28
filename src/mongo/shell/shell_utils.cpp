@@ -303,6 +303,55 @@ void ConnectionRegistry::registerConnection(DBClientBase& client) {
     }
 }
 
+void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
+    log() << "ian: processing op " << op;
+    // For sharded clusters, `client_s` is used instead and `client` is not present.
+    string client;
+    if (auto elem = op["client"]) {
+        // mongod currentOp client
+        if (elem.type() != String) {
+            warning() << "Ignoring operation " << op["opid"].toString(false)
+                      << "; expected 'client' field in currentOp response to have type "
+                "string, but found "
+                      << typeName(elem.type());
+            return;
+        }
+        client = elem.str();
+    } else if (auto elem = op["client_s"]) {
+        // mongos currentOp client
+        if (elem.type() != String) {
+            warning() << "Ignoring operation " << op["opid"].toString(false)
+                      << "; expected 'client_s' field in currentOp response to have type "
+                "string, but found "
+                      << typeName(elem.type());
+            return;
+        }
+        client = elem.str();
+    } else {
+        // Internal operation, like TTL index.
+        return;
+    }
+
+    if (myUris.count(client)) {
+        // The operation originated from us, so we get rid of it.
+        // TODO: think about weird race
+        BSONObjBuilder cmdBob;
+        BSONObj info;
+        log() << "ian: Killing op " << op["opid"];
+        cmdBob.appendAs(op["opid"], "op");
+        auto cmdArgs = cmdBob.done();
+        const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
+        BSONObj killOpResponse;
+        conn.runCommand("admin", killOp, killOpResponse);
+
+        if (!killOpResponse["ok"].trueValue()) {
+            // Cannot happen since killOp always returns success...for now.
+            warning() << "Failed to kill op " << op["opid"] <<
+                "Expected ok response but got " << killOpResponse;
+        }
+    }
+}
+
 void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
     Prompter prompter("do you want to kill the current op(s) on the server?");
     stdx::lock_guard<stdx::mutex> lk(_mutex);
@@ -314,6 +363,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             continue;
         }
 
+        const set<string>& myUris = i->second;
         const ConnectionString cs(status.getValue());
 
         string errmsg;
@@ -322,54 +372,35 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             continue;
         }
 
-        const set<string>& uris = i->second;
-
-        BSONObj currentOpRes;
-        // TODO: Run a $currentOp aggregation here...
-        conn->runPseudoCommand("admin", "currentOp", "$cmd.sys.inprog", {}, currentOpRes);
-        if (!currentOpRes["inprog"].isABSONObj()) {
-            // We don't have permissions (or the call didn't succeed) - go to the next connection.
+        if (withPrompt && !prompter.confirm()) {
+            // The user didn't want us to kill anything anyway.
             continue;
         }
-        auto inprog = currentOpRes["inprog"].embeddedObject();
-        for (const auto op : inprog) {
-            // For sharded clusters, `client_s` is used instead and `client` is not present.
-            string client;
-            if (auto elem = op["client"]) {
-                // mongod currentOp client
-                if (elem.type() != String) {
-                    warning() << "Ignoring operation " << op["opid"].toString(false)
-                              << "; expected 'client' field in currentOp response to have type "
-                                 "string, but found "
-                              << typeName(elem.type());
-                    continue;
-                }
-                client = elem.str();
-            } else if (auto elem = op["client_s"]) {
-                // mongos currentOp client
-                if (elem.type() != String) {
-                    warning() << "Ignoring operation " << op["opid"].toString(false)
-                              << "; expected 'client_s' field in currentOp response to have type "
-                                 "string, but found "
-                              << typeName(elem.type());
-                    continue;
-                }
-                client = elem.str();
-            } else {
-                // Internal operation, like TTL index.
-                continue;
-            }
-            if (uris.count(client)) {
-                if (!withPrompt || prompter.confirm()) {
-                    BSONObjBuilder cmdBob;
-                    BSONObj info;
-                    log() << "ian: Killing op " << op["opid"];
-                    cmdBob.appendAs(op["opid"], "op");
-                    auto cmdArgs = cmdBob.done();
-                    conn->runPseudoCommand("admin", "killOp", "$cmd.sys.killop", cmdArgs, info);
-                } else {
-                    return;
-                }
+
+        BSONObj currentOpRes;
+        BSONObj cmd = BSON("aggregate" << 1 <<
+                           "pipeline" << BSON_ARRAY(BSON("$currentOp" <<
+                                                         BSON("localOps" << true))) <<
+                           "cursor" << BSONObj());
+        conn->runCommand("admin", cmd, currentOpRes);
+
+        log() << "ian: res is " << currentOpRes;
+
+        BSONObj cursorObj = currentOpRes["cursor"].Obj();
+        BSONObj firstBatch = cursorObj["firstBatch"].Obj();
+        BSONObjIterator it(firstBatch);
+        while (it.more()) {
+            BSONElement e = it.next();
+            // TODO: process
+            processOp(*conn, e.Obj(), myUris);
+        }
+
+        long long cursorId = cursorObj["id"].Long();
+        if (cursorId != 0) {
+            auto cursor = conn->getMore("admin", cursorId, 0, 0);
+
+            while (cursor->more()) {
+                processOp(*conn, cursor->next(), myUris);
             }
         }
     }
