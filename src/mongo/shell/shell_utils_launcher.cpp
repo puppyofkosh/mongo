@@ -987,14 +987,12 @@ int killDb(int port, ProcessId _pid, int signal) {
 int getSignal(const BSONObj& a) {
     int ret = SIGTERM;
     if (a.nFields() >= 2) {
-        log() << "ian: found another field!";
         BSONObjIterator i(a);
         i.next();
         BSONElement e = i.next();
         verify(e.isNumber());
         ret = int(e.number());
     }
-    log() << "ian: signal is " << ret;
     return ret;
 }
 
@@ -1025,7 +1023,6 @@ BSONObj StopMongoProgram(const BSONObj& a, void* data) {
 }
 
 BSONObj StopMongoProgramByPid(const BSONObj& a, void* data) {
-    log() << "ian: in stopMongoProgramByPid with arg " << a;
     int nFields = a.nFields();
     uassert(ErrorCodes::FailedToParse, "wrong number of arguments", nFields >= 1 && nFields <= 3);
     uassert(
