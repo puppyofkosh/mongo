@@ -308,20 +308,9 @@ void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
     // For sharded clusters, `client_s` is used instead and `client` is not present.
     string client;
     if (auto elem = op["client"]) {
-        // mongod currentOp client
         if (elem.type() != String) {
             warning() << "Ignoring operation " << op["opid"].toString(false)
                       << "; expected 'client' field in currentOp response to have type "
-                "string, but found "
-                      << typeName(elem.type());
-            return;
-        }
-        client = elem.str();
-    } else if (auto elem = op["client_s"]) {
-        // mongos currentOp client
-        if (elem.type() != String) {
-            warning() << "Ignoring operation " << op["opid"].toString(false)
-                      << "; expected 'client_s' field in currentOp response to have type "
                 "string, but found "
                       << typeName(elem.type());
             return;
@@ -394,7 +383,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             processOp(*conn, e.Obj(), myUris);
         }
 
-        long long cursorId = cursorObj["id"].Long();
+        const long long cursorId = cursorObj["id"].Long();
         if (cursorId != 0) {
             auto cursor = conn->getMore("admin", cursorId, 0, 0);
 
