@@ -303,11 +303,16 @@ void ConnectionRegistry::registerConnection(DBClientBase& client) {
     }
 }
 
-void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
-    string client;
+/*
+ * Given an operation object returned by $currentOp, check that it was started by us, and if so,
+ * kill it.
+ */
+void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
+    invariant(conn);
+    std::string client;
     if (auto elem = op["client"]) {
-        if (elem.type() != String) {
-            warning() << "Ignoring operation " << op["opid"].toString(false)
+        if (elem.type() != BSONType::String) {
+            warning() << "Ignoring operation " << op["opid"]
                       << "; expected 'client' field in $currentOp response to have type "
                          "string, but found "
                       << typeName(elem.type());
@@ -333,7 +338,7 @@ void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
     auto cmdArgs = cmdBob.done();
     const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
     BSONObj killOpResponse;
-    conn.runCommand("admin", killOp, killOpResponse);
+    conn->runCommand("admin", killOp, killOpResponse);
 
     if (!killOpResponse["ok"].trueValue()) {
         // Cannot happen since killOp always returns success...for now.
@@ -344,6 +349,12 @@ void processOp(DBClientBase& conn, BSONObj op, const set<string>& myUris) {
 
 void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
     Prompter prompter("do you want to kill the current op(s) on the server?");
+
+    if (withPrompt && !prompter.confirm()) {
+        // The user didn't want us to kill anything anyway.
+        return;
+    }
+
     stdx::lock_guard<stdx::mutex> lk(_mutex);
     for (map<string, set<string>>::const_iterator i = _connectionUris.begin();
          i != _connectionUris.end();
@@ -356,16 +367,12 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         const set<string>& myUris = i->second;
         const ConnectionString cs(status.getValue());
 
-        string errmsg;
+        std::string errmsg;
         std::unique_ptr<DBClientBase> conn(cs.connect("MongoDB Shell", errmsg));
         if (!conn) {
             continue;
         }
 
-        if (withPrompt && !prompter.confirm()) {
-            // The user didn't want us to kill anything anyway.
-            continue;
-        }
 
         BSONArrayBuilder uriArrBuilder;
         for (auto&& a : myUris) {
@@ -392,16 +399,18 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         BSONObjIterator it(firstBatch);
         while (it.more()) {
             BSONElement e = it.next();
-            processOp(*conn, e.Obj(), myUris);
+            processOp(conn.get(), e.Obj(), myUris);
         }
 
         const long long cursorId = cursorObj["id"].Long();
-        if (cursorId != 0) {
-            auto cursor = conn->getMore("admin", cursorId, 0, 0);
+        if (cursorId == 0) {
+            continue;
+        }
+        const int kBatchSize = 100;
+        DBClientCursor c(conn.get(), "admin", cursorId, kBatchSize, 0);
 
-            while (cursor->more()) {
-                processOp(*conn, cursor->next(), myUris);
-            }
+        while (c.more()) {
+            processOp(conn.get(), c.next(), myUris);
         }
     }
 }
