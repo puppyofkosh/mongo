@@ -351,7 +351,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
     Prompter prompter("do you want to kill the current op(s) on the server?");
 
     if (withPrompt && !prompter.confirm()) {
-        // The user didn't want us to kill anything anyway.
+        // The user didn't want us to kill anything.
         return;
     }
 
@@ -373,13 +373,11 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
             continue;
         }
 
-
         BSONArrayBuilder uriArrBuilder;
         for (auto&& a : myUris) {
             uriArrBuilder.append(a);
         }
 
-        BSONObj currentOpRes;
         BSONObj cmd = BSON(
             "aggregate" << 1 << "pipeline"
                         << BSON_ARRAY(
@@ -392,22 +390,15 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
                         // Must be provided for the 'aggregate' command.
                         << "cursor"
                         << BSONObj());
-        conn->runCommand("admin", cmd, currentOpRes);
-
-        BSONObj cursorObj = currentOpRes["cursor"].Obj();
-        BSONObj firstBatch = cursorObj["firstBatch"].Obj();
-        BSONObjIterator it(firstBatch);
-        while (it.more()) {
-            BSONElement e = it.next();
-            processOp(conn.get(), e.Obj(), myUris);
-        }
-
-        const long long cursorId = cursorObj["id"].Long();
-        if (cursorId == 0) {
-            continue;
-        }
-        const int kBatchSize = 100;
-        DBClientCursor c(conn.get(), "admin", cursorId, kBatchSize, 0);
+        DBClientCursor c(conn.get(),
+                         "admin",
+                         cmd,
+                         0, // nToReturn
+                         0, // nToSkip
+                         nullptr, // fieldsToReturn
+                         0, // queryOptions
+                         0  // batchSize
+            );
 
         while (c.more()) {
             processOp(conn.get(), c.next(), myUris);
