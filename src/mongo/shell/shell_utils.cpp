@@ -341,8 +341,7 @@ void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
     conn->runCommand("admin", killOp, killOpResponse);
 
     if (!killOpResponse["ok"].trueValue()) {
-        // Cannot happen since killOp always returns success...for now.
-        warning() << "Failed to kill op " << op["opid"] << "Expected ok response but got "
+        warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
                   << killOpResponse;
     }
 }
