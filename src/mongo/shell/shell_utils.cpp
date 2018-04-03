@@ -34,6 +34,7 @@
 #include "mongo/shell/shell_utils.h"
 
 #include "mongo/client/dbclientinterface.h"
+#include "mongo/client/dbcommandcursor.h"
 #include "mongo/client/replica_set_monitor.h"
 #include "mongo/platform/random.h"
 #include "mongo/scripting/engine.h"
@@ -327,22 +328,23 @@ void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
     }
 
     // The $currentOp query should have filtered out any operations not started by us.
-    invariant(myUris.count(client));
+    //invariant(myUris.count(client));
 
-    // The operation originated from us, so we get rid of it. We run the $currentOp on a separate
-    // connection, so we don't have to worry about killing our own $currentOp.
-    BSONObjBuilder cmdBob;
-    BSONObj info;
-    log() << "Killing op " << op["opid"];
-    cmdBob.appendAs(op["opid"], "op");
-    auto cmdArgs = cmdBob.done();
-    const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
-    BSONObj killOpResponse;
-    conn->runCommand("admin", killOp, killOpResponse);
+    if (myUris.count(client)) {
+        // The operation originated from us, so we kill it.
+        BSONObjBuilder cmdBob;
+        BSONObj info;
+        log() << "Killing op " << op["opid"] << std::flush;
+        cmdBob.appendAs(op["opid"], "op");
+        auto cmdArgs = cmdBob.done();
+        const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
+        BSONObj killOpResponse;
+        conn->runCommand("admin", killOp, killOpResponse);
 
-    if (!killOpResponse["ok"].trueValue()) {
-        warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
-                  << killOpResponse;
+        if (!killOpResponse["ok"].trueValue()) {
+            warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
+                      << killOpResponse;
+        }
     }
 }
 
@@ -354,54 +356,64 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         return;
     }
 
+    log() << "ian: hi";
+
     stdx::lock_guard<stdx::mutex> lk(_mutex);
     for (map<string, set<string>>::const_iterator i = _connectionUris.begin();
          i != _connectionUris.end();
          ++i) {
         auto status = ConnectionString::parse(i->first);
         if (!status.isOK()) {
+            log() << "ian: couldn't parse " << i->first << " " << status.getStatus();
             continue;
         }
 
+        log() << "ian: hi 2";
+        
         const set<string>& myUris = i->second;
         const ConnectionString cs(status.getValue());
 
         std::string errmsg;
         std::unique_ptr<DBClientBase> conn(cs.connect("MongoDB Shell", errmsg));
         if (!conn) {
+            log() << "ian: Couldn't establish connection " << errmsg;
             continue;
         }
+        log() << "ian: hi 3";
 
         BSONArrayBuilder uriArrBuilder;
         for (auto&& a : myUris) {
             uriArrBuilder.append(a);
         }
+        log() << "ian: hi 4";
 
         BSONObj cmd = BSON(
             "aggregate" << 1 << "pipeline"
                         << BSON_ARRAY(
                                // 'localOps' true so that when run on a sharded cluster, we get the
                                // mongos operations.
-                               BSON("$currentOp" << BSON("localOps" << true)) <<
+                            BSON("$currentOp" << BSON("localOps" << true))// <<
                                // Match any operations started by us.
-                               BSON("$match"
-                                    << BSON("client" << BSON("$in" << uriArrBuilder.arr()))))
+                               // BSON("$match"
+                               //      << BSON("client" << BSON("$in" << uriArrBuilder.arr())
+                               //              << "$comment" << "ianlol"
+                               //          ))
+                            )
                         // Must be provided for the 'aggregate' command.
                         << "cursor"
-                        << BSONObj());
-        DBClientCursor c(conn.get(),
-                         "admin",
-                         cmd,
-                         0, // nToReturn
-                         0, // nToSkip
-                         nullptr, // fieldsToReturn
-                         0, // queryOptions
-                         0  // batchSize
-            );
-
-        while (c.more()) {
-            processOp(conn.get(), c.next(), myUris);
+            << BSON("batchSize" << 1));
+        DBCommandCursor cursor(conn.get(), cmd, "admin");
+        log() << "ian: hi 5";
+        while (cursor.more()) {
+            auto swNext = cursor.next();
+            if (!swNext.isOK()) {
+                warning() << "Got error trying to iterate agg cursor: " << swNext.getStatus();
+                break;
+            }
+            log() << "ian: hi processing op " << swNext.getValue();
+            processOp(conn.get(), swNext.getValue(), myUris);
         }
+        log() << "ian: hi 7";
     }
 }
 

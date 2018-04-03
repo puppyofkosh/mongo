@@ -2,22 +2,24 @@
 
     const collName = "jstests_shellkillop";
     function getCurOps() {
-        return currentOps =
+        let currentOps =
                    db.getSiblingDB("admin")
                        .aggregate(
                            [{$currentOp: {localOps: true}}, {$match: {ns: "test." + collName}}])
-                       .toArray();
+            .toArray();
+        print("ian: Found currentOps : " + tojson(currentOps));
+        return currentOps;
     }
     db[collName].drop();
     db[collName].insert({_id: 0});
 
-    // Run a find that will take forever.
-    function evalFn(collName) {
+    // Run a find that will take several hours if not killed.
+    function runLongFind(collName) {
         const curs = db[collName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
         curs.itcount();
     }
 
-    const evalStr = "(" + evalFn.toString() + ")('" + collName + "');";
+    const evalStr = "(" + runLongFind.toString() + ")('" + collName + "');";
     // mongo --autokillop suppresses the ctrl-c "do you want to kill current operation" message.
     // It's just for testing purposes and thus not in the shell help.
     const shellPid =

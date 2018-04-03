@@ -168,6 +168,7 @@ clientDriverEnv.Library(
         'dbclient.cpp',
         'dbclient_rs.cpp',
         'dbclientcursor.cpp',
+        'dbcommandcursor.cpp',
         'index_spec.cpp',
         'global_conn_pool.cpp',
         'replica_set_monitor.cpp',
@@ -176,6 +177,7 @@ clientDriverEnv.Library(
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/auth/authcommon',
         '$BUILD_DIR/mongo/db/dbmessage',
+        '$BUILD_DIR/mongo/db/query/command_request_response',
         '$BUILD_DIR/mongo/db/wire_version',
         '$BUILD_DIR/mongo/db/write_concern_options',
         '$BUILD_DIR/mongo/executor/connection_pool_stats',
@@ -259,6 +261,14 @@ env.CppUnitTest(
 
 env.CppUnitTest('dbclient_rs_test',
                 ['dbclient_rs_test.cpp'],
+                LIBDEPS=[
+                    'clientdriver',
+                    '$BUILD_DIR/mongo/dbtests/mocklib',
+                ]
+)
+
+env.CppUnitTest('dbcommandcursor_test',
+                ['dbcommandcursor_test.cpp'],
                 LIBDEPS=[
                     'clientdriver',
                     '$BUILD_DIR/mongo/dbtests/mocklib',

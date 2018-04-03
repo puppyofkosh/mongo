@@ -108,6 +108,7 @@ Message DBClientCursor::_assembleInit() {
         bool hasInvalidMaxTimeMs = query.hasField("$maxTimeMS");
 
         if (hasValidNToReturnForCommand && hasValidFlagsForCommand && !hasInvalidMaxTimeMs) {
+            log() << "ian: Assemblign command request";
             return assembleCommandRequest(_client, ns.db(), opts, query);
         }
     } else if (_useFindCommand) {
@@ -154,6 +155,7 @@ Message DBClientCursor::_assembleGetMore() {
 bool DBClientCursor::init() {
     invariant(!_connectionHasPendingReplies);
     Message toSend = _assembleInit();
+    log() << "ian: built initial message ";
     verify(_client);
     Message reply;
     if (!_client->call(toSend, reply, false, &_originalHost)) {
@@ -161,6 +163,7 @@ bool DBClientCursor::init() {
         log() << "DBClientCursor::init call() failed" << endl;
         return false;
     }
+    log() << "ian: got some reply";
     if (reply.empty()) {
         // log msg temp?
         log() << "DBClientCursor::init message from call() was empty" << endl;
@@ -204,6 +207,7 @@ bool DBClientCursor::initLazyFinish(bool& retry) {
 }
 
 void DBClientCursor::requestMore() {
+    log() << "ian: requesting more from server...";
     if (opts & QueryOption_Exhaust) {
         return exhaustReceiveMore();
     }
@@ -271,7 +275,9 @@ BSONObj DBClientCursor::commandDataReceived(const Message& reply) {
             opCtx, commandReply->getMetadata(), _client->getServerAddress()));
     }
 
-    return commandReply->getCommandReply().getOwned();
+    BSONObj o = commandReply->getCommandReply().getOwned();
+    log() << "ian: dr got response " << o;
+    return o;
 }
 
 void DBClientCursor::dataReceived(const Message& reply, bool& retry, string& host) {
@@ -280,6 +286,7 @@ void DBClientCursor::dataReceived(const Message& reply, bool& retry, string& hos
 
     // If this is a reply to our initial command request.
     if (_isCommand && cursorId == 0) {
+        log() << "ian: dr 1";
         batch.objs.push_back(commandDataReceived(reply));
         return;
     }
@@ -356,17 +363,25 @@ void DBClientCursor::dataReceived(const Message& reply, bool& retry, string& hos
 
 /** If true, safe to call next().  Requests more from server if necessary. */
 bool DBClientCursor::more() {
-    if (!_putBack.empty())
+    if (!_putBack.empty()) {
+        log() << "ian: more 1";
         return true;
+    }
 
-    if (haveLimit && static_cast<int>(batch.pos) >= nToReturn)
+    if (haveLimit && static_cast<int>(batch.pos) >= nToReturn) {
+        log() << "ian: more 2";   
         return false;
+    }
 
-    if (batch.pos < batch.objs.size())
+    if (batch.pos < batch.objs.size()) {
+        log() << "ian: more 3";
         return true;
+    }
 
-    if (cursorId == 0)
+    if (cursorId == 0) {
+        log() << "ian: more 4";   
         return false;
+    }
 
     requestMore();
     return batch.pos < batch.objs.size();
