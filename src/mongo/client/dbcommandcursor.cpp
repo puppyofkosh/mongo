@@ -87,6 +87,7 @@ bool DBCommandCursor::moreBuffered() {
 
 
 bool DBCommandCursor::more() {
+    invariant(!_isKilled);
     if (!moreBuffered()) {
         if (_lastResponse && _lastResponse->getCursorId() == 0) {
             return false;
@@ -103,12 +104,14 @@ bool DBCommandCursor::more() {
 }
 
 StatusWith<BSONObj> DBCommandCursor::next() {
+    invariant(!_isKilled);
     invariant(more());
     if (!_error.isOK()) {
         return _error;
     }
 
-    invariant(_lastResponse);
+    invariant(moreBuffered());
+    invariant(_positionInBatch < _lastResponse->getBatch().size());
     return _lastResponse->getBatch()[_positionInBatch++];
 }
 

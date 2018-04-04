@@ -25,8 +25,6 @@
  *    then also delete it in the license file.
  */
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kDefault
-
 #include "mongo/platform/basic.h"
 
 #include "mongo/dbtests/mock/mock_remote_db_server.h"
@@ -39,7 +37,6 @@
 #include "mongo/rpc/metadata.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/assert_util.h"
-#include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
 #include "mongo/util/net/socket_exception.h"
 #include "mongo/util/time_support.h"
@@ -142,7 +139,6 @@ void MockRemoteDBServer::remove(const string& ns, Query query, int flags) {
 rpc::UniqueReply MockRemoteDBServer::runCommand(InstanceID id, const OpMsgRequest& request) {
     checkIfUp(id);
     std::string cmdName = request.getCommandName().toString();
-    log() << "ian: running command";
 
     BSONObj reply;
     {

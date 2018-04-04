@@ -796,7 +796,7 @@ public:
 
     virtual bool isMongos() const = 0;
 
-    virtual bool serverSupportsWireVersion(WireVersion version);
+    bool serverSupportsWireVersion(WireVersion version);
 
     /**
      * Parses command replies and runs them through the metadata reader.

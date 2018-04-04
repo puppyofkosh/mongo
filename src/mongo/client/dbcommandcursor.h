@@ -26,11 +26,12 @@
  * then also delete it in the license file.
  */
 
+#pragma once
+
 #include "mongo/bson/bsonobj.h"
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/query/cursor_response.h"
-
 
 namespace mongo {
 
