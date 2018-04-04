@@ -328,7 +328,7 @@ void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
     }
 
     // The $currentOp query should have filtered out any operations not started by us.
-    //invariant(myUris.count(client));
+    // invariant(myUris.count(client));
 
     if (myUris.count(client)) {
         // The operation originated from us, so we kill it.
@@ -369,7 +369,7 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         }
 
         log() << "ian: hi 2";
-        
+
         const set<string>& myUris = i->second;
         const ConnectionString cs(status.getValue());
 
@@ -392,16 +392,16 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
                         << BSON_ARRAY(
                                // 'localOps' true so that when run on a sharded cluster, we get the
                                // mongos operations.
-                            BSON("$currentOp" << BSON("localOps" << true))// <<
+                               BSON("$currentOp" << BSON("localOps" << true))  // <<
                                // Match any operations started by us.
                                // BSON("$match"
                                //      << BSON("client" << BSON("$in" << uriArrBuilder.arr())
                                //              << "$comment" << "ianlol"
                                //          ))
-                            )
+                               )
                         // Must be provided for the 'aggregate' command.
                         << "cursor"
-            << BSON("batchSize" << 1));
+                        << BSON("batchSize" << 1));
         DBCommandCursor cursor(conn.get(), cmd, "admin");
         log() << "ian: hi 5";
         while (cursor.more()) {

@@ -3,10 +3,9 @@
     const collName = "jstests_shellkillop";
     function getCurOps() {
         let currentOps =
-                   db.getSiblingDB("admin")
-                       .aggregate(
-                           [{$currentOp: {localOps: true}}, {$match: {ns: "test." + collName}}])
-            .toArray();
+            db.getSiblingDB("admin")
+                .aggregate([{$currentOp: {localOps: true}}, {$match: {ns: "test." + collName}}])
+                .toArray();
         print("ian: Found currentOps : " + tojson(currentOps));
         return currentOps;
     }

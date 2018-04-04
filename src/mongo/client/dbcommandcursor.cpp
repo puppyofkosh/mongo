@@ -37,17 +37,13 @@
 
 namespace mongo {
 
-DBCommandCursor::DBCommandCursor(DBClientBase* client,
-                                 BSONObj command,
-                                 const std::string& dbName)
-    :_client(client),
-     _initialCommand(command),
-     _dbName(dbName) {
+DBCommandCursor::DBCommandCursor(DBClientBase* client, BSONObj command, const std::string& dbName)
+    : _client(client), _initialCommand(command), _dbName(dbName) {
     invariant(_client);
 }
 
 DBCommandCursor::~DBCommandCursor() {
-    kill();    
+    kill();
 }
 
 void DBCommandCursor::requestMore() {
@@ -82,27 +78,28 @@ bool DBCommandCursor::moreBuffered() {
     if (!_error.isOK()) {
         return true;
     }
-    
+
     if (_lastResponse && _positionInBatch < _lastResponse->getBatch().size()) {
         return true;
     }
 
     return false;
 }
-    
-    
+
+
 bool DBCommandCursor::more() {
     if (!moreBuffered()) {
         if (_lastResponse && _lastResponse->getCursorId() == 0) {
             return false;
         }
-        
+
         requestMore();
 
-        // TODO: will the server ever troll us and return a non-zero cursor ID, followed by an empty batch?
+        // TODO: will the server ever troll us and return a non-zero cursor ID, followed by an empty
+        // batch?
         // invariant(moreBuffered());
     }
-    
+
     return moreBuffered();
 }
 
@@ -134,6 +131,4 @@ void DBCommandCursor::kill() {
     _client->killCursor(_lastResponse->getNSS(), _lastResponse->getCursorId());
     _isKilled = true;
 }
-
-
 }

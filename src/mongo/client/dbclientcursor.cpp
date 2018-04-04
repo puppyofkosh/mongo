@@ -369,7 +369,7 @@ bool DBClientCursor::more() {
     }
 
     if (haveLimit && static_cast<int>(batch.pos) >= nToReturn) {
-        log() << "ian: more 2";   
+        log() << "ian: more 2";
         return false;
     }
 
@@ -379,7 +379,7 @@ bool DBClientCursor::more() {
     }
 
     if (cursorId == 0) {
-        log() << "ian: more 4";   
+        log() << "ian: more 4";
         return false;
     }
 

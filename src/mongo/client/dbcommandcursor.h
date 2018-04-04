@@ -36,13 +36,12 @@ namespace mongo {
 
 class DBCommandCursor {
     MONGO_DISALLOW_COPYING(DBCommandCursor);
+
 public:
-    DBCommandCursor(DBClientBase* client,
-                    BSONObj command,
-                    const std::string& dbName);
+    DBCommandCursor(DBClientBase* client, BSONObj command, const std::string& dbName);
 
     virtual ~DBCommandCursor();
-    
+
     /* Safe to call next() if true. May request more from the server. */
     bool more();
 
@@ -51,18 +50,18 @@ public:
 
     // TODO: add dtor which calls kill()
 
-    /* 
+    /*
      * Kill the cursor associated with this DBCommandCursor. Illegal to call if more() has not been
      * called yet. Once kill() has been called, it is illegal to call next() or more() again.
      */
     void kill();
-    
+
 private:
     bool moreBuffered();
     void requestMore();
 
     BSONObj getCommandToRun();
-    
+
     boost::optional<CursorResponse> _lastResponse;
     size_t _positionInBatch = 0;
 
@@ -74,5 +73,4 @@ private:
 
     bool _isKilled = false;
 };
-
 }

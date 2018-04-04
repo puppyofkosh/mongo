@@ -64,7 +64,7 @@ using std::pair;
 using std::string;
 using std::unique_ptr;
 using std::vector;
-    
+
 class DBCommandCursorTest : public unittest::Test {
 protected:
     void setUp() {
@@ -90,11 +90,10 @@ BSONObj getCommand() {
 BSONObj getNthResponseObject(int n) {
     return BSON("x" << n);
 }
-    
+
 BSONObj getEmptyResponse() {
-    return CursorResponse(kNs,
-                          0LL,
-                          std::vector<BSONObj>()).toBSON(CursorResponse::ResponseType::InitialResponse);
+    return CursorResponse(kNs, 0LL, std::vector<BSONObj>())
+        .toBSON(CursorResponse::ResponseType::InitialResponse);
 }
 
 
@@ -109,7 +108,8 @@ TEST_F(DBCommandCursorTest, CommandWithOneResult) {
 
     BSONObj result = BSON("x" << 1);
 
-    BSONObj response = CursorResponse(kNs, 0LL, {result}).toBSON(CursorResponse::ResponseType::InitialResponse);
+    BSONObj response =
+        CursorResponse(kNs, 0LL, {result}).toBSON(CursorResponse::ResponseType::InitialResponse);
     _server->setCommandReply(kCursorGeneratingCommandName, response);
 
     ASSERT_TRUE(cursor.more());
@@ -127,10 +127,10 @@ TEST_F(DBCommandCursorTest, CommandWithManyResults) {
     DBCommandCursor cursor(_conn.get(), getCommand(), "admin");
 
     int docNum = 1;
-    std::vector<BSONObj> firstBatch = {BSON("x" << docNum++),
-                                       BSON("x" << docNum++),
-                                       BSON("x" << docNum++)};
-    BSONObj firstResponse = CursorResponse(kNs, 123LL, firstBatch).toBSON(CursorResponse::ResponseType::InitialResponse);
+    std::vector<BSONObj> firstBatch = {
+        BSON("x" << docNum++), BSON("x" << docNum++), BSON("x" << docNum++)};
+    BSONObj firstResponse = CursorResponse(kNs, 123LL, firstBatch)
+                                .toBSON(CursorResponse::ResponseType::InitialResponse);
     _server->setCommandReply(kCursorGeneratingCommandName, firstResponse);
 
     for (auto expected : firstBatch) {
@@ -147,29 +147,24 @@ TEST_F(DBCommandCursorTest, CommandWithManyResults) {
 
         // On the last iteration the server will return cursor id of 0.
         CursorId returnedCursorId = i + 1 == nIters ? 0LL : 123LL;
-        BSONObj getMoreResponse = CursorResponse(kNs,
-                                                 returnedCursorId,
-                                                 nextBatch).toBSON(CursorResponse::ResponseType::SubsequentResponse);
+        BSONObj getMoreResponse = CursorResponse(kNs, returnedCursorId, nextBatch)
+                                      .toBSON(CursorResponse::ResponseType::SubsequentResponse);
         _server->setCommandReply("getMore", getMoreResponse);
         for (auto expected : nextBatch) {
             ASSERT_TRUE(cursor.more());
             auto swNext = cursor.next();
             ASSERT_OK(swNext);
-            ASSERT_EQ(swNext.getValue().woCompare(expected), 0);        
+            ASSERT_EQ(swNext.getValue().woCompare(expected), 0);
         }
     }
 
     // Implicitly checks that killCursors is _not_ sent, since there's no response set for it
     // on the mock server.
 }
-    
+
 TEST_F(DBCommandCursorTest, ErrorOnInitialCommand) {
     Status status(ErrorCodes::OperationFailed, "some error");
-    BSONObj err = BSON("ok" << 0
-                            << "errmsg"
-                            << status.reason()
-                            << "code"
-                            << int(status.code()));
+    BSONObj err = BSON("ok" << 0 << "errmsg" << status.reason() << "code" << int(status.code()));
 
     DBCommandCursor cursor(_conn.get(), getCommand(), kNs.toString());
     _server->setCommandReply(kCursorGeneratingCommandName, err);
@@ -185,7 +180,7 @@ TEST_F(DBCommandCursorTest, ErrorOnInitialCommand) {
 
 TEST_F(DBCommandCursorTest, ErrorOnGetMore) {
     // TODO: write this
-    //DBCommandCursor cursor(_conn.get(), getCommand(), "admin");
+    // DBCommandCursor cursor(_conn.get(), getCommand(), "admin");
 }
 
 TEST_F(DBCommandCursorTest, KillsCursorOnDestruction) {
@@ -195,7 +190,8 @@ TEST_F(DBCommandCursorTest, KillsCursorOnDestruction) {
 
         BSONObj result = BSON("x" << 1);
 
-        BSONObj response = CursorResponse(kNs, 123LL, {result}).toBSON(CursorResponse::ResponseType::InitialResponse);
+        BSONObj response = CursorResponse(kNs, 123LL, {result})
+                               .toBSON(CursorResponse::ResponseType::InitialResponse);
         _server->setCommandReply(kCursorGeneratingCommandName, response);
 
         ASSERT_TRUE(cursor.more());
