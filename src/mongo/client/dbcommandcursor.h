@@ -48,8 +48,6 @@ public:
     /* Return next object in result cursor. */
     StatusWith<BSONObj> next();
 
-    // TODO: add dtor which calls kill()
-
     /*
      * Kill the cursor associated with this DBCommandCursor. Illegal to call if more() has not been
      * called yet. Once kill() has been called, it is illegal to call next() or more() again.

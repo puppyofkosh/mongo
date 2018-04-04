@@ -378,23 +378,21 @@ void processOp(DBClientBase* conn, BSONObj op, const std::set<string>& myUris) {
     }
 
     // The $currentOp query should have filtered out any operations not started by us.
-    // invariant(myUris.count(client));
+    invariant(myUris.count(client));
 
-    if (myUris.count(client)) {
-        // The operation originated from us, so we kill it.
-        BSONObjBuilder cmdBob;
-        BSONObj info;
-        log() << "Killing op " << op["opid"] << std::flush;
-        cmdBob.appendAs(op["opid"], "op");
-        auto cmdArgs = cmdBob.done();
-        const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
-        BSONObj killOpResponse;
-        conn->runCommand("admin", killOp, killOpResponse);
+    // The operation originated from us, so we kill it.
+    BSONObjBuilder cmdBob;
+    BSONObj info;
+    log() << "Killing op " << op["opid"];
+    cmdBob.appendAs(op["opid"], "op");
+    auto cmdArgs = cmdBob.done();
+    const BSONObj killOp = BSON("killOp" << 1 << "op" << op["opid"]);
+    BSONObj killOpResponse;
+    conn->runCommand("admin", killOp, killOpResponse);
 
-        if (!killOpResponse["ok"].trueValue()) {
-            warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
-                      << killOpResponse;
-        }
+    if (!killOpResponse["ok"].trueValue()) {
+        warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
+                  << killOpResponse;
     }
 }
 
@@ -404,34 +402,27 @@ void findAndKillMyOps40AndLater(DBClientBase* conn, const std::set<string>& myUr
         uriArrBuilder.append(a);
     }
 
-    BSONObj cmd =
-        BSON("aggregate" << 1 << "pipeline"
-                         << BSON_ARRAY(
-                                // 'localOps' true so that when run on a sharded cluster, we get the
-                                // mongos operations.
-                                BSON("$currentOp" << BSON("localOps" << true))  // <<
-                                // Match any operations started by us.
-                                // BSON("$match"
-                                //      << BSON("client" << BSON("$in" << uriArrBuilder.arr())
-                                //              << "$comment" << "ianlol"
-                                //          ))
-                                )
-                         // Must be provided for the 'aggregate' command.
-                         << "cursor"
-                         << BSON("batchSize" << 1));
+    BSONObj cmd = BSON(
+        "aggregate" << 1 << "pipeline"
+                    << BSON_ARRAY(
+                           // 'localOps' true so that when run on a sharded cluster, we get the
+                           // mongos operations.
+                           BSON("$currentOp" << BSON("localOps" << true)) <<
+                           // Match any operations started by us.
+                           BSON("$match" << BSON("client" << BSON("$in" << uriArrBuilder.arr()))))
+                    // Must be provided for the 'aggregate' command.
+                    << "cursor"
+                    << BSONObj());
 
     DBCommandCursor cursor(conn, cmd, "admin");
-    log() << "ian: hi 5";
     while (cursor.more()) {
         auto swNext = cursor.next();
         if (!swNext.isOK()) {
             warning() << "Got error trying to iterate agg cursor: " << swNext.getStatus();
             break;
         }
-        log() << "ian: hi processing op " << swNext.getValue();
         processOp(conn, swNext.getValue(), myUris);
     }
-    log() << "ian: hi 7";
 }
 
 void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
@@ -459,8 +450,6 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         if (!conn) {
             continue;
         }
-        log() << "ian: hi 3. Established connection. Supports version with REPLICA_SET? "
-              << conn->serverSupportsWireVersion(REPLICA_SET_TRANSACTIONS);
 
         if (conn->serverSupportsWireVersion(REPLICA_SET_TRANSACTIONS)) {
             findAndKillMyOps40AndLater(conn.get(), myUris);

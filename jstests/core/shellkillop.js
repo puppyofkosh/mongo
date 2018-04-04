@@ -6,7 +6,6 @@
             db.getSiblingDB("admin")
                 .aggregate([{$currentOp: {localOps: true}}, {$match: {ns: "test." + collName}}])
                 .toArray();
-        print("ian: Found currentOps : " + tojson(currentOps));
         return currentOps;
     }
     db[collName].drop();
