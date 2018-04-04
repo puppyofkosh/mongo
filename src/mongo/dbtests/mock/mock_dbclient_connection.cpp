@@ -29,6 +29,7 @@
 
 #include "mongo/dbtests/mock/mock_dbclient_connection.h"
 
+#include "mongo/db/query/killcursors_request.h"
 #include "mongo/dbtests/mock/mock_dbclient_cursor.h"
 #include "mongo/util/net/socket_exception.h"
 #include "mongo/util/time_support.h"
@@ -158,8 +159,11 @@ void MockDBClientConnection::remove(const string& ns, Query query, int flags) {
     _remoteServer->remove(ns, query, flags);
 }
 
-void MockDBClientConnection::killCursor(const NamespaceString& ns, long long cursorID) {
-    verify(false);  // unimplemented
+void MockDBClientConnection::killCursor(const NamespaceString& ns, long long cursorId) {
+    auto req = OpMsgRequest::fromDBAndBody(ns.db(), KillCursorsRequest(ns, {cursorId}).toBSON());
+    _remoteServer->runCommand(_remoteServerInstanceID, req);
+    // Response is discarded.
+    return;
 }
 
 bool MockDBClientConnection::call(mongo::Message& toSend,

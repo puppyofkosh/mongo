@@ -141,10 +141,14 @@ TEST_F(DBCommandCursorTest, CommandWithManyResults) {
     }
 
     // Do a few rounds of getMores.
-    for (int i = 0; i < 3; i++) {
+    const int nIters = 3;
+    for (int i = 0; i < nIters; i++) {
         std::vector<BSONObj> nextBatch = {BSON("x" << docNum++), BSON("x" << docNum++)};
+
+        // On the last iteration the server will return cursor id of 0.
+        CursorId returnedCursorId = i + 1 == nIters ? 0LL : 123LL;
         BSONObj getMoreResponse = CursorResponse(kNs,
-                                                 123LL,
+                                                 returnedCursorId,
                                                  nextBatch).toBSON(CursorResponse::ResponseType::SubsequentResponse);
         _server->setCommandReply("getMore", getMoreResponse);
         for (auto expected : nextBatch) {

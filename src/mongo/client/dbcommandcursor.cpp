@@ -46,6 +46,10 @@ DBCommandCursor::DBCommandCursor(DBClientBase* client,
     invariant(_client);
 }
 
+DBCommandCursor::~DBCommandCursor() {
+    kill();    
+}
+
 void DBCommandCursor::requestMore() {
     BSONObj serverResponse;
     BSONObj commandToRun;
@@ -111,5 +115,25 @@ StatusWith<BSONObj> DBCommandCursor::next() {
     invariant(_lastResponse);
     return _lastResponse->getBatch()[_positionInBatch++];
 }
-    
+
+void DBCommandCursor::kill() {
+    if (_isKilled) {
+        return;
+    }
+
+    if (!_lastResponse) {
+        // Nothing was ever sent to the server.
+        return;
+    }
+
+    if (_lastResponse->getCursorId() == 0) {
+        // The cursor was exhausted.
+        return;
+    }
+
+    _client->killCursor(_lastResponse->getNSS(), _lastResponse->getCursorId());
+    _isKilled = true;
+}
+
+
 }
