@@ -9,11 +9,13 @@
         return currentOps;
     }
     db[collName].drop();
-    db[collName].insert({_id: 0});
+    for (var i = 0; i < 5000; i++) {
+        db[collName].insert({_id: i});
+    }
 
     // Run a find that will take several hours if not killed.
     function runLongFind(collName) {
-        const curs = db[collName].find({$where: 'for(var i=0;i<100000;i++) sleep(1000)'});
+        const curs = db[collName].find({$where: 'sleep(1000 * 10)'});
         curs.itcount();
     }
 

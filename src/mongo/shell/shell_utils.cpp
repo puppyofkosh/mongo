@@ -390,7 +390,7 @@ void processOp(DBClientBase* conn, BSONObj op, const std::set<string>& myUris) {
     BSONObj killOpResponse;
     conn->runCommand("admin", killOp, killOpResponse);
 
-    if (!killOpResponse["ok"].trueValue()) {
+    if (!getStatusFromCommandResult(killOpResponse).isOK()) {
         warning() << "Failed to kill op " << op["opid"] << ". Expected ok response but got "
                   << killOpResponse;
     }
@@ -426,6 +426,8 @@ void findAndKillMyOps40AndLater(DBClientBase* conn, const std::set<string>& myUr
 }
 
 void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
+
     Prompter prompter("do you want to kill the current op(s) on the server?");
 
     if (withPrompt && !prompter.confirm()) {
@@ -433,7 +435,6 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         return;
     }
 
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
     for (map<string, set<string>>::const_iterator i = _connectionUris.begin();
          i != _connectionUris.end();
          ++i) {
