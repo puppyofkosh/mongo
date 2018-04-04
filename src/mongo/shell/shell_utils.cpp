@@ -37,6 +37,7 @@
 #include "mongo/client/dbcommandcursor.h"
 #include "mongo/client/replica_set_monitor.h"
 #include "mongo/platform/random.h"
+#include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/scripting/engine.h"
 #include "mongo/shell/bench.h"
 #include "mongo/shell/shell_options.h"
@@ -305,10 +306,59 @@ void ConnectionRegistry::registerConnection(DBClientBase& client) {
 }
 
 /*
+ * Pre 4.0, there was no way of getting (or killing) all current operations running locally on a
+ * mongos. When there are still operations running and we are connected to a mongos, we just log a
+ * warning.
+ */
+void findAndKillMyOpsPre40(DBClientBase* conn, const std::set<string>& myUris) {
+    invariant(conn);
+
+    BSONObj currentOpRes;
+    conn->runPseudoCommand("admin", "currentOp", "$cmd.sys.inprog", {}, currentOpRes);
+    if (!currentOpRes["inprog"].isABSONObj()) {
+        Status status = getStatusFromCommandResult(currentOpRes);
+        warning() << "currentOp command did not succeed: " << status;
+        // We don't have permissions (or the call didn't succeed) - do nothing.
+        return;
+    }
+    auto inprog = currentOpRes["inprog"].embeddedObject();
+    for (const auto op : inprog) {
+        // For sharded clusters, `client_s` is used instead and `client` is not present.
+        string client;
+        if (auto elem = op["client"]) {
+            // mongod currentOp client
+            if (elem.type() != String) {
+                warning() << "Ignoring operation " << op["opid"].toString(false)
+                          << "; expected 'client' field in currentOp response to have type "
+                             "string, but found "
+                          << typeName(elem.type());
+                continue;
+            }
+            client = elem.str();
+        } else if (auto elem = op["client_s"]) {
+            // mongos currentOp client.
+            warning() << "Cannot kill operations on mongos. Not killing operation " << op["opid"]
+                      << ".";
+            continue;
+        } else {
+            // Internal operation, like TTL index.
+            continue;
+        }
+        if (myUris.count(client)) {
+            BSONObjBuilder cmdBob;
+            BSONObj info;
+            cmdBob.appendAs(op["opid"], "op");
+            auto cmdArgs = cmdBob.done();
+            conn->runPseudoCommand("admin", "killOp", "$cmd.sys.killop", cmdArgs, info);
+        }
+    }
+}
+
+/*
  * Given an operation object returned by $currentOp, check that it was started by us, and if so,
  * kill it.
  */
-void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
+void processOp(DBClientBase* conn, BSONObj op, const std::set<string>& myUris) {
     invariant(conn);
     std::string client;
     if (auto elem = op["client"]) {
@@ -348,6 +398,42 @@ void processOp(DBClientBase* conn, BSONObj op, const set<string>& myUris) {
     }
 }
 
+void findAndKillMyOps40AndLater(DBClientBase* conn, const std::set<string>& myUris) {
+    BSONArrayBuilder uriArrBuilder;
+    for (auto&& a : myUris) {
+        uriArrBuilder.append(a);
+    }
+
+    BSONObj cmd =
+        BSON("aggregate" << 1 << "pipeline"
+                         << BSON_ARRAY(
+                                // 'localOps' true so that when run on a sharded cluster, we get the
+                                // mongos operations.
+                                BSON("$currentOp" << BSON("localOps" << true))  // <<
+                                // Match any operations started by us.
+                                // BSON("$match"
+                                //      << BSON("client" << BSON("$in" << uriArrBuilder.arr())
+                                //              << "$comment" << "ianlol"
+                                //          ))
+                                )
+                         // Must be provided for the 'aggregate' command.
+                         << "cursor"
+                         << BSON("batchSize" << 1));
+
+    DBCommandCursor cursor(conn, cmd, "admin");
+    log() << "ian: hi 5";
+    while (cursor.more()) {
+        auto swNext = cursor.next();
+        if (!swNext.isOK()) {
+            warning() << "Got error trying to iterate agg cursor: " << swNext.getStatus();
+            break;
+        }
+        log() << "ian: hi processing op " << swNext.getValue();
+        processOp(conn, swNext.getValue(), myUris);
+    }
+    log() << "ian: hi 7";
+}
+
 void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
     Prompter prompter("do you want to kill the current op(s) on the server?");
 
@@ -356,19 +442,14 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         return;
     }
 
-    log() << "ian: hi";
-
     stdx::lock_guard<stdx::mutex> lk(_mutex);
     for (map<string, set<string>>::const_iterator i = _connectionUris.begin();
          i != _connectionUris.end();
          ++i) {
         auto status = ConnectionString::parse(i->first);
         if (!status.isOK()) {
-            log() << "ian: couldn't parse " << i->first << " " << status.getStatus();
             continue;
         }
-
-        log() << "ian: hi 2";
 
         const set<string>& myUris = i->second;
         const ConnectionString cs(status.getValue());
@@ -376,44 +457,16 @@ void ConnectionRegistry::killOperationsOnAllConnections(bool withPrompt) const {
         std::string errmsg;
         std::unique_ptr<DBClientBase> conn(cs.connect("MongoDB Shell", errmsg));
         if (!conn) {
-            log() << "ian: Couldn't establish connection " << errmsg;
             continue;
         }
-        log() << "ian: hi 3";
+        log() << "ian: hi 3. Established connection. Supports version with REPLICA_SET? "
+              << conn->serverSupportsWireVersion(REPLICA_SET_TRANSACTIONS);
 
-        BSONArrayBuilder uriArrBuilder;
-        for (auto&& a : myUris) {
-            uriArrBuilder.append(a);
+        if (conn->serverSupportsWireVersion(REPLICA_SET_TRANSACTIONS)) {
+            findAndKillMyOps40AndLater(conn.get(), myUris);
+        } else {
+            findAndKillMyOpsPre40(conn.get(), myUris);
         }
-        log() << "ian: hi 4";
-
-        BSONObj cmd = BSON(
-            "aggregate" << 1 << "pipeline"
-                        << BSON_ARRAY(
-                               // 'localOps' true so that when run on a sharded cluster, we get the
-                               // mongos operations.
-                               BSON("$currentOp" << BSON("localOps" << true))  // <<
-                               // Match any operations started by us.
-                               // BSON("$match"
-                               //      << BSON("client" << BSON("$in" << uriArrBuilder.arr())
-                               //              << "$comment" << "ianlol"
-                               //          ))
-                               )
-                        // Must be provided for the 'aggregate' command.
-                        << "cursor"
-                        << BSON("batchSize" << 1));
-        DBCommandCursor cursor(conn.get(), cmd, "admin");
-        log() << "ian: hi 5";
-        while (cursor.more()) {
-            auto swNext = cursor.next();
-            if (!swNext.isOK()) {
-                warning() << "Got error trying to iterate agg cursor: " << swNext.getStatus();
-                break;
-            }
-            log() << "ian: hi processing op " << swNext.getValue();
-            processOp(conn.get(), swNext.getValue(), myUris);
-        }
-        log() << "ian: hi 7";
     }
 }
 

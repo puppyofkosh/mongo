@@ -53,7 +53,6 @@ void DBCommandCursor::requestMore() {
     if (!_lastResponse) {
         commandToRun = _initialCommand;
     } else {
-        // TODO: Choose nss to pass in a better way.
         GetMoreRequest req(_lastResponse->getNSS(),
                            _lastResponse->getCursorId(),
                            boost::none,

@@ -74,7 +74,7 @@ private:
 
 
 DBDirectClient::DBDirectClient(OperationContext* opCtx) : _opCtx(opCtx) {
-    _setServerRPCProtocols(rpc::supports::kAll);
+    _setServerRPCProtocols({rpc::supports::kAll, {RELEASE_2_4_AND_BEFORE, LATEST_WIRE_VERSION}});
 }
 
 bool DBDirectClient::isFailed() const {

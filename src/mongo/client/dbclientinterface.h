@@ -796,6 +796,8 @@ public:
 
     virtual bool isMongos() const = 0;
 
+    virtual bool serverSupportsWireVersion(WireVersion version);
+
     /**
      * Parses command replies and runs them through the metadata reader.
      * This is virtual and non-const to allow subclasses to act on failures.
@@ -824,7 +826,7 @@ protected:
     virtual void _auth(const BSONObj& params);
 
     // should be set by subclasses during connection.
-    void _setServerRPCProtocols(rpc::ProtocolSet serverProtocols);
+    void _setServerRPCProtocols(rpc::ProtocolSetAndWireVersionInfo serverProtocols);
 
     /** controls how chatty the client is about network errors & such.  See log.h */
     const logger::LogSeverity _logLevel;
@@ -840,10 +842,9 @@ private:
     rpc::ProtocolSet _clientRPCProtocols{rpc::supports::kAll};
 
     /**
-     * The rpc protocol the remote server(s) support. We support 'opQueryOnly' by default unless
-     * we detect support for OP_COMMAND at connection time.
+     * The rpc protocol the remote server(s) support. Set in connect().
      */
-    rpc::ProtocolSet _serverRPCProtocols{rpc::supports::kOpQueryOnly};
+    rpc::ProtocolSetAndWireVersionInfo _serverProtocolSetAndWireVersionInfo;
 
     rpc::RequestMetadataWriter _metadataWriter;
     rpc::ReplyMetadataReader _metadataReader;

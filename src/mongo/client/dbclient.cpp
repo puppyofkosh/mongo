@@ -148,15 +148,20 @@ rpc::ProtocolSet DBClientBase::getClientRPCProtocols() const {
 }
 
 rpc::ProtocolSet DBClientBase::getServerRPCProtocols() const {
-    return _serverRPCProtocols;
+    return _serverProtocolSetAndWireVersionInfo.protocolSet;
+}
+
+bool DBClientBase::serverSupportsWireVersion(WireVersion version) {
+    const WireVersionInfo& serverVersion = _serverProtocolSetAndWireVersionInfo.version;
+    return serverVersion.minWireVersion <= version && version <= serverVersion.maxWireVersion;
 }
 
 void DBClientBase::setClientRPCProtocols(rpc::ProtocolSet protocols) {
     _clientRPCProtocols = std::move(protocols);
 }
 
-void DBClientBase::_setServerRPCProtocols(rpc::ProtocolSet protocols) {
-    _serverRPCProtocols = std::move(protocols);
+void DBClientBase::_setServerRPCProtocols(rpc::ProtocolSetAndWireVersionInfo psAndWireVersionInfo) {
+    _serverProtocolSetAndWireVersionInfo = std::move(psAndWireVersionInfo);
 }
 
 void DBClientBase::setRequestMetadataWriter(rpc::RequestMetadataWriter writer) {
@@ -910,7 +915,7 @@ Status DBClientConnection::connect(const HostAndPort& serverAddress, StringData 
         return validateStatus;
     }
 
-    _setServerRPCProtocols(swProtocolSet.getValue().protocolSet);
+    _setServerRPCProtocols(std::move(swProtocolSet.getValue()));
 
     auto negotiatedProtocol = rpc::negotiate(
         getServerRPCProtocols(), rpc::computeProtocolSet(WireSpec::instance().outgoing));
