@@ -523,8 +523,8 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
     // since a mongos may forward a change stream in an invalid position (e.g. in a nested $lookup
     // or $facet pipeline). In this case, mongod is responsible for parsing the pipeline and
     // throwing an error without ever executing the change stream.
-    if (_expCtx->fromMongos) {
-        invariant(_expCtx->needsMerge);
+    if (pExpCtx->fromMongos) {
+        invariant(pExpCtx->needsMerge);
     }
     log() << "ian: processing... " << input;
 
@@ -549,15 +549,15 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
         if (!_documentKeyFieldsSharded) {
             // If this is not a shard server, 'catalogCache' will be nullptr and we will skip the
             // routing table check.
-            auto catalogCache = Grid::get(_expCtx->opCtx)->catalogCache();
+            auto catalogCache = Grid::get(pExpCtx->opCtx)->catalogCache();
             const bool collectionIsSharded = catalogCache && [catalogCache, this]() {
                 auto routingInfo =
-                    catalogCache->getCollectionRoutingInfo(_expCtx->opCtx, _expCtx->ns);
+                    catalogCache->getCollectionRoutingInfo(pExpCtx->opCtx, pExpCtx->ns);
                 return routingInfo.isOK() && routingInfo.getValue().cm();
             }();
             if (_documentKeyFields.empty() || collectionIsSharded) {
-                _documentKeyFields = _expCtx->mongoProcessInterface->collectDocumentKeyFields(
-                    _expCtx->opCtx, _expCtx->ns, uuid.getUuid());
+                _documentKeyFields = pExpCtx->mongoProcessInterface->collectDocumentKeyFields(
+                    pExpCtx->opCtx, pExpCtx->ns, uuid.getUuid());
                 _documentKeyFieldsSharded = collectionIsSharded;
             }
         }
@@ -662,7 +662,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
 
     // If we're in a sharded environment, we'll need to merge the results by their sort key, so add
     // that as metadata.
-    if (_expCtx->needsMerge) {
+    if (pExpCtx->needsMerge) {
         doc.setSortKeyMetaField(BSON("" << ts << "" << uuid << "" << documentKey));
     }
 
@@ -688,7 +688,7 @@ Document DocumentSourceOplogTransformation::serializeStageOptions(
     Document changeStreamOptions(_changeStreamSpec);
     // If we're on a mongos and no other start time is specified, we want to start at the current
     // cluster time on the mongos.  This ensures all shards use the same start time.
-    if (_expCtx->inMongos &&
+    if (pExpCtx->inMongos &&
         changeStreamOptions[DocumentSourceChangeStreamSpec::kResumeAfterFieldName].missing() &&
         changeStreamOptions
             [DocumentSourceChangeStreamSpec::kResumeAfterClusterTimeDeprecatedFieldName]
@@ -701,7 +701,7 @@ Document DocumentSourceOplogTransformation::serializeStageOptions(
         // operations/commands equal to or greater than the 'startAtClusterTime' timestamp. In
         // particular, avoid including the last operation that went through mongos in an attempt to
         // match the behavior of a replica set more closely.
-        auto clusterTime = LogicalClock::get(_expCtx->opCtx)->getClusterTime();
+        auto clusterTime = LogicalClock::get(pExpCtx->opCtx)->getClusterTime();
         clusterTime.addTicks(1);
         newChangeStreamOptions[DocumentSourceChangeStreamSpec::kStartAtClusterTimeFieldName]
                               [ResumeTokenClusterTime::kTimestampFieldName] =
@@ -748,7 +748,7 @@ DocumentSource::StageConstraints DocumentSourceOplogTransformation::constraints(
 }
 
 DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
-    _expCtx->checkForInterrupt();
+    pExpCtx->checkForInterrupt();
 
     // Get the next input document.
     auto input = pSource->getNext();

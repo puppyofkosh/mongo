@@ -168,10 +168,10 @@ class DocumentSourceOplogTransformation : public DocumentSource {
 public:
     DocumentSourceOplogTransformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                       BSONObj changeStreamSpec)
-        : DocumentSource(expCtx), _expCtx(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
-        // TODO: remove _expCtx and use the pExpCtx which is part of DocumentSource instead.
+        : DocumentSource(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
     }
     ~DocumentSourceOplogTransformation() = default;
+
     Document applyTransformation(const Document& input);
     boost::intrusive_ptr<DocumentSource> optimize() final {
         return this;
@@ -191,7 +191,6 @@ public:
     }
 
 private:
-    boost::intrusive_ptr<ExpressionContext> _expCtx;
     BSONObj _changeStreamSpec;
 
     // Fields of the document key, in order, including the shard key if the collection is
