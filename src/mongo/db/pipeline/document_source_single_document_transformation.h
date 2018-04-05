@@ -57,7 +57,6 @@ public:
             kInclusionProjection,
             kComputedProjection,
             kReplaceRoot,
-            kChangeStreamTransformation,
         };
         virtual ~TransformerInterface() = default;
         virtual Document applyTransformation(const Document& input) = 0;
@@ -110,15 +109,9 @@ public:
             PositionRequirement::kNone,
             HostTypeRequirement::kNone,
             DiskUseRequirement::kNoDiskUse,
-            (getType() == TransformerInterface::TransformerType::kChangeStreamTransformation
-                 ? FacetRequirement::kNotAllowed
-                 : FacetRequirement::kAllowed),
-            (getType() == TransformerInterface::TransformerType::kChangeStreamTransformation
-                 ? TransactionRequirement::kNotAllowed
-                 : TransactionRequirement::kAllowed),
-            (getType() == TransformerInterface::TransformerType::kChangeStreamTransformation
-                 ? ChangeStreamRequirement::kChangeStreamStage
-                 : ChangeStreamRequirement::kWhitelist));
+            FacetRequirement::kAllowed,
+            TransactionRequirement::kAllowed,
+            ChangeStreamRequirement::kWhitelist);
 
         constraints.canSwapWithMatch = true;
         constraints.canSwapWithLimit = true;

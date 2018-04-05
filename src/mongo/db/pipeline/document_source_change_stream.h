@@ -86,22 +86,35 @@ public:
         const NamespaceString _nss;
     };
 
-    class Transformation : public DocumentSourceSingleDocumentTransformation::TransformerInterface {
+    class Transformation : public DocumentSource {
     public:
         Transformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        BSONObj changeStreamSpec)
-            : _expCtx(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {}
+            : DocumentSource(expCtx),
+            _expCtx(expCtx),
+            _changeStreamSpec(changeStreamSpec.getOwned()) {
+            // TODO: remove _expCtx and use the pExpCtx which is part of DocumentSource instead.
+        }
         ~Transformation() = default;
-        Document applyTransformation(const Document& input) final;
-        TransformerType getType() const final {
-            return TransformerType::kChangeStreamTransformation;
-        };
-        void optimize() final{};
+        Document applyTransformation(const Document& input);
+        boost::intrusive_ptr<DocumentSource> optimize() final {
+            return this;
+        }
         Document serializeStageOptions(
-            boost::optional<ExplainOptions::Verbosity> explain) const final;
-        DocumentSource::GetDepsReturn addDependencies(DepsTracker* deps) const final;
+            boost::optional<ExplainOptions::Verbosity> explain) const;
+        DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
         DocumentSource::GetModPathsReturn getModifiedPaths() const final;
 
+        void doDispose() final {}
+        Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
+
+        DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
+
+        DocumentSource::GetNextResult getNext();
+        const char* getSourceName() const {
+            return kStageName.rawData();
+        }
+        
     private:
         boost::intrusive_ptr<ExpressionContext> _expCtx;
         BSONObj _changeStreamSpec;
@@ -113,6 +126,10 @@ public:
 
         // Set to true if the collection is found to be sharded while retrieving _documentKeyFields.
         bool _documentKeyFieldsSharded = false;
+
+        // Cached stage options in case this DocumentSource is disposed before serialized (e.g. explain
+        // with a sort which will auto-dispose of the pipeline).
+        Document _cachedStageOptions;
     };
 
     // The name of the field where the document key (_id and shard key, if present) will be found

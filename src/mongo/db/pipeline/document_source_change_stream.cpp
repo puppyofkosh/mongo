@@ -37,6 +37,7 @@
 #include "mongo/db/logical_clock.h"
 #include "mongo/db/pipeline/change_stream_constants.h"
 #include "mongo/db/pipeline/document_path_support.h"
+#include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/document_source_check_resume_token.h"
 #include "mongo/db/pipeline/document_source_limit.h"
 #include "mongo/db/pipeline/document_source_lookup_change_post_image.h"
@@ -505,10 +506,8 @@ BSONObj DocumentSourceChangeStream::replaceResumeTokenInCommand(const BSONObj or
 
 intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationStage(
     BSONObj changeStreamSpec, const intrusive_ptr<ExpressionContext>& expCtx) {
-    return intrusive_ptr<DocumentSource>(new DocumentSourceSingleDocumentTransformation(
-        expCtx,
-        stdx::make_unique<Transformation>(expCtx, changeStreamSpec),
-        kStageName.toString()));
+    return intrusive_ptr<DocumentSource>(new DocumentSourceChangeStream::Transformation(
+                                             expCtx, changeStreamSpec));
 }
 
 Document DocumentSourceChangeStream::Transformation::applyTransformation(const Document& input) {
@@ -708,7 +707,7 @@ Document DocumentSourceChangeStream::Transformation::serializeStageOptions(
     return changeStreamOptions;
 }
 
-DocumentSource::GetDepsReturn DocumentSourceChangeStream::Transformation::addDependencies(
+DocumentSource::GetDepsReturn DocumentSourceChangeStream::Transformation::getDependencies(
     DepsTracker* deps) const {
     deps->fields.insert(repl::OplogEntry::kOpTypeFieldName.toString());
     deps->fields.insert(repl::OplogEntry::kTimestampFieldName.toString());
@@ -723,6 +722,39 @@ DocumentSource::GetModPathsReturn DocumentSourceChangeStream::Transformation::ge
     const {
     // All paths are modified.
     return {DocumentSource::GetModPathsReturn::Type::kAllPaths, std::set<string>{}, {}};
+}
+
+Value DocumentSourceChangeStream::Transformation::serialize(
+    boost::optional<ExplainOptions::Verbosity> explain) const {
+    return Value(Document{{getSourceName(), serializeStageOptions(explain)}});
+}
+
+DocumentSource::StageConstraints DocumentSourceChangeStream::Transformation::constraints(Pipeline::SplitState pipeState) const {
+    StageConstraints constraints(
+        StreamType::kStreaming,
+        PositionRequirement::kNone,
+        HostTypeRequirement::kNone,
+        DiskUseRequirement::kNoDiskUse,
+        FacetRequirement::kNotAllowed,
+        TransactionRequirement::kNotAllowed,
+        ChangeStreamRequirement::kChangeStreamStage);
+
+    constraints.canSwapWithMatch = true;
+    constraints.canSwapWithLimit = true;
+    return constraints;
+}
+
+DocumentSource::GetNextResult DocumentSourceChangeStream::Transformation::getNext() {
+    _expCtx->checkForInterrupt();
+
+    // Get the next input document.
+    auto input = pSource->getNext();
+    if (!input.isAdvanced()) {
+        return input;
+    }
+
+    // Apply and return the document with added fields.
+    return applyTransformation(input.releaseDocument());
 }
 
 }  // namespace mongo
