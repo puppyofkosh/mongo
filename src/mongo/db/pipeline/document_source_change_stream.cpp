@@ -236,13 +236,39 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
 
 }  // namespace
 
+BSONObj getOpMatchFilter(const std::string& nsFieldName,
+                         bool onEntireDB,
+                         const NamespaceString& nss) {
+    const static auto regexAllCollections = R"(\.(?!(\$|system\.)))";
+
+    // 2) Supported operations on the target namespace.
+
+    // 2.1) Normal CRUD ops.
+    auto normalOpTypeMatch = BSON("op" << NE << "n");
+
+    // 2.2) A chunk gets migrated to a new shard that doesn't have any chunks.
+    auto chunkMigratedMatch = BSON("op"
+                                   << "n"
+                                   << "o2.type"
+                                   << "migrateChunkToNewShard");
+
+    if (onEntireDB) {
+        // Match all namespaces that start with db name, followed by ".", then not followed by
+        // '$' or 'system.'
+        return BSON(nsFieldName << BSONRegEx("^" + nss.db() + regexAllCollections)
+                                << OR(normalOpTypeMatch, chunkMigratedMatch));
+    } else {
+        return BSON(nsFieldName << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
+    }
+}
+
+
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     Timestamp startFrom,
     bool startFromInclusive) {
     auto nss = expCtx->ns;
     auto onEntireDB = nss.isCollectionlessAggregateNS();
-    const auto regexAllCollections = R"(\.(?!(\$|system\.)))";
 
     // 1) Supported commands that have the target db namespace (e.g. test.$cmd) in "ns" field.
     BSONArrayBuilder invalidatingCommands;
@@ -274,37 +300,27 @@ BSONObj DocumentSourceChangeStream::buildMatchFilter(
     // 1.2) Supported commands that have arbitrary db namespaces in "ns" field.
     auto renameDropTarget = BSON("o.to" << nss.ns());
 
+    // 1.3) Look for applyOps which have entries matching the desired namespace.
+    auto applyOps = getOpMatchFilter("o.applyOps.ns", onEntireDB, nss);
+
     // All supported commands that are either (1.1) or (1.2).
     BSONObj commandMatch = BSON("op"
                                 << "c"
-                                << OR(commandsOnTargetDb, renameDropTarget));
-
-    // 2.1) Normal CRUD ops.
-    auto normalOpTypeMatch = BSON("op" << NE << "n");
-
-    // 2.2) A chunk gets migrated to a new shard that doesn't have any chunks.
-    auto chunkMigratedMatch = BSON("op"
-                                   << "n"
-                                   << "o2.type"
-                                   << "migrateChunkToNewShard");
+                                << OR(commandsOnTargetDb, renameDropTarget, applyOps));
 
     // 2) Supported operations on the target namespace.
-    BSONObj opMatch;
-    if (onEntireDB) {
-        // Match all namespaces that start with db name, followed by ".", then not followed by
-        // '$' or 'system.'
-        opMatch = BSON("ns" << BSONRegEx("^" + nss.db() + regexAllCollections)
-                            << OR(normalOpTypeMatch, chunkMigratedMatch));
-    } else {
-        opMatch = BSON("ns" << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
-    }
+    BSONObj opMatch = getOpMatchFilter("ns", onEntireDB, nss);
 
     // Match oplog entries after "start" and are either supported (1) commands or (2) operations,
     // excepting those tagged "fromMigrate".
     // Include the resume token, if resuming, so we can verify it was still present in the oplog.
-    return BSON("$and" << BSON_ARRAY(BSON("ts" << (startFromInclusive ? GTE : GT) << startFrom)
-                                     << BSON(OR(opMatch, commandMatch))
-                                     << BSON("fromMigrate" << NE << true)));
+    auto query =
+        BSON("$and" << BSON_ARRAY(BSON("ts" << (startFromInclusive ? GTE : GT) << startFrom)
+                                  << BSON(OR(opMatch, commandMatch))
+                                  << BSON("fromMigrate" << NE << true)));
+
+    log() << "ian: query is " << query;
+    return query;
 }
 
 namespace {
@@ -511,6 +527,7 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
     if (_expCtx->fromMongos) {
         invariant(_expCtx->needsMerge);
     }
+    log() << "ian: processing... " << input;
 
     MutableDocument doc;
 
@@ -600,6 +617,12 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
         case repl::OpTypeEnum::kCommand: {
             // Any command that makes it through our filter is an invalidating command such as a
             // drop.
+            log() << "ian: Found a command: " << input;
+            if (!input.getNestedField("o.applyOps").missing()) {
+                log() << "ian: found an applyOps";
+            } else {
+                log() << "ian: found an invalidating command";
+            }
             operationType = kInvalidateOpType;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
