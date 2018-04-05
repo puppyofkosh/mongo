@@ -86,52 +86,6 @@ public:
         const NamespaceString _nss;
     };
 
-    class Transformation : public DocumentSource {
-    public:
-        Transformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                       BSONObj changeStreamSpec)
-            : DocumentSource(expCtx),
-            _expCtx(expCtx),
-            _changeStreamSpec(changeStreamSpec.getOwned()) {
-            // TODO: remove _expCtx and use the pExpCtx which is part of DocumentSource instead.
-        }
-        ~Transformation() = default;
-        Document applyTransformation(const Document& input);
-        boost::intrusive_ptr<DocumentSource> optimize() final {
-            return this;
-        }
-        Document serializeStageOptions(
-            boost::optional<ExplainOptions::Verbosity> explain) const;
-        DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
-        DocumentSource::GetModPathsReturn getModifiedPaths() const final;
-
-        void doDispose() final {}
-        Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
-
-        DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
-
-        DocumentSource::GetNextResult getNext();
-        const char* getSourceName() const {
-            return kStageName.rawData();
-        }
-        
-    private:
-        boost::intrusive_ptr<ExpressionContext> _expCtx;
-        BSONObj _changeStreamSpec;
-
-        // Fields of the document key, in order, including the shard key if the collection is
-        // sharded, and anyway "_id". Empty until the first oplog entry with a uuid is encountered.
-        // Needed for transforming 'insert' oplog entries.
-        std::vector<FieldPath> _documentKeyFields;
-
-        // Set to true if the collection is found to be sharded while retrieving _documentKeyFields.
-        bool _documentKeyFieldsSharded = false;
-
-        // Cached stage options in case this DocumentSource is disposed before serialized (e.g. explain
-        // with a sort which will auto-dispose of the pipeline).
-        Document _cachedStageOptions;
-    };
-
     // The name of the field where the document key (_id and shard key, if present) will be found
     // after the transformation.
     static constexpr StringData kDocumentKeyField = "documentKey"_sd;
@@ -209,6 +163,46 @@ private:
     // instead.
     DocumentSourceChangeStream() = default;
 };
+
+class DocumentSourceOplogTransformation : public DocumentSource {
+public:
+    DocumentSourceOplogTransformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                      BSONObj changeStreamSpec)
+        : DocumentSource(expCtx), _expCtx(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
+        // TODO: remove _expCtx and use the pExpCtx which is part of DocumentSource instead.
+    }
+    ~DocumentSourceOplogTransformation() = default;
+    Document applyTransformation(const Document& input);
+    boost::intrusive_ptr<DocumentSource> optimize() final {
+        return this;
+    }
+    Document serializeStageOptions(boost::optional<ExplainOptions::Verbosity> explain) const;
+    DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
+    DocumentSource::GetModPathsReturn getModifiedPaths() const final;
+
+    void doDispose() final {}
+    Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
+
+    DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
+
+    DocumentSource::GetNextResult getNext();
+    const char* getSourceName() const {
+        return DocumentSourceChangeStream::kStageName.rawData();
+    }
+
+private:
+    boost::intrusive_ptr<ExpressionContext> _expCtx;
+    BSONObj _changeStreamSpec;
+
+    // Fields of the document key, in order, including the shard key if the collection is
+    // sharded, and anyway "_id". Empty until the first oplog entry with a uuid is encountered.
+    // Needed for transforming 'insert' oplog entries.
+    std::vector<FieldPath> _documentKeyFields;
+
+    // Set to true if the collection is found to be sharded while retrieving _documentKeyFields.
+    bool _documentKeyFieldsSharded = false;
+};
+
 
 /**
  * A custom subclass of DocumentSourceMatch which does not serialize itself (since it came from an

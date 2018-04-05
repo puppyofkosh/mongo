@@ -104,14 +104,13 @@ public:
     GetModPathsReturn getModifiedPaths() const final;
 
     StageConstraints constraints(Pipeline::SplitState pipeState) const final {
-        StageConstraints constraints(
-            StreamType::kStreaming,
-            PositionRequirement::kNone,
-            HostTypeRequirement::kNone,
-            DiskUseRequirement::kNoDiskUse,
-            FacetRequirement::kAllowed,
-            TransactionRequirement::kAllowed,
-            ChangeStreamRequirement::kWhitelist);
+        StageConstraints constraints(StreamType::kStreaming,
+                                     PositionRequirement::kNone,
+                                     HostTypeRequirement::kNone,
+                                     DiskUseRequirement::kNoDiskUse,
+                                     FacetRequirement::kAllowed,
+                                     TransactionRequirement::kAllowed,
+                                     ChangeStreamRequirement::kWhitelist);
 
         constraints.canSwapWithMatch = true;
         constraints.canSwapWithLimit = true;

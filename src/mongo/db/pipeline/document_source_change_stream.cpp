@@ -506,11 +506,11 @@ BSONObj DocumentSourceChangeStream::replaceResumeTokenInCommand(const BSONObj or
 
 intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationStage(
     BSONObj changeStreamSpec, const intrusive_ptr<ExpressionContext>& expCtx) {
-    return intrusive_ptr<DocumentSource>(new DocumentSourceChangeStream::Transformation(
-                                             expCtx, changeStreamSpec));
+    return intrusive_ptr<DocumentSource>(
+        new DocumentSourceOplogTransformation(expCtx, changeStreamSpec));
 }
 
-Document DocumentSourceChangeStream::Transformation::applyTransformation(const Document& input) {
+Document DocumentSourceOplogTransformation::applyTransformation(const Document& input) {
     // If we're executing a change stream pipeline that was forwarded from mongos, then we expect it
     // to "need merge"---we expect to be executing the shards part of a split pipeline. It is never
     // correct for mongos to pass through the change stream without splitting into into a merging
@@ -574,20 +574,20 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
     auto opType = repl::OpType_parse(IDLParserErrorContext("ChangeStreamEntry.op"), op);
     switch (opType) {
         case repl::OpTypeEnum::kInsert: {
-            operationType = kInsertOpType;
+            operationType = DocumentSourceChangeStream::kInsertOpType;
             fullDocument = input[repl::OplogEntry::kObjectFieldName];
             documentKey = Value(document_path_support::extractDocumentKeyFromDoc(
                 fullDocument.getDocument(), _documentKeyFields));
             break;
         }
         case repl::OpTypeEnum::kDelete: {
-            operationType = kDeleteOpType;
+            operationType = DocumentSourceChangeStream::kDeleteOpType;
             documentKey = input[repl::OplogEntry::kObjectFieldName];
             break;
         }
         case repl::OpTypeEnum::kUpdate: {
             if (id.missing()) {
-                operationType = kUpdateOpType;
+                operationType = DocumentSourceChangeStream::kUpdateOpType;
                 checkValueType(input[repl::OplogEntry::kObjectFieldName],
                                repl::OplogEntry::kObjectFieldName,
                                BSONType::Object);
@@ -607,7 +607,7 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
                     {"updatedFields", updatedFields.missing() ? Value(Document()) : updatedFields},
                     {"removedFields", removedFieldsVector}});
             } else {
-                operationType = kReplaceOpType;
+                operationType = DocumentSourceChangeStream::kReplaceOpType;
                 fullDocument = input[repl::OplogEntry::kObjectFieldName];
             }
             documentKey = input[repl::OplogEntry::kObject2FieldName];
@@ -622,16 +622,17 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
             } else {
                 log() << "ian: found an invalidating command";
             }
-            operationType = kInvalidateOpType;
+            operationType = DocumentSourceChangeStream::kInvalidateOpType;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
             break;
         }
         case repl::OpTypeEnum::kNoop: {
-            operationType = kNewShardDetectedOpType;
+            operationType = DocumentSourceChangeStream::kNewShardDetectedOpType;
             // Generate a fake document Id for NewShardDetected operation so that we can resume
             // after this operation.
-            documentKey = Value(Document{{kIdField, input[repl::OplogEntry::kObject2FieldName]}});
+            documentKey = Value(Document{{DocumentSourceChangeStream::kIdField,
+                                          input[repl::OplogEntry::kObject2FieldName]}});
             break;
         }
         default: { MONGO_UNREACHABLE; }
@@ -639,10 +640,10 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
 
     // UUID should always be present except for invalidate entries.  It will not be under
     // FCV 3.4, so we should close the stream as invalid.
-    if (operationType != kInvalidateOpType && uuid.missing()) {
+    if (operationType != DocumentSourceChangeStream::kInvalidateOpType && uuid.missing()) {
         warning() << "Saw a CRUD op without a UUID.  Did Feature Compatibility Version get "
                      "downgraded after opening the stream?";
-        operationType = kInvalidateOpType;
+        operationType = DocumentSourceChangeStream::kInvalidateOpType;
         fullDocument = Value();
         updateDescription = Value();
         documentKey = Value();
@@ -655,8 +656,9 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
     resumeTokenData.documentKey = documentKey;
     if (!uuid.missing())
         resumeTokenData.uuid = uuid.getUuid();
-    doc.addField(kIdField, Value(ResumeToken(resumeTokenData).toDocument()));
-    doc.addField(kOperationTypeField, Value(operationType));
+    doc.addField(DocumentSourceChangeStream::kIdField,
+                 Value(ResumeToken(resumeTokenData).toDocument()));
+    doc.addField(DocumentSourceChangeStream::kOperationTypeField, Value(operationType));
 
     // If we're in a sharded environment, we'll need to merge the results by their sort key, so add
     // that as metadata.
@@ -665,13 +667,15 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
     }
 
     // "invalidate" and "newShardDetected" entries have fewer fields.
-    if (operationType == kInvalidateOpType || operationType == kNewShardDetectedOpType) {
+    if (operationType == DocumentSourceChangeStream::kInvalidateOpType ||
+        operationType == DocumentSourceChangeStream::kNewShardDetectedOpType) {
         return doc.freeze();
     }
 
-    doc.addField(kFullDocumentField, fullDocument);
-    doc.addField(kNamespaceField, Value(Document{{"db", nss.db()}, {"coll", nss.coll()}}));
-    doc.addField(kDocumentKeyField, documentKey);
+    doc.addField(DocumentSourceChangeStream::kFullDocumentField, fullDocument);
+    doc.addField(DocumentSourceChangeStream::kNamespaceField,
+                 Value(Document{{"db", nss.db()}, {"coll", nss.coll()}}));
+    doc.addField(DocumentSourceChangeStream::kDocumentKeyField, documentKey);
 
     // Note that 'updateDescription' might be the 'missing' value, in which case it will not be
     // serialized.
@@ -679,7 +683,7 @@ Document DocumentSourceChangeStream::Transformation::applyTransformation(const D
     return doc.freeze();
 }
 
-Document DocumentSourceChangeStream::Transformation::serializeStageOptions(
+Document DocumentSourceOplogTransformation::serializeStageOptions(
     boost::optional<ExplainOptions::Verbosity> explain) const {
     Document changeStreamOptions(_changeStreamSpec);
     // If we're on a mongos and no other start time is specified, we want to start at the current
@@ -707,7 +711,7 @@ Document DocumentSourceChangeStream::Transformation::serializeStageOptions(
     return changeStreamOptions;
 }
 
-DocumentSource::GetDepsReturn DocumentSourceChangeStream::Transformation::getDependencies(
+DocumentSource::GetDepsReturn DocumentSourceOplogTransformation::getDependencies(
     DepsTracker* deps) const {
     deps->fields.insert(repl::OplogEntry::kOpTypeFieldName.toString());
     deps->fields.insert(repl::OplogEntry::kTimestampFieldName.toString());
@@ -718,33 +722,32 @@ DocumentSource::GetDepsReturn DocumentSourceChangeStream::Transformation::getDep
     return DocumentSource::GetDepsReturn::EXHAUSTIVE_ALL;
 }
 
-DocumentSource::GetModPathsReturn DocumentSourceChangeStream::Transformation::getModifiedPaths()
-    const {
+DocumentSource::GetModPathsReturn DocumentSourceOplogTransformation::getModifiedPaths() const {
     // All paths are modified.
     return {DocumentSource::GetModPathsReturn::Type::kAllPaths, std::set<string>{}, {}};
 }
 
-Value DocumentSourceChangeStream::Transformation::serialize(
+Value DocumentSourceOplogTransformation::serialize(
     boost::optional<ExplainOptions::Verbosity> explain) const {
     return Value(Document{{getSourceName(), serializeStageOptions(explain)}});
 }
 
-DocumentSource::StageConstraints DocumentSourceChangeStream::Transformation::constraints(Pipeline::SplitState pipeState) const {
-    StageConstraints constraints(
-        StreamType::kStreaming,
-        PositionRequirement::kNone,
-        HostTypeRequirement::kNone,
-        DiskUseRequirement::kNoDiskUse,
-        FacetRequirement::kNotAllowed,
-        TransactionRequirement::kNotAllowed,
-        ChangeStreamRequirement::kChangeStreamStage);
+DocumentSource::StageConstraints DocumentSourceOplogTransformation::constraints(
+    Pipeline::SplitState pipeState) const {
+    StageConstraints constraints(StreamType::kStreaming,
+                                 PositionRequirement::kNone,
+                                 HostTypeRequirement::kNone,
+                                 DiskUseRequirement::kNoDiskUse,
+                                 FacetRequirement::kNotAllowed,
+                                 TransactionRequirement::kNotAllowed,
+                                 ChangeStreamRequirement::kChangeStreamStage);
 
     constraints.canSwapWithMatch = true;
     constraints.canSwapWithLimit = true;
     return constraints;
 }
 
-DocumentSource::GetNextResult DocumentSourceChangeStream::Transformation::getNext() {
+DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     _expCtx->checkForInterrupt();
 
     // Get the next input document.
