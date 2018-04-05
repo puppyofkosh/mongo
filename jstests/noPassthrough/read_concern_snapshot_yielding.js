@@ -143,6 +143,7 @@
         // Confirm that the command did not yield.
         if (profilerFilter) {
             let profilerEntry = getLatestProfilerEntry(db, profilerFilter);
+            print("ian: profilerEntry is " + tojson(profilerEntry));
             assert(profilerEntry.hasOwnProperty("numYield"), tojson(profilerEntry));
             assert.eq(0, profilerEntry.numYield, tojson(profilerEntry));
         }

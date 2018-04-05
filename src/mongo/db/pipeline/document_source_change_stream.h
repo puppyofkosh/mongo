@@ -172,7 +172,8 @@ public:
     }
     ~DocumentSourceOplogTransformation() = default;
 
-    Document applyTransformation(const Document& input);
+    // TODO: convert isApplyOpsEntry to an enum.
+    Document applyTransformation(const Document& input, bool isApplyOpsEntry);
     boost::intrusive_ptr<DocumentSource> optimize() final {
         return this;
     }
@@ -191,7 +192,15 @@ public:
     }
 
 private:
+    ResumeTokenData getResumeToken(const Document& doc, bool isApplyOpsEntry);
+    Document extractNextApplyOpsEntry();
+    
     BSONObj _changeStreamSpec;
+
+    // TODO: turn this baby into a struct.
+    // also store lsid and txnNumber inside the struct.
+    std::vector<Value> _currentApplyOps;
+    size_t _applyOpsIndex = 0;
 
     // Fields of the document key, in order, including the shard key if the collection is
     // sharded, and anyway "_id". Empty until the first oplog entry with a uuid is encountered.
