@@ -159,6 +159,12 @@ public:
                                                const BSONObj resumeToken);
 
 private:
+    /*
+     * Helper for building the match filter.
+     */
+    static BSONObj getApplyOpsFilter(bool onEntireDB, const NamespaceString& nss);
+    static BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss);
+
     // It is illegal to construct a DocumentSourceChangeStream directly, use createFromBson()
     // instead.
     DocumentSourceChangeStream() = default;
@@ -170,7 +176,7 @@ public:
                                       BSONObj changeStreamSpec);
     ~DocumentSourceOplogTransformation() = default;
 
-    // TODO: convert isApplyOpsEntry to an enum.
+    // TODO: remove isApplyOpsEntry and use a field instead
     Document applyTransformation(const Document& input, bool isApplyOpsEntry);
     boost::intrusive_ptr<DocumentSource> optimize() final {
         return this;
@@ -200,7 +206,7 @@ private:
     // watching the entire DB.
     boost::optional<pcrecpp::RE> _nsRegex;
 
-    // TODO: turn this baby into a struct.
+    // TODO: turn this into a boost::optional<some struct>.
     // also store lsid and txnNumber inside the struct.
     std::vector<Value> _currentApplyOps;
     size_t _applyOpsIndex = 0;

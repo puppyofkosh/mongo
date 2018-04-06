@@ -243,11 +243,7 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
 
 }  // namespace
 
-BSONObj getOpMatchFilter(const std::string& nsFieldName,
-                         bool onEntireDB,
-                         const NamespaceString& nss) {
-    const static auto regexAllCollections = R"(\.(?!(\$|system\.)))";
-
+BSONObj DocumentSourceChangeStream::getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
     // 2) Supported operations on the target namespace.
 
     // 2.1) Normal CRUD ops.
@@ -262,13 +258,25 @@ BSONObj getOpMatchFilter(const std::string& nsFieldName,
     if (onEntireDB) {
         // Match all namespaces that start with db name, followed by ".", then not followed by
         // '$' or 'system.'
-        return BSON(nsFieldName << BSONRegEx("^" + nss.db() + regexAllCollections)
-                                << OR(normalOpTypeMatch, chunkMigratedMatch));
+        return BSON("ns" << BSONRegEx(buildNsRegex(nss))
+                         << OR(normalOpTypeMatch, chunkMigratedMatch));
     } else {
-        return BSON(nsFieldName << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
+        return BSON("ns" << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
     }
 }
 
+BSONObj DocumentSourceChangeStream::getApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
+    BSONObjBuilder applyOpsBuilder;
+    applyOpsBuilder.append("lsid", BSON("$exists" << true));
+    applyOpsBuilder.append("txnNumber", BSON("$exists" << true));
+    const std::string& kApplyOpsNs = "o.applyOps.ns";
+    if (onEntireDB) {
+        applyOpsBuilder.append(kApplyOpsNs, BSONRegEx(buildNsRegex(nss)));
+    } else {
+        applyOpsBuilder.append(kApplyOpsNs, nss.ns());
+    }
+    return applyOpsBuilder.obj();
+}
 
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -308,9 +316,7 @@ BSONObj DocumentSourceChangeStream::buildMatchFilter(
     auto renameDropTarget = BSON("o.to" << nss.ns());
 
     // 1.3) Look for applyOps which have entries matching the desired namespace.
-    // TODO: make sure that the operation is a transaction (has txnNumber and lsid)
-    // TODO: make test case to be sure we "skip" non transaction applyOps
-    auto applyOps = getOpMatchFilter("o.applyOps.ns", onEntireDB, nss);
+    BSONObj applyOps = getApplyOpsFilter(onEntireDB, nss);
 
     // All supported commands that are either (1.1) or (1.2).
     BSONObj commandMatch = BSON("op"
@@ -318,7 +324,7 @@ BSONObj DocumentSourceChangeStream::buildMatchFilter(
                                 << OR(commandsOnTargetDb, renameDropTarget, applyOps));
 
     // 2) Supported operations on the target namespace.
-    BSONObj opMatch = getOpMatchFilter("ns", onEntireDB, nss);
+    BSONObj opMatch = getOpMatchFilter(onEntireDB, nss);
 
     // Match oplog entries after "start" and are either supported (1) commands or (2) operations,
     // excepting those tagged "fromMigrate".
@@ -695,6 +701,8 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
         if (!uuid.missing())
             resumeTokenData.uuid = uuid.getUuid();
     }
+
+    // TODO: add txnNumber and lsid
 
     doc.addField(DocumentSourceChangeStream::kIdField,
                  Value(ResumeToken(resumeTokenData).toDocument()));

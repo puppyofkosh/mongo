@@ -942,6 +942,8 @@ TEST_F(ChangeStreamStageDBTest, TransformInvalidate) {
     checkTransformation(dropDB, expectedInvalidateDropDatabase);
 }
 
+// TODO: Add a checkTransformation for applyOps
+
 TEST_F(ChangeStreamStageDBTest, SystemCollectionsDropOrRenameShouldInvalidate) {
     NamespaceString systemColl(nss.db() + ".system.users");
     NamespaceString renamedSystemColl(nss.db() + ".system.users_new");
