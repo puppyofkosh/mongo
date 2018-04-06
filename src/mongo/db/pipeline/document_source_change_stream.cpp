@@ -88,6 +88,12 @@ constexpr StringData DocumentSourceChangeStream::kNewShardDetectedOpType;
 namespace {
 
 static constexpr StringData kOplogMatchExplainName = "$_internalOplogMatch"_sd;
+
+std::string buildNsRegex(const NamespaceString& nss) {
+    const static auto regexAllCollections = R"(\.(?!(\$|system\.)))";
+    return "^" + nss.db() + regexAllCollections;
+}
+
 }  // namespace
 
 intrusive_ptr<DocumentSourceOplogMatch> DocumentSourceOplogMatch::create(
@@ -512,6 +518,15 @@ intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationSt
         new DocumentSourceOplogTransformation(expCtx, changeStreamSpec));
 }
 
+DocumentSourceOplogTransformation::DocumentSourceOplogTransformation(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx, BSONObj changeStreamSpec)
+    : DocumentSource(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
+
+    if (expCtx->ns.isCollectionlessAggregateNS()) {
+        _nsRegex.emplace(buildNsRegex(expCtx->ns));
+    }
+}
+
 Document DocumentSourceOplogTransformation::applyTransformation(const Document& input,
                                                                 bool isApplyOpsEntry) {
     // If we're executing a change stream pipeline that was forwarded from mongos, then we expect it
@@ -622,20 +637,21 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
             log() << "ian: Found a command: " << input;
             if (!input.getNestedField("o.applyOps").missing()) {
                 log() << "ian: found an applyOps. Saving it...";
+
+                // We should never see an applyOps inside of an applyOps that made it past the
+                // filter.
+                invariant(!isApplyOpsEntry);
                 _currentApplyOps = input.getNestedField("o.applyOps").getArray();
                 invariant(!_currentApplyOps.empty());
                 _applyOpsIndex = 0;
 
-                // Now call applyTransformation on the first entry in the applyOps.            
+                // Now call applyTransformation on the first relevant entry in the applyOps.
                 Document nextDoc = extractNextApplyOpsEntry();
                 invariant(!nextDoc.empty());
                 return applyTransformation(nextDoc, true);
-
-                // TODO: extract the next thing from the applyOps...
-                // TODO: we can assume non-empty applyOps entries
-            } else {
-                log() << "ian: found an invalidating command";
             }
+
+            log() << "ian: found an invalidating command";
             operationType = DocumentSourceChangeStream::kInvalidateOpType;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
@@ -671,7 +687,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
 
         // TODO:!
         // For now we return an empty resumeToken.
-        
+
     } else {
         // do something else
         resumeTokenData.clusterTime = ts.getTimestamp();
@@ -798,17 +814,58 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     return applyTransformation(input.releaseDocument(), false);
 }
 
+bool isOpTypeRelevant(const Document& d) {
+    // TODO: talk to Charlie about just using this instead of having two implementations of the
+    // same thing.
+
+    Value op = d["op"];
+    invariant(!op.missing());
+
+    if (op.getString() != "n") {
+        return true;
+    }
+
+    Value type = d.getNestedField("o2.type");
+    if (!type.missing() && type.getString() == "migrateChunkToNewShard") {
+        return true;
+    }
+
+    return false;
+}
+
+bool DocumentSourceOplogTransformation::isDocumentRelevant(const Document& d) {
+    if (!isOpTypeRelevant(d)) {
+        return false;
+    }
+
+    Value nsField = d["ns"];
+    invariant(!nsField.missing());
+
+    if (_nsRegex) {
+        // Match all namespaces that start with db name, followed by ".", then not followed by
+        // '$' or 'system.'
+        return _nsRegex->PartialMatch(nsField.getString());
+    }
+
+    return nsField.getString() == pExpCtx->ns.ns();
+}
+
 /*
  * Gets the next relevant applyOps entry that should be returned. If there is none, returns empty
  * document.
  */
 Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
-    for (; _applyOpsIndex < _currentApplyOps.size(); ++_applyOpsIndex) {
-        Document d = _currentApplyOps[_applyOpsIndex].getDocument();
-        // for now assume we care about v...
+
+    while (_applyOpsIndex < _currentApplyOps.size()) {
+        Document d = _currentApplyOps[_applyOpsIndex++].getDocument();
+        log() << "Found applyOps subDocument " << d;
+        if (!isDocumentRelevant(d)) {
+            log() << "Document " << d << " is not relevant";
+            continue;
+        }
+
         return d;
     }
-    
     return Document();
 }
 

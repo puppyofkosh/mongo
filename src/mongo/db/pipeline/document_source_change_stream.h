@@ -167,9 +167,7 @@ private:
 class DocumentSourceOplogTransformation : public DocumentSource {
 public:
     DocumentSourceOplogTransformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                      BSONObj changeStreamSpec)
-        : DocumentSource(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
-    }
+                                      BSONObj changeStreamSpec);
     ~DocumentSourceOplogTransformation() = default;
 
     // TODO: convert isApplyOpsEntry to an enum.
@@ -194,8 +192,13 @@ public:
 private:
     ResumeTokenData getResumeToken(const Document& doc, bool isApplyOpsEntry);
     Document extractNextApplyOpsEntry();
-    
+    bool isDocumentRelevant(const Document& d);
+
     BSONObj _changeStreamSpec;
+
+    // Regex for matching the "ns" field in applyOps sub-entries. Only non-boost::none when we're
+    // watching the entire DB.
+    boost::optional<pcrecpp::RE> _nsRegex;
 
     // TODO: turn this baby into a struct.
     // also store lsid and txnNumber inside the struct.
