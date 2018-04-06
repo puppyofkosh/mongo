@@ -645,7 +645,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
                 log() << "ian: found an applyOps. Saving it...";
 
                 // We should never see an applyOps inside of an applyOps that made it past the
-                // filter.
+                // filter. This prevents more than one level of recursion.
                 invariant(!isApplyOpsEntry);
                 _currentApplyOps = input.getNestedField("o.applyOps").getArray();
                 invariant(!_currentApplyOps.empty());
@@ -868,7 +868,7 @@ Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
         Document d = _currentApplyOps[_applyOpsIndex++].getDocument();
         log() << "Found applyOps subDocument " << d;
         if (!isDocumentRelevant(d)) {
-            log() << "Document " << d << " is not relevant";
+            log() << "Document is not relevant";
             continue;
         }
 
