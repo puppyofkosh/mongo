@@ -39,7 +39,9 @@
     session.commitTransaction();
 
     // Do applyOps on the collection that we care about. This is an "external" applyOps, though
-    // (not run as part of a transaction) so its entries should be skipped in the change stream.
+    // (not run as part of a transaction) so its entries should be skipped in the change
+    // stream. This checks that applyOps that don't have an 'lsid' and 'txnNumber' field do not get
+    // unwound.
     assert.commandWorked(db.runCommand({
         applyOps: [
             {op: "i", ns: coll.getFullName(), o: {_id: 3, a: "SHOULD NOT READ THIS"}},
