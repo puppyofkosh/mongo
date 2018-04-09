@@ -107,7 +107,6 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
     if (pExpCtx->fromMongos) {
         invariant(pExpCtx->needsMerge);
     }
-    log() << "ian: processing... " << input;
 
     MutableDocument doc;
 
@@ -197,9 +196,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
         case repl::OpTypeEnum::kCommand: {
             // Any command that makes it through our filter is an invalidating command such as a
             // drop.
-            log() << "ian: Found a command: " << input;
             if (!input.getNestedField("o.applyOps").missing()) {
-                log() << "ian: found an applyOps. Saving it...";
 
                 // We should never see an applyOps inside of an applyOps that made it past the
                 // filter. This prevents more than one level of recursion.
@@ -214,7 +211,6 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
                 return applyTransformation(nextDoc);
             }
 
-            log() << "ian: found an invalidating command";
             operationType = DocumentSourceChangeStream::kInvalidateOpType;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
@@ -362,8 +358,6 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     if (_txnContext) {
         Document next = extractNextApplyOpsEntry();
         if (!next.empty()) {
-            log() << "ian: non empty _applyOps: ";
-            log() << "Extracted: " << next;
             return applyTransformation(next);
         }
     }
@@ -422,9 +416,7 @@ Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
 
     while (_txnContext && _txnContext->pos < _txnContext->arr.size()) {
         Document d = _txnContext->arr[_txnContext->pos++].getDocument();
-        log() << "Found applyOps subDocument " << d;
         if (!isDocumentRelevant(d)) {
-            log() << "Document is not relevant";
             continue;
         }
 

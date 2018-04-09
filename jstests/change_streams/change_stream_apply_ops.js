@@ -59,7 +59,6 @@
 
     // Check for the second insert.
     change = cst.getOneChange(aggcursor);
-    printjson(change);
     assert.eq(change.fullDocument._id, 2);
     assert.eq(change.operationType, "insert", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
@@ -67,7 +66,6 @@
 
     // Check for the update.
     change = cst.getOneChange(aggcursor);
-    printjson(change);
     assert.eq(tojson(change.updateDescription.updatedFields), tojson({"a": 1}));
     assert.eq(change.operationType, "update", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
@@ -75,7 +73,6 @@
 
     // Check for the delete.
     change = cst.getOneChange(aggcursor);
-    printjson(change);
     assert.eq(change.documentKey._id, kDeletedDocumentId);
     assert.eq(change.operationType, "delete", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
