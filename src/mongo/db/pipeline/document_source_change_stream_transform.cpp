@@ -74,8 +74,24 @@ DocumentSourceOplogTransformation::DocumentSourceOplogTransformation(
     }
 }
 
-Document DocumentSourceOplogTransformation::applyTransformation(const Document& input,
-                                                                bool isApplyOpsEntry) {
+void DocumentSourceOplogTransformation::initializeTransactionContext(const Document& input) {
+    invariant(!_txnContext);
+
+    Value applyOps = input.getNestedField("o.applyOps");
+    checkValueType(input.getNestedField("o.applyOps"), "applyOps", BSONType::Array);
+    invariant(applyOps.getArrayLength() > 0);
+
+    // TODO: Where are the string constants for these?
+    Value lsid = input["lsid"];
+    checkValueType(lsid, "lsid", BSONType::Object);
+
+    Value txnNumber = input["txnNumber"];
+    checkValueType(txnNumber, "txnNumber", BSONType::NumberLong);
+
+    _txnContext.emplace(applyOps, lsid.getDocument(), txnNumber.getLong());
+}
+
+Document DocumentSourceOplogTransformation::applyTransformation(const Document& input) {
     // If we're executing a change stream pipeline that was forwarded from mongos, then we expect it
     // to "need merge"---we expect to be executing the shards part of a split pipeline. It is never
     // correct for mongos to pass through the change stream without splitting into into a merging
@@ -187,26 +203,15 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
 
                 // We should never see an applyOps inside of an applyOps that made it past the
                 // filter. This prevents more than one level of recursion.
-                invariant(!isApplyOpsEntry);
-                invariant(_currentApplyOps.empty());
-                invariant(_applyOpsIndex == 0);
+                invariant(!_txnContext);
 
-                // TODO: Switch to using BSONObjIterator
-                _currentApplyOps = input.getNestedField("o.applyOps").getArray();
-                invariant(!_currentApplyOps.empty());
-                // TODO: Where are the string constants for these?
-                Value lsid = input["lsid"];
-                checkValueType(lsid, "lsid", BSONType::Object);
-                _lsid = lsid.getDocument();
-
-                Value txnNumber = input["txnNumber"];
-                checkValueType(txnNumber, "txnNumber", BSONType::NumberLong);
-                _txnNumber = txnNumber.getLong();
+                initializeTransactionContext(input);
 
                 // Now call applyTransformation on the first relevant entry in the applyOps.
                 Document nextDoc = extractNextApplyOpsEntry();
                 invariant(!nextDoc.empty());
-                return applyTransformation(nextDoc, true);
+
+                return applyTransformation(nextDoc);
             }
 
             log() << "ian: found an invalidating command";
@@ -240,26 +245,22 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
     // Note that 'documentKey' and/or 'uuid' might be missing, in which case the missing fields will
     // not appear in the output.
     ResumeTokenData resumeTokenData;
-    if (isApplyOpsEntry) {
-        // Do something with resume token
+    if (_txnContext) {
+        // We're in the middle of unwinding an 'applyOps'.
 
-        // TODO:!
+        // TODO: SERVER-34314
         // For now we return an empty resumeToken.
-
     } else {
-        // do something else
         resumeTokenData.clusterTime = ts.getTimestamp();
         resumeTokenData.documentKey = documentKey;
         if (!uuid.missing())
             resumeTokenData.uuid = uuid.getUuid();
     }
 
-    if (isApplyOpsEntry) {
-        invariant(_txnNumber);
-        invariant(_lsid);
+    if (_txnContext) {
         doc.addField(DocumentSourceChangeStream::kTxnNumberField,
-                     Value(static_cast<long long>(_txnNumber.get())));
-        doc.addField(DocumentSourceChangeStream::kLsidField, Value(_lsid.get()));
+                     Value(static_cast<long long>(_txnContext->txnNumber)));
+        doc.addField(DocumentSourceChangeStream::kLsidField, Value(_txnContext->lsid));
     }
 
     doc.addField(DocumentSourceChangeStream::kIdField,
@@ -356,11 +357,15 @@ DocumentSource::StageConstraints DocumentSourceOplogTransformation::constraints(
 DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     pExpCtx->checkForInterrupt();
 
-    Document next = extractNextApplyOpsEntry();
-    if (!next.empty()) {
-        log() << "ian: non empty _applyOps: ";
-        log() << "Extracted: " << next;
-        return applyTransformation(next, true);
+    // If we're unwinding an 'applyOps' from a transaction, check if there are any documents we have
+    // stored that can be returned.
+    if (_txnContext) {
+        Document next = extractNextApplyOpsEntry();
+        if (!next.empty()) {
+            log() << "ian: non empty _applyOps: ";
+            log() << "Extracted: " << next;
+            return applyTransformation(next);
+        }
     }
 
     // Get the next input document.
@@ -369,8 +374,8 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
         return input;
     }
 
-    // Apply and return the document with added fields.
-    return applyTransformation(input.releaseDocument(), false);
+    // Apply the transform and return the document with added fields.
+    return applyTransformation(input.releaseDocument());
 }
 
 bool isOpTypeRelevant(const Document& d) {
@@ -415,8 +420,8 @@ bool DocumentSourceOplogTransformation::isDocumentRelevant(const Document& d) {
  */
 Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
 
-    while (_applyOpsIndex < _currentApplyOps.size()) {
-        Document d = _currentApplyOps[_applyOpsIndex++].getDocument();
+    while (_txnContext && _txnContext->pos < _txnContext->arr.size()) {
+        Document d = _txnContext->arr[_txnContext->pos++].getDocument();
         log() << "Found applyOps subDocument " << d;
         if (!isDocumentRelevant(d)) {
             log() << "Document is not relevant";
@@ -426,9 +431,7 @@ Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
         return d;
     }
 
-    // We ran out of stuff in the applyOps entry. Clear out _currentApplyOps.
-    _currentApplyOps.clear();
-    _applyOpsIndex = 0;
+    _txnContext = boost::none;
 
     return Document();
 }

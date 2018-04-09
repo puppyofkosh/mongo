@@ -39,8 +39,7 @@ public:
                                       BSONObj changeStreamSpec);
     ~DocumentSourceOplogTransformation() = default;
 
-    // TODO: remove isApplyOpsEntry and use a field instead
-    Document applyTransformation(const Document& input, bool isApplyOpsEntry);
+    Document applyTransformation(const Document& input);
     boost::intrusive_ptr<DocumentSource> optimize() final {
         return this;
     }
@@ -59,7 +58,38 @@ public:
     }
 
 private:
-    ResumeTokenData getResumeToken(const Document& doc, bool isApplyOpsEntry);
+    /*
+     * Represents the DocumentSource's state if it's currently reading from an 'applyOps' entry
+     * which was created as part of a transaction.
+     */
+    struct TransactionContext {
+        MONGO_DISALLOW_COPYING(TransactionContext);
+
+        // The applyOps representing the transaction. Only kept around so that the underlying
+        // memory of 'arr' isn't freed.
+        Value applyOps;
+
+        // Array representation of the 'applyOps' field. Stored like this to avoid re-typechecking
+        // each call to next(), or copying the entire array.
+        const std::vector<Value>& arr;
+
+        // Our current place in the applyOps array.
+        size_t pos;
+
+        // Fields that were taken from the 'applyOps' oplog entry.
+        Document lsid;
+        TxnNumber txnNumber;
+
+        TransactionContext(const Value& applyOpsVal, const Document& lsidDoc, TxnNumber n)
+            : applyOps(applyOpsVal),
+              arr(applyOps.getArray()),
+              pos(0),
+              lsid(lsidDoc),
+              txnNumber(n) {}
+    };
+
+    void initializeTransactionContext(const Document& input);
+
     Document extractNextApplyOpsEntry();
     bool isDocumentRelevant(const Document& d);
 
@@ -69,12 +99,8 @@ private:
     // watching the entire DB.
     boost::optional<pcrecpp::RE> _nsRegex;
 
-    // TODO: turn this into a boost::optional<some struct>.
-    // also store lsid and txnNumber inside the struct.
-    std::vector<Value> _currentApplyOps;
-    size_t _applyOpsIndex = 0;
-    boost::optional<TxnNumber> _txnNumber;
-    boost::optional<Document> _lsid;
+    // Represents if the current 'applyOps' we're unwinding, if any.
+    boost::optional<TransactionContext> _txnContext;
 
     // Fields of the document key, in order, including the shard key if the collection is
     // sharded, and anyway "_id". Empty until the first oplog entry with a uuid is encountered.
