@@ -286,7 +286,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
     return doc.freeze();
 }
 
-Document DocumentSourceOplogTransformation::serializeStageOptions(
+Value DocumentSourceOplogTransformation::serialize(
     boost::optional<ExplainOptions::Verbosity> explain) const {
     Document changeStreamOptions(_changeStreamSpec);
     // If we're on a mongos and no other start time is specified, we want to start at the current
@@ -311,7 +311,7 @@ Document DocumentSourceOplogTransformation::serializeStageOptions(
                                   Value(clusterTime.asTimestamp());
         changeStreamOptions = newChangeStreamOptions.freeze();
     }
-    return changeStreamOptions;
+    return Value(Document{{getSourceName(), changeStreamOptions}});
 }
 
 DocumentSource::GetDepsReturn DocumentSourceOplogTransformation::getDependencies(
@@ -328,11 +328,6 @@ DocumentSource::GetDepsReturn DocumentSourceOplogTransformation::getDependencies
 DocumentSource::GetModPathsReturn DocumentSourceOplogTransformation::getModifiedPaths() const {
     // All paths are modified.
     return {DocumentSource::GetModPathsReturn::Type::kAllPaths, std::set<string>{}, {}};
-}
-
-Value DocumentSourceOplogTransformation::serialize(
-    boost::optional<ExplainOptions::Verbosity> explain) const {
-    return Value(Document{{getSourceName(), serializeStageOptions(explain)}});
 }
 
 DocumentSource::StageConstraints DocumentSourceOplogTransformation::constraints(

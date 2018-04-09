@@ -125,7 +125,6 @@ public:
     static constexpr StringData kTxnNumberField = "txnNumber"_sd;
     static constexpr StringData kLsidField = "lsid"_sd;
 
-
     // The different types of operations we can use for the operation type.
     static constexpr StringData kUpdateOpType = "update"_sd;
     static constexpr StringData kDeleteOpType = "delete"_sd;
@@ -170,12 +169,6 @@ public:
     static void checkValueType(const Value v, const StringData filedName, BSONType expectedType);
 
 private:
-    /*
-     * Helper for building the match filter.
-     */
-    static BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss);
-    static BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss);
-
     // It is illegal to construct a DocumentSourceChangeStream directly, use createFromBson()
     // instead.
     DocumentSourceChangeStream() = default;

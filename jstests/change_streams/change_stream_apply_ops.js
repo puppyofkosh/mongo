@@ -18,7 +18,7 @@
     const kDeletedDocumentId = 0;
     db[collName].insert({_id: kDeletedDocumentId, a: "I was here before the transaction"});
 
-    let aggcursor = cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
+    let changeStream = cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
 
     const sessionOptions = {causalConsistency: false};
     const session = db.getMongo().startSession(sessionOptions);
@@ -52,7 +52,7 @@
     assert.commandWorked(db.runCommand({drop: collName}));
 
     // Check for the first insert.
-    let change = cst.getOneChange(aggcursor);
+    let change = cst.getOneChange(changeStream);
     assert.eq(change.fullDocument._id, 1);
     assert.eq(change.operationType, "insert", tojson(change));
     const firstChangeTxnNumber = change.txnNumber;
@@ -60,28 +60,28 @@
     assert.eq(typeof firstChangeLsid, "object");
 
     // Check for the second insert.
-    change = cst.getOneChange(aggcursor);
+    change = cst.getOneChange(changeStream);
     assert.eq(change.fullDocument._id, 2);
     assert.eq(change.operationType, "insert", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
     assert.eq(0, bsonWoCompare(firstChangeLsid, change.lsid));
 
     // Check for the update.
-    change = cst.getOneChange(aggcursor);
+    change = cst.getOneChange(changeStream);
     assert.eq(tojson(change.updateDescription.updatedFields), tojson({"a": 1}));
     assert.eq(change.operationType, "update", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
     assert.eq(0, bsonWoCompare(firstChangeLsid, change.lsid));
 
     // Check for the delete.
-    change = cst.getOneChange(aggcursor);
+    change = cst.getOneChange(changeStream);
     assert.eq(change.documentKey._id, kDeletedDocumentId);
     assert.eq(change.operationType, "delete", tojson(change));
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
     assert.eq(0, bsonWoCompare(firstChangeLsid, change.lsid));
 
     cst.assertNextChangesEqual({
-        cursor: aggcursor,
+        cursor: changeStream,
         expectedChanges: [{operationType: "invalidate"}],
         expectInvalidate: true
     });

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2017 MongoDB Inc.
+ * Copyright (C) 2018 MongoDB Inc.
  *
  * This program is free software: you can redistribute it and/or  modify
  * it under the terms of the GNU Affero General Public License, version 3,
@@ -26,6 +26,8 @@
  * then also delete it in the license file.
  */
 
+#pragma once
+
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/document_source_change_stream.h"
 #include "mongo/db/pipeline/document_source_match.h"
@@ -33,21 +35,18 @@
 #include "mongo/db/pipeline/field_path.h"
 
 namespace mongo {
+/*
+ * TODO comment Special stage 
+ */
 class DocumentSourceOplogTransformation : public DocumentSource {
 public:
     DocumentSourceOplogTransformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                       BSONObj changeStreamSpec);
-    ~DocumentSourceOplogTransformation() = default;
 
     Document applyTransformation(const Document& input);
-    boost::intrusive_ptr<DocumentSource> optimize() final {
-        return this;
-    }
-    Document serializeStageOptions(boost::optional<ExplainOptions::Verbosity> explain) const;
     DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
     DocumentSource::GetModPathsReturn getModifiedPaths() const final;
 
-    void doDispose() final {}
     Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
 
     DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;

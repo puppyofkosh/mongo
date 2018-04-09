@@ -243,13 +243,19 @@ void DocumentSourceChangeStream::checkValueType(const Value v,
             (v.getType() == expectedType));
 }
 
-BSONObj DocumentSourceChangeStream::getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
-    // 2) Supported operations on the target namespace.
+/*
+ * Helpers for building the oplog filter.
+ */
+namespace {
 
-    // 2.1) Normal CRUD ops.
+/*
+ * Construct the filter which will match "normal" oplog entries.
+ */
+BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
+    // a) Normal CRUD ops.
     auto normalOpTypeMatch = BSON("op" << NE << "n");
 
-    // 2.2) A chunk gets migrated to a new shard that doesn't have any chunks.
+    // b) A chunk gets migrated to a new shard that doesn't have any chunks.
     auto chunkMigratedMatch = BSON("op"
                                    << "n"
                                    << "o2.type"
@@ -258,26 +264,29 @@ BSONObj DocumentSourceChangeStream::getOpMatchFilter(bool onEntireDB, const Name
     if (onEntireDB) {
         // Match all namespaces that start with db name, followed by ".", then not followed by
         // '$' or 'system.'
-        return BSON("ns" << BSONRegEx(buildNsRegex(nss))
-                         << OR(normalOpTypeMatch, chunkMigratedMatch));
+        return BSON("ns" << BSONRegEx(DocumentSourceChangeStream::buildNsRegex(nss))
+                    << OR(normalOpTypeMatch, chunkMigratedMatch));
     } else {
         return BSON("ns" << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
     }
 }
 
-BSONObj DocumentSourceChangeStream::getTxnApplyOpsFilter(bool onEntireDB,
-                                                         const NamespaceString& nss) {
+BSONObj getTxnApplyOpsFilter(bool onEntireDB,
+                             const NamespaceString& nss) {
     BSONObjBuilder applyOpsBuilder;
     applyOpsBuilder.append("op", "c");
     applyOpsBuilder.append("lsid", BSON("$exists" << true));
     applyOpsBuilder.append("txnNumber", BSON("$exists" << true));
     const std::string& kApplyOpsNs = "o.applyOps.ns";
     if (onEntireDB) {
-        applyOpsBuilder.append(kApplyOpsNs, BSONRegEx(buildNsRegex(nss)));
+        applyOpsBuilder.append(kApplyOpsNs,
+                               BSONRegEx(DocumentSourceChangeStream::buildNsRegex(nss)));
     } else {
         applyOpsBuilder.append(kApplyOpsNs, nss.ns());
     }
     return applyOpsBuilder.obj();
+}
+
 }
 
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
@@ -336,7 +345,6 @@ BSONObj DocumentSourceChangeStream::buildMatchFilter(
                                   << BSON(OR(opMatch, commandMatch, applyOps))
                                   << BSON("fromMigrate" << NE << true)));
 
-    log() << "ian: query is " << query;
     return query;
 }
 
