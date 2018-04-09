@@ -173,7 +173,7 @@ private:
     /*
      * Helper for building the match filter.
      */
-    static BSONObj getApplyOpsFilter(bool onEntireDB, const NamespaceString& nss);
+    static BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss);
     static BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss);
 
     // It is illegal to construct a DocumentSourceChangeStream directly, use createFromBson()

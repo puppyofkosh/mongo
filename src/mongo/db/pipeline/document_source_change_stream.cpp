@@ -265,8 +265,10 @@ BSONObj DocumentSourceChangeStream::getOpMatchFilter(bool onEntireDB, const Name
     }
 }
 
-BSONObj DocumentSourceChangeStream::getApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
+BSONObj DocumentSourceChangeStream::getTxnApplyOpsFilter(bool onEntireDB,
+                                                         const NamespaceString& nss) {
     BSONObjBuilder applyOpsBuilder;
+    applyOpsBuilder.append("op", "c");
     applyOpsBuilder.append("lsid", BSON("$exists" << true));
     applyOpsBuilder.append("txnNumber", BSON("$exists" << true));
     const std::string& kApplyOpsNs = "o.applyOps.ns";
@@ -315,23 +317,23 @@ BSONObj DocumentSourceChangeStream::buildMatchFilter(
     // 1.2) Supported commands that have arbitrary db namespaces in "ns" field.
     auto renameDropTarget = BSON("o.to" << nss.ns());
 
-    // 1.3) Look for applyOps which have entries matching the desired namespace.
-    BSONObj applyOps = getApplyOpsFilter(onEntireDB, nss);
-
     // All supported commands that are either (1.1) or (1.2).
     BSONObj commandMatch = BSON("op"
                                 << "c"
-                                << OR(commandsOnTargetDb, renameDropTarget, applyOps));
+                                << OR(commandsOnTargetDb, renameDropTarget));
 
     // 2) Supported operations on the target namespace.
     BSONObj opMatch = getOpMatchFilter(onEntireDB, nss);
+
+    // 3) Look for 'applyOps' which were created as part of a transaction.
+    BSONObj applyOps = getTxnApplyOpsFilter(onEntireDB, nss);
 
     // Match oplog entries after "start" and are either supported (1) commands or (2) operations,
     // excepting those tagged "fromMigrate".
     // Include the resume token, if resuming, so we can verify it was still present in the oplog.
     auto query =
         BSON("$and" << BSON_ARRAY(BSON("ts" << (startFromInclusive ? GTE : GT) << startFrom)
-                                  << BSON(OR(opMatch, commandMatch))
+                                  << BSON(OR(opMatch, commandMatch, applyOps))
                                   << BSON("fromMigrate" << NE << true)));
 
     log() << "ian: query is " << query;
