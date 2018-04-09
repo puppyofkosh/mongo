@@ -13,8 +13,7 @@
     const coll = assertDropAndRecreateCollection(db, collName);
     assertDropAndRecreateCollection(db, otherCollName);
 
-    let aggcursor =
-        cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
+    let aggcursor = cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
 
     const sessionOptions = {causalConsistency: false};
     const session = db.getMongo().startSession(sessionOptions);
@@ -43,10 +42,15 @@
     let change = cst.getOneChange(aggcursor);
     assert.eq(change.fullDocument._id, 1);
     assert.eq(change.operationType, "insert", tojson(change));
+    const firstChangeTxnNumber = change.txnNumber;
+    const firstChangeLsid = change.lsid;
+    assert.eq(typeof firstChangeLsid, "object");
 
     change = cst.getOneChange(aggcursor);
     assert.eq(change.fullDocument._id, 2);
     assert.eq(change.operationType, "insert", tojson(change));
+    assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
+    assert.eq(0, bsonWoCompare(firstChangeLsid, change.lsid));
 
     cst.assertNextChangesEqual({
         cursor: aggcursor,

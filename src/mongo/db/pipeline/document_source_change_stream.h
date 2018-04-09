@@ -122,6 +122,10 @@ public:
     // to the timestamp will be kIdField + "." + kClusterTimeField + "." + kTimestampField.
     static constexpr StringData kTimestampField = "ts"_sd;
 
+    static constexpr StringData kTxnNumberField = "txnNumber"_sd;
+    static constexpr StringData kLsidField = "lsid"_sd;
+
+
     // The different types of operations we can use for the operation type.
     static constexpr StringData kUpdateOpType = "update"_sd;
     static constexpr StringData kDeleteOpType = "delete"_sd;
@@ -138,6 +142,8 @@ public:
     static BSONObj buildMatchFilter(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                     Timestamp startFrom,
                                     bool startFromInclusive);
+
+    static std::string buildNsRegex(const NamespaceString& nss);
 
     /**
      * Parses a $changeStream stage from 'elem' and produces the $match and transformation
@@ -158,6 +164,11 @@ public:
     static BSONObj replaceResumeTokenInCommand(const BSONObj originalCmdObj,
                                                const BSONObj resumeToken);
 
+    /**
+     * Helper used by other change stream stages.
+     */
+    static void checkValueType(const Value v, const StringData filedName, BSONType expectedType);
+
 private:
     /*
      * Helper for building the match filter.
@@ -169,57 +180,6 @@ private:
     // instead.
     DocumentSourceChangeStream() = default;
 };
-
-class DocumentSourceOplogTransformation : public DocumentSource {
-public:
-    DocumentSourceOplogTransformation(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                      BSONObj changeStreamSpec);
-    ~DocumentSourceOplogTransformation() = default;
-
-    // TODO: remove isApplyOpsEntry and use a field instead
-    Document applyTransformation(const Document& input, bool isApplyOpsEntry);
-    boost::intrusive_ptr<DocumentSource> optimize() final {
-        return this;
-    }
-    Document serializeStageOptions(boost::optional<ExplainOptions::Verbosity> explain) const;
-    DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
-    DocumentSource::GetModPathsReturn getModifiedPaths() const final;
-
-    void doDispose() final {}
-    Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
-
-    DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
-
-    DocumentSource::GetNextResult getNext();
-    const char* getSourceName() const {
-        return DocumentSourceChangeStream::kStageName.rawData();
-    }
-
-private:
-    ResumeTokenData getResumeToken(const Document& doc, bool isApplyOpsEntry);
-    Document extractNextApplyOpsEntry();
-    bool isDocumentRelevant(const Document& d);
-
-    BSONObj _changeStreamSpec;
-
-    // Regex for matching the "ns" field in applyOps sub-entries. Only non-boost::none when we're
-    // watching the entire DB.
-    boost::optional<pcrecpp::RE> _nsRegex;
-
-    // TODO: turn this into a boost::optional<some struct>.
-    // also store lsid and txnNumber inside the struct.
-    std::vector<Value> _currentApplyOps;
-    size_t _applyOpsIndex = 0;
-
-    // Fields of the document key, in order, including the shard key if the collection is
-    // sharded, and anyway "_id". Empty until the first oplog entry with a uuid is encountered.
-    // Needed for transforming 'insert' oplog entries.
-    std::vector<FieldPath> _documentKeyFields;
-
-    // Set to true if the collection is found to be sharded while retrieving _documentKeyFields.
-    bool _documentKeyFieldsSharded = false;
-};
-
 
 /**
  * A custom subclass of DocumentSourceMatch which does not serialize itself (since it came from an
