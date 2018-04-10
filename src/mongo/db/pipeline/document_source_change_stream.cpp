@@ -248,8 +248,8 @@ void DocumentSourceChangeStream::checkValueType(const Value v,
  */
 namespace {
 
-/*
- * Construct the filter which will match "normal" oplog entries.
+/**
+ * Constructs the filter which will match "normal" oplog entries.
  */
 BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
     // a) Normal CRUD ops.
@@ -271,6 +271,11 @@ BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
     }
 }
 
+/**
+ * Constructs the filter which will match 'applyOps' oplog entries that are:
+ * 1) Part of a transaction
+ * 2) Have sub-entries which should be returned in the change stream
+ */
 BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
     BSONObjBuilder applyOpsBuilder;
     applyOpsBuilder.append("op", "c");
