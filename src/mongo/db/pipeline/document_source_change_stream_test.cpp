@@ -39,6 +39,7 @@
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/document_source_change_stream.h"
+#include "mongo/db/pipeline/document_source_change_stream_transform.h"
 #include "mongo/db/pipeline/document_source_limit.h"
 #include "mongo/db/pipeline/document_source_match.h"
 #include "mongo/db/pipeline/document_source_mock.h"
@@ -667,7 +668,7 @@ TEST_F(ChangeStreamStageTest, TransformationShouldBeAbleToReParseSerializedStage
     vector<intrusive_ptr<DocumentSource>> allStages(std::begin(result), std::end(result));
     ASSERT_EQ(allStages.size(), 3UL);
     auto stage = allStages[1];
-    ASSERT(dynamic_cast<DocumentSourceSingleDocumentTransformation*>(stage.get()));
+    ASSERT(dynamic_cast<DocumentSourceOplogTransformation*>(stage.get()));
 
     //
     // Serialize the stage and confirm contents.
