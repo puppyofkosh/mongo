@@ -9,32 +9,41 @@
 
     let cst = new ChangeStreamTest(db);
 
-    const collName = "change_stream_apply_ops";
     const otherCollName = "change_stream_apply_ops_2";
-    const coll = assertDropAndRecreateCollection(db, collName);
+    const coll = assertDropAndRecreateCollection(db, "change_stream_apply_ops");
     assertDropAndRecreateCollection(db, otherCollName);
+
+    const otherDbName = "change_stream_apply_ops_db";
+    const otherDbCollName = "someColl";
+    assertDropAndRecreateCollection(db.getSiblingDB(otherDbName), otherDbCollName);
 
     // Insert a document that gets deleted as part of the transaction.
     const kDeletedDocumentId = 0;
-    db[collName].insert({_id: kDeletedDocumentId, a: "I was here before the transaction"});
+    coll.insert({_id: kDeletedDocumentId, a: "I was here before the transaction"});
 
-    let changeStream = cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
+    let changeStream =
+        cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: coll});
 
     const sessionOptions = {causalConsistency: false};
     const session = db.getMongo().startSession(sessionOptions);
     const sessionDb = session.getDatabase(db.getName());
+    const sessionColl = sessionDb[coll.getName()];
 
     session.startTransaction({readConcern: {level: "snapshot"}, writeConcern: {w: "majority"}});
-    assert.commandWorked(sessionDb[collName].insert({_id: 1, a: 0}));
-    assert.commandWorked(sessionDb[collName].insert({_id: 2, a: 0}));
+    assert.commandWorked(sessionColl.insert({_id: 1, a: 0}));
+    assert.commandWorked(sessionColl.insert({_id: 2, a: 0}));
 
     // One insert on a collection that we're not watching. This should be skipped in the change
     // stream.
     assert.commandWorked(sessionDb[otherCollName].insert({_id: 3, a: "SHOULD NOT READ THIS"}));
 
-    assert.commandWorked(sessionDb[collName].updateOne({_id: 1}, {$inc: {a: 1}}));
+    // One insert on a database we're not watching. Should also be skipped.
+    assert.commandWorked(session.getDatabase(otherDbName)[otherDbCollName].insert(
+        {_id: 0, a: "SHOULD NOT READ THIS"}));
 
-    assert.commandWorked(sessionDb[collName].deleteOne({_id: kDeletedDocumentId}));
+    assert.commandWorked(sessionColl.updateOne({_id: 1}, {$inc: {a: 1}}));
+
+    assert.commandWorked(sessionColl.deleteOne({_id: kDeletedDocumentId}));
 
     session.commitTransaction();
 
@@ -49,7 +58,7 @@
     }));
 
     // Drop the collection. This will trigger an "invalidate" event.
-    assert.commandWorked(db.runCommand({drop: collName}));
+    assert.commandWorked(db.runCommand({drop: coll.getName()}));
 
     // Check for the first insert.
     let change = cst.getOneChange(changeStream);

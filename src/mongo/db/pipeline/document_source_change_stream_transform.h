@@ -36,7 +36,8 @@
 
 namespace mongo {
 /*
- * TODO comment Special stage 
+ * This stage is used internally by change streams for transforming oplog entries into the change
+ * stream format. This stage cannot be created by users.
  */
 class DocumentSourceOplogTransformation : public DocumentSource {
 public:
@@ -64,15 +65,15 @@ private:
     struct TransactionContext {
         MONGO_DISALLOW_COPYING(TransactionContext);
 
-        // The applyOps representing the transaction. Only kept around so that the underlying
-        // memory of 'arr' isn't freed.
-        Value applyOps;
+        // The array of oplog entries from an 'applyOps' representing the transaction. Only kept
+        // around so that the underlying memory of 'arr' isn't freed.
+        Value opArray;
 
-        // Array representation of the 'applyOps' field. Stored like this to avoid re-typechecking
+        // Array representation of the 'opArray' field. Stored like this to avoid re-typechecking
         // each call to next(), or copying the entire array.
         const std::vector<Value>& arr;
 
-        // Our current place in the applyOps array.
+        // Our current place in the 'opArray'.
         size_t pos;
 
         // Fields that were taken from the 'applyOps' oplog entry.
@@ -80,11 +81,7 @@ private:
         TxnNumber txnNumber;
 
         TransactionContext(const Value& applyOpsVal, const Document& lsidDoc, TxnNumber n)
-            : applyOps(applyOpsVal),
-              arr(applyOps.getArray()),
-              pos(0),
-              lsid(lsidDoc),
-              txnNumber(n) {}
+            : opArray(applyOpsVal), arr(opArray.getArray()), pos(0), lsid(lsidDoc), txnNumber(n) {}
     };
 
     void initializeTransactionContext(const Document& input);

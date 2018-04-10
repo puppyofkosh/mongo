@@ -218,6 +218,10 @@ public:
     }
 };
 
+TEST_F(ChangeStreamStageTestNoSetup, NsFilter) {
+    // TODO write this
+}
+
 TEST_F(ChangeStreamStageTest, ShouldRejectUnrecognizedOption) {
     auto expCtx = getExpCtx();
 

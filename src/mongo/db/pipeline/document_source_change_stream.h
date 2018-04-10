@@ -164,9 +164,10 @@ public:
                                                const BSONObj resumeToken);
 
     /**
-     * Helper used by other change stream stages.
+     * Helper used by various change stream stages. Used for asserting that a certain Value of a
+     * field has a certain type. Will uassert() if the field does not have the expected type.
      */
-    static void checkValueType(const Value v, const StringData filedName, BSONType expectedType);
+    static void checkValueType(const Value v, const StringData fieldName, BSONType expectedType);
 
 private:
     // It is illegal to construct a DocumentSourceChangeStream directly, use createFromBson()

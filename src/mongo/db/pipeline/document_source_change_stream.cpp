@@ -265,14 +265,13 @@ BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
         // Match all namespaces that start with db name, followed by ".", then not followed by
         // '$' or 'system.'
         return BSON("ns" << BSONRegEx(DocumentSourceChangeStream::buildNsRegex(nss))
-                    << OR(normalOpTypeMatch, chunkMigratedMatch));
+                         << OR(normalOpTypeMatch, chunkMigratedMatch));
     } else {
         return BSON("ns" << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
     }
 }
 
-BSONObj getTxnApplyOpsFilter(bool onEntireDB,
-                             const NamespaceString& nss) {
+BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
     BSONObjBuilder applyOpsBuilder;
     applyOpsBuilder.append("op", "c");
     applyOpsBuilder.append("lsid", BSON("$exists" << true));
@@ -286,7 +285,6 @@ BSONObj getTxnApplyOpsFilter(bool onEntireDB,
     }
     return applyOpsBuilder.obj();
 }
-
 }
 
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
@@ -433,6 +431,8 @@ void parseResumeOptions(const intrusive_ptr<ExpressionContext>& expCtx,
 }  // namespace
 
 std::string DocumentSourceChangeStream::buildNsRegex(const NamespaceString& nss) {
+    // Match all namespaces that start with db name, followed by ".", then not followed by
+    // '$' or 'system.'
     const static auto regexAllCollections = R"(\.(?!(\$|system\.)))";
     return "^" + nss.db() + regexAllCollections;
 }
