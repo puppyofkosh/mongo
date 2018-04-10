@@ -86,7 +86,16 @@ private:
 
     void initializeTransactionContext(const Document& input);
 
-    Document extractNextApplyOpsEntry();
+    /**
+     * Gets the next relevant applyOps entry that should be returned. If there is none, returns
+     * empty document.
+     */
+    boost::optional<Document> extractNextApplyOpsEntry();
+
+    /**
+     * Helper for extractNextApplyOpsEntry(). Checks the namespace of the given document to see if
+     * it should be returned in the change stream.
+     */
     bool isDocumentRelevant(const Document& d);
 
     BSONObj _changeStreamSpec;

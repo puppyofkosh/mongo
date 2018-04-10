@@ -196,10 +196,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
             break;
         }
         case repl::OpTypeEnum::kCommand: {
-            // Any command that makes it through our filter is an invalidating command such as a
-            // drop.
             if (!input.getNestedField("o.applyOps").missing()) {
-
                 // We should never see an applyOps inside of an applyOps that made it past the
                 // filter. This prevents more than one level of recursion.
                 invariant(!_txnContext);
@@ -207,12 +204,14 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
                 initializeTransactionContext(input);
 
                 // Now call applyTransformation on the first relevant entry in the applyOps.
-                Document nextDoc = extractNextApplyOpsEntry();
-                invariant(!nextDoc.empty());
+                boost::optional<Document> nextDoc = extractNextApplyOpsEntry();
+                invariant(nextDoc);
 
-                return applyTransformation(nextDoc);
+                return applyTransformation(*nextDoc);
             }
 
+            // Any command other than 'applyOps' that makes it through our filter is an
+            // invalidating command such as a drop.
             operationType = DocumentSourceChangeStream::kInvalidateOpType;
             // Make sure the result doesn't have a document key.
             documentKey = Value();
@@ -342,7 +341,7 @@ DocumentSource::StageConstraints DocumentSourceOplogTransformation::constraints(
                                  TransactionRequirement::kNotAllowed,
                                  ChangeStreamRequirement::kChangeStreamStage);
 
-    constraints.canSwapWithMatch = true;
+    constraints.canSwapWithMatch = false;
     constraints.canSwapWithLimit = true;
     return constraints;
 }
@@ -353,9 +352,9 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     // If we're unwinding an 'applyOps' from a transaction, check if there are any documents we have
     // stored that can be returned.
     if (_txnContext) {
-        Document next = extractNextApplyOpsEntry();
-        if (!next.empty()) {
-            return applyTransformation(next);
+        boost::optional<Document> next = extractNextApplyOpsEntry();
+        if (next) {
+            return applyTransformation(*next);
         }
     }
 
@@ -402,11 +401,7 @@ bool DocumentSourceOplogTransformation::isDocumentRelevant(const Document& d) {
     return nsField.getString() == pExpCtx->ns.ns();
 }
 
-/*
- * Gets the next relevant applyOps entry that should be returned. If there is none, returns empty
- * document.
- */
-Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
+boost::optional<Document> DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
 
     while (_txnContext && _txnContext->pos < _txnContext->arr.size()) {
         Document d = _txnContext->arr[_txnContext->pos++].getDocument();
@@ -419,6 +414,6 @@ Document DocumentSourceOplogTransformation::extractNextApplyOpsEntry() {
 
     _txnContext = boost::none;
 
-    return Document();
+    return boost::none;
 }
-}
+}  // namespace mongo
