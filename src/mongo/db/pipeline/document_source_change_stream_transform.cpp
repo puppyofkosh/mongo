@@ -370,9 +370,6 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
 }
 
 bool isOpTypeRelevant(const Document& d) {
-    // TODO: talk to Charlie about just using this instead of having two implementations of the
-    // same thing.
-
     Value op = d["op"];
     invariant(!op.missing());
 

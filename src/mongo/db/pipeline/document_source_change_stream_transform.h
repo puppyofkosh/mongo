@@ -35,7 +35,7 @@
 #include "mongo/db/pipeline/field_path.h"
 
 namespace mongo {
-/*
+/**
  * This stage is used internally by change streams for transforming oplog entries into the change
  * stream format. This stage cannot be created by users.
  */
@@ -58,7 +58,7 @@ public:
     }
 
 private:
-    /*
+    /**
      * Represents the DocumentSource's state if it's currently reading from an 'applyOps' entry
      * which was created as part of a transaction.
      */

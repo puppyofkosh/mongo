@@ -89,6 +89,7 @@
     assert.eq(firstChangeTxnNumber.valueOf(), change.txnNumber);
     assert.eq(0, bsonWoCompare(firstChangeLsid, change.lsid));
 
+    // The drop should have invalidated the change stream.
     cst.assertNextChangesEqual({
         cursor: changeStream,
         expectedChanges: [{operationType: "invalidate"}],

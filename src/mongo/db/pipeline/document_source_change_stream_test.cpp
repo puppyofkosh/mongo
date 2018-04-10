@@ -218,10 +218,6 @@ public:
     }
 };
 
-TEST_F(ChangeStreamStageTestNoSetup, NsFilter) {
-    // TODO write this
-}
-
 TEST_F(ChangeStreamStageTest, ShouldRejectUnrecognizedOption) {
     auto expCtx = getExpCtx();
 
@@ -945,8 +941,6 @@ TEST_F(ChangeStreamStageDBTest, TransformInvalidate) {
     };
     checkTransformation(dropDB, expectedInvalidateDropDatabase);
 }
-
-// TODO: Add a checkTransformation for applyOps
 
 TEST_F(ChangeStreamStageDBTest, SystemCollectionsDropOrRenameShouldInvalidate) {
     NamespaceString systemColl(nss.db() + ".system.users");
