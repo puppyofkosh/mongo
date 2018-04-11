@@ -628,10 +628,11 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
                                      "ns" << nss.ns() <<
                                      "ui" << testUuid() <<
                                      "o" << BSON("_id" << 123 << "x" << "hallo")) <<
-                                BSON("op" << "i" <<
+                                BSON("op" << "u" <<
                                      "ns" << nss.ns() <<
                                      "ui" << testUuid() <<
-                                     "o" << BSON("_id" << 124 << "x" << "hallo 2")) <<
+                                     "o" << BSON("$set" << BSON("x" << "hallo 2")) <<
+                                     "o2" << BSON("_id" << 123)) <<
                                 // One document that shouldn't get read because it's on a different
                                 // collection.
                                 BSON("op" << "i" <<
@@ -676,9 +677,9 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
     nextDoc = next.releaseDocument();
     ASSERT_EQ(nextDoc["txnNumber"].getLong(), 0LL);
     ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
-              DSChangeStream::kInsertOpType);
-    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["_id"].getInt(), 124);
-    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["x"].getString(), "hallo 2");
+              DSChangeStream::kUpdateOpType);
+    ASSERT_EQ(nextDoc[DSChangeStream::kDocumentKeyField]["_id"].getInt(), 123);
+    ASSERT_EQ(nextDoc[DSChangeStream::kUpdateDescriptionField]["updatedFields"]["x"].getString(), "hallo 2");
     ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
 
     next = transform->getNext();

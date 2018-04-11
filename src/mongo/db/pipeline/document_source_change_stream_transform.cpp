@@ -300,7 +300,7 @@ Document DocumentSourceOplogTransformation::applyTransformation(const Document& 
 
     // Note that 'updateDescription' might be the 'missing' value, in which case it will not be
     // serialized.
-    doc.addField("updateDescription", updateDescription);
+    doc.addField(DocumentSourceChangeStream::kUpdateDescriptionField, updateDescription);
     return doc.freeze();
 }
 

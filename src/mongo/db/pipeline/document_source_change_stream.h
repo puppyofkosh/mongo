@@ -101,6 +101,10 @@ public:
     // transformation.
     static constexpr StringData kNamespaceField = "ns"_sd;
 
+    // Name of the field which stores information about updates. Only applies when OperationType
+    // is "update".
+    static constexpr StringData kUpdateDescriptionField = "updateDescription"_sd;
+    
     // The name of the subfield of '_id' where the UUID of the namespace will be located after the
     // transformation.
     static constexpr StringData kUuidField = "uuid"_sd;
@@ -142,7 +146,7 @@ public:
                                     Timestamp startFrom,
                                     bool startFromInclusive);
 
-    static std::string buildNsRegex(const NamespaceString& nss);
+    static std::string buildAllCollectionsRegex(const NamespaceString& nss);
 
     /**
      * Parses a $changeStream stage from 'elem' and produces the $match and transformation
