@@ -186,6 +186,40 @@ public:
     }
 
     /**
+     * Helper for running an applyOps through the pipeline, and getting all of the results.
+     */
+    std::vector<Document> getApplyOpsResults(const Document& applyOpsDoc,
+                                             const LogicalSessionFromClient& lsid) {
+        BSONObj applyOpsObj = applyOpsDoc.toBson();
+
+        // Create an oplog entry and then glue on an lsid and txnNumber
+        auto baseOplogEntry = makeOplogEntry(OpTypeEnum::kCommand,
+                                             nss.getCommandNS(),
+                                             applyOpsObj,
+                                             testUuid(),
+                                             boost::none,  // fromMigrate
+                                             BSONObj());
+        BSONObjBuilder builder(baseOplogEntry.toBSON());
+        builder.append("lsid", lsid.toBSON());
+        builder.append("txnNumber", 0LL);
+        BSONObj oplogEntry = builder.done();
+
+        // Create the stages and check that the documents produced matched those in the applyOps.
+        vector<intrusive_ptr<DocumentSource>> stages = makeStages(oplogEntry);
+        auto transform = stages[2].get();
+        invariant(dynamic_cast<DocumentSourceOplogTransformation*>(transform) != nullptr);
+
+        std::vector<Document> res;
+        auto next = transform->getNext();
+        while (next.isAdvanced()) {
+            res.push_back(next.releaseDocument());
+            next = transform->getNext();
+        }
+        return res;
+    }
+
+
+    /**
      * This method is required to avoid a static initialization fiasco resulting from calling
      * UUID::gen() in file static scope.
      */
@@ -193,6 +227,15 @@ public:
         static const UUID* uuid_gen = new UUID(UUID::gen());
         return *uuid_gen;
     }
+
+    static LogicalSessionFromClient testLsid() {
+        // Required to avoid static initialization fiasco.
+        static const UUID* uuid = new UUID(UUID::gen());
+        LogicalSessionFromClient lsid{};
+        lsid.setId(*uuid);
+        return lsid;
+    }
+
 
     /**
      * Creates an OplogEntry with given parameters and preset defaults for this test suite.
@@ -619,67 +662,96 @@ TEST_F(ChangeStreamStageTest, TransformNewShardDetected) {
     checkTransformation(newShardDetected, expectedNewShardDetected);
 }
 
+TEST_F(ChangeStreamStageTest, TransformEmptyApplyOps) {
+    Document applyOpsDoc{{"applyOps", Value{std::vector<Document>{}}}};
+
+    LogicalSessionFromClient lsid = testLsid();
+    vector<Document> results = getApplyOpsResults(applyOpsDoc, lsid);
+
+    // Should not return anything.
+    ASSERT_EQ(results.size(), 0u);
+}
+
+TEST_F(ChangeStreamStageTest, TransformNonTransactionApplyOps) {
+    BSONObj applyOpsObj = Document{{"applyOps",
+                                    Value{std::vector<Document>{Document{
+                                        {"op", "i"_sd},
+                                        {"ns", nss.ns()},
+                                        {"ui", testUuid()},
+                                        {"o", Value{Document{{"_id", 123}, {"x", "hallo"_sd}}}}}}}}}
+                              .toBson();
+
+    // Don't append lsid or txnNumber
+
+    auto oplogEntry = makeOplogEntry(OpTypeEnum::kCommand,
+                                     nss.getCommandNS(),
+                                     applyOpsObj,
+                                     testUuid(),
+                                     boost::none,  // fromMigrate
+                                     BSONObj());
+
+
+    checkTransformation(oplogEntry, boost::none);
+}
+
+TEST_F(ChangeStreamStageTest, TransformApplyOpsWithEntriesOnDifferentNs) {
+    // Doesn't use the checkTransformation() pattern that other tests use since we expect multiple
+    // documents to be returned from one applyOps.
+
+    auto otherUUID = UUID::gen();
+    Document applyOpsDoc{
+        {"applyOps",
+         Value{std::vector<Document>{
+             Document{{"op", "i"_sd},
+                      {"ns", "someotherdb.collname"_sd},
+                      {"ui", otherUUID},
+                      {"o", Value{Document{{"_id", 123}, {"x", "hallo"_sd}}}}},
+             Document{{"op", "u"_sd},
+                      {"ns", "someotherdb.collname"_sd},
+                      {"ui", otherUUID},
+                      {"o", Value{Document{{"$set", Value{Document{{"x", "hallo 2"_sd}}}}}}},
+                      {"o2", Value{Document{{"_id", 123}}}}},
+         }}},
+    };
+    LogicalSessionFromClient lsid = testLsid();
+    vector<Document> results = getApplyOpsResults(applyOpsDoc, lsid);
+
+    // All documents should be skipped.
+    ASSERT_EQ(results.size(), 0u);
+}
+
+
 TEST_F(ChangeStreamStageTest, TransformApplyOps) {
     // Doesn't use the checkTransformation() pattern that other tests use since we expect multiple
     // documents to be returned from one applyOps.
 
-    BSONObj applyOps = BSON(
-        "applyOps" << BSON_ARRAY(BSON("op"
-                                      << "i"
-                                      << "ns"
-                                      << nss.ns()
-                                      << "ui"
-                                      << testUuid()
-                                      << "o"
-                                      << BSON("_id" << 123 << "x"
-                                                    << "hallo"))
-                                 << BSON("op"
-                                         << "u"
-                                         << "ns"
-                                         << nss.ns()
-                                         << "ui"
-                                         << testUuid()
-                                         << "o"
-                                         << BSON("$set" << BSON("x"
-                                                                << "hallo 2"))
-                                         << "o2"
-                                         << BSON("_id" << 123))
-                                 <<
-                                 // One document that shouldn't get read because it's on a different
-                                 // collection.
-                                 BSON("op"
-                                      << "i"
-                                      << "ns"
-                                      << "someothercollection.collName"
-                                      << "ui"
-                                      << testUuid()
-                                      << "o"
-                                      << BSON("_id" << 124 << "x"
-                                                    << "hallo 2"))));
+    Document applyOpsDoc{
+        {"applyOps",
+         Value{std::vector<Document>{
+             Document{{"op", "i"_sd},
+                      {"ns", nss.ns()},
+                      {"ui", testUuid()},
+                      {"o", Value{Document{{"_id", 123}, {"x", "hallo"_sd}}}}},
+             Document{{"op", "u"_sd},
+                      {"ns", nss.ns()},
+                      {"ui", testUuid()},
+                      {"o", Value{Document{{"$set", Value{Document{{"x", "hallo 2"_sd}}}}}}},
+                      {"o2", Value{Document{{"_id", 123}}}}},
+             // Operation on another namespace which should be skipped.
+             Document{{"op", "i"_sd},
+                      {"ns", "someotherdb.collname"_sd},
+                      {"ui", UUID::gen()},
+                      {"o", Value{Document{{"_id", 0}, {"x", "Should not read this!"_sd}}}}},
+         }}},
+    };
+    LogicalSessionFromClient lsid = testLsid();
+    vector<Document> results = getApplyOpsResults(applyOpsDoc, lsid);
 
-    // Create an oplog entry and then glue on an lsid and txnNumber
-    auto baseOplogEntry = makeOplogEntry(OpTypeEnum::kCommand,
-                                         nss.getCommandNS(),
-                                         applyOps,
-                                         testUuid(),
-                                         boost::none,  // fromMigrate
-                                         BSONObj());
-    BSONObjBuilder builder(baseOplogEntry.toBSON());
-    LogicalSessionFromClient lsid{};
-    lsid.setId(UUID::gen());
-    builder.append("lsid", lsid.toBSON());
-    builder.append("txnNumber", 0LL);
-    BSONObj oplogEntry = builder.done();
-
-    // Create the stages and check that the documents produced matched those in the applyOps.
-    vector<intrusive_ptr<DocumentSource>> stages = makeStages(oplogEntry);
-    auto transform = stages[2].get();
-    invariant(dynamic_cast<DocumentSourceOplogTransformation*>(transform) != nullptr);
+    // The third document should be skipped.
+    ASSERT_EQ(results.size(), 2u);
 
     // Check that the first document is correct.
-    auto next = transform->getNext();
-    ASSERT_TRUE(next.isAdvanced());
-    auto nextDoc = next.releaseDocument();
+    auto nextDoc = results[0];
     ASSERT_EQ(nextDoc["txnNumber"].getLong(), 0LL);
     ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
               DSChangeStream::kInsertOpType);
@@ -688,9 +760,7 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
     ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
 
     // Check the second document.
-    next = transform->getNext();
-    ASSERT_TRUE(next.isAdvanced());
-    nextDoc = next.releaseDocument();
+    nextDoc = results[1];
     ASSERT_EQ(nextDoc["txnNumber"].getLong(), 0LL);
     ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
               DSChangeStream::kUpdateOpType);
@@ -699,8 +769,7 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
               "hallo 2");
     ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
 
-    next = transform->getNext();
-    ASSERT_FALSE(next.isAdvanced());
+    // The third document is skipped.
 }
 
 TEST_F(ChangeStreamStageTest, MatchFiltersCreateCollection) {
