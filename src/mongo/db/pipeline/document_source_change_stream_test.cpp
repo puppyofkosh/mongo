@@ -623,23 +623,39 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
     // Doesn't use the checkTransformation() pattern that other tests use since we expect multiple
     // documents to be returned from one applyOps.
 
-    BSONObj applyOps = BSON("applyOps" << BSON_ARRAY(
-                                BSON("op" << "i" <<
-                                     "ns" << nss.ns() <<
-                                     "ui" << testUuid() <<
-                                     "o" << BSON("_id" << 123 << "x" << "hallo")) <<
-                                BSON("op" << "u" <<
-                                     "ns" << nss.ns() <<
-                                     "ui" << testUuid() <<
-                                     "o" << BSON("$set" << BSON("x" << "hallo 2")) <<
-                                     "o2" << BSON("_id" << 123)) <<
-                                // One document that shouldn't get read because it's on a different
-                                // collection.
-                                BSON("op" << "i" <<
-                                     "ns" << "someothercollection.collName" <<
-                                     "ui" << testUuid() <<
-                                     "o" << BSON("_id" << 124 << "x" << "hallo 2"))
-                                ));
+    BSONObj applyOps = BSON(
+        "applyOps" << BSON_ARRAY(BSON("op"
+                                      << "i"
+                                      << "ns"
+                                      << nss.ns()
+                                      << "ui"
+                                      << testUuid()
+                                      << "o"
+                                      << BSON("_id" << 123 << "x"
+                                                    << "hallo"))
+                                 << BSON("op"
+                                         << "u"
+                                         << "ns"
+                                         << nss.ns()
+                                         << "ui"
+                                         << testUuid()
+                                         << "o"
+                                         << BSON("$set" << BSON("x"
+                                                                << "hallo 2"))
+                                         << "o2"
+                                         << BSON("_id" << 123))
+                                 <<
+                                 // One document that shouldn't get read because it's on a different
+                                 // collection.
+                                 BSON("op"
+                                      << "i"
+                                      << "ns"
+                                      << "someothercollection.collName"
+                                      << "ui"
+                                      << testUuid()
+                                      << "o"
+                                      << BSON("_id" << 124 << "x"
+                                                    << "hallo 2"))));
 
     // Create an oplog entry and then glue on an lsid and txnNumber
     auto baseOplogEntry = makeOplogEntry(OpTypeEnum::kCommand,
@@ -679,7 +695,8 @@ TEST_F(ChangeStreamStageTest, TransformApplyOps) {
     ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
               DSChangeStream::kUpdateOpType);
     ASSERT_EQ(nextDoc[DSChangeStream::kDocumentKeyField]["_id"].getInt(), 123);
-    ASSERT_EQ(nextDoc[DSChangeStream::kUpdateDescriptionField]["updatedFields"]["x"].getString(), "hallo 2");
+    ASSERT_EQ(nextDoc[DSChangeStream::kUpdateDescriptionField]["updatedFields"]["x"].getString(),
+              "hallo 2");
     ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
 
     next = transform->getNext();

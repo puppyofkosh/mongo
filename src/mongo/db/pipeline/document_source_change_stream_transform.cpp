@@ -81,7 +81,6 @@ bool isOpTypeRelevant(const Document& d) {
 
     return false;
 }
-
 }
 
 DocumentSourceOplogTransformation::DocumentSourceOplogTransformation(

@@ -104,7 +104,7 @@ public:
     // Name of the field which stores information about updates. Only applies when OperationType
     // is "update".
     static constexpr StringData kUpdateDescriptionField = "updateDescription"_sd;
-    
+
     // The name of the subfield of '_id' where the UUID of the namespace will be located after the
     // transformation.
     static constexpr StringData kUuidField = "uuid"_sd;

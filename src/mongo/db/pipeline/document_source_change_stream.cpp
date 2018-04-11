@@ -284,14 +284,14 @@ BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
     applyOpsBuilder.append("txnNumber", BSON("$exists" << true));
     const std::string& kApplyOpsNs = "o.applyOps.ns";
     if (onEntireDB) {
-        applyOpsBuilder.append(kApplyOpsNs,
-                               BSONRegEx(DocumentSourceChangeStream::buildAllCollectionsRegex(nss)));
+        applyOpsBuilder.append(
+            kApplyOpsNs, BSONRegEx(DocumentSourceChangeStream::buildAllCollectionsRegex(nss)));
     } else {
         applyOpsBuilder.append(kApplyOpsNs, nss.ns());
     }
     return applyOpsBuilder.obj();
 }
-} // namespace
+}  // namespace
 
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
