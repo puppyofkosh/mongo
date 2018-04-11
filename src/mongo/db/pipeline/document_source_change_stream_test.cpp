@@ -125,7 +125,7 @@ public:
      * Returns a list of stages expanded from a $changStream specification, starting with a
      * DocumentSourceMock which contains a single document representing 'entry'.
      */
-    vector<intrusive_ptr<DocumentSource>> makeStages(const OplogEntry& entry) {
+    vector<intrusive_ptr<DocumentSource>> makeStages(const BSONObj& entry) {
         const auto spec = fromjson("{$changeStream: {}}");
         list<intrusive_ptr<DocumentSource>> result =
             DSChangeStream::createFromBson(spec.firstElement(), getExpCtx());
@@ -143,7 +143,7 @@ public:
         ASSERT(match);
         auto executableMatch = DocumentSourceMatch::create(match->getQuery(), getExpCtx());
 
-        auto mock = DocumentSourceMock::create(D(entry.toBSON()));
+        auto mock = DocumentSourceMock::create(D(entry));
         executableMatch->setSource(mock.get());
 
         // Check the oplog entry is transformed correctly.
@@ -157,6 +157,10 @@ public:
         closeCursor->setSource(transform);
 
         return {mock, executableMatch, transform, closeCursor};
+    }
+
+    vector<intrusive_ptr<DocumentSource>> makeStages(const OplogEntry& entry) {
+        return makeStages(entry.toBSON());
     }
 
     OplogEntry createCommand(const BSONObj& oField,
@@ -613,6 +617,72 @@ TEST_F(ChangeStreamStageTest, TransformNewShardDetected) {
         {DSChangeStream::kOperationTypeField, DSChangeStream::kNewShardDetectedOpType},
     };
     checkTransformation(newShardDetected, expectedNewShardDetected);
+}
+
+TEST_F(ChangeStreamStageTest, TransformApplyOps) {
+    // Doesn't use the checkTransformation() pattern that other tests use since we expect multiple
+    // documents to be returned from one applyOps.
+
+    BSONObj applyOps = BSON("applyOps" << BSON_ARRAY(
+                                BSON("op" << "i" <<
+                                     "ns" << nss.ns() <<
+                                     "ui" << testUuid() <<
+                                     "o" << BSON("_id" << 123 << "x" << "hallo")) <<
+                                BSON("op" << "i" <<
+                                     "ns" << nss.ns() <<
+                                     "ui" << testUuid() <<
+                                     "o" << BSON("_id" << 124 << "x" << "hallo 2")) <<
+                                // One document that shouldn't get read because it's on a different
+                                // collection.
+                                BSON("op" << "i" <<
+                                     "ns" << "someothercollection.collName" <<
+                                     "ui" << testUuid() <<
+                                     "o" << BSON("_id" << 124 << "x" << "hallo 2"))
+                                ));
+
+    // Create an oplog entry and then glue on an lsid and txnNumber
+    auto baseOplogEntry = makeOplogEntry(OpTypeEnum::kCommand,
+                                         nss.getCommandNS(),
+                                         applyOps,
+                                         testUuid(),
+                                         boost::none,  // fromMigrate
+                                         BSONObj());
+    BSONObjBuilder builder(baseOplogEntry.toBSON());
+    LogicalSessionFromClient lsid{};
+    lsid.setId(UUID::gen());
+    builder.append("lsid", lsid.toBSON());
+    builder.append("txnNumber", 0LL);
+    BSONObj oplogEntry = builder.done();
+
+    // Create the stages and check that the documents produced matched those in the applyOps.
+    vector<intrusive_ptr<DocumentSource>> stages = makeStages(oplogEntry);
+    auto transform = stages[2].get();
+    invariant(dynamic_cast<DocumentSourceOplogTransformation*>(transform) != nullptr);
+
+    // Check that the first document is correct.
+    auto next = transform->getNext();
+    ASSERT_TRUE(next.isAdvanced());
+    auto nextDoc = next.releaseDocument();
+    ASSERT_EQ(nextDoc["txnNumber"].getLong(), 0LL);
+    ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
+              DSChangeStream::kInsertOpType);
+    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["_id"].getInt(), 123);
+    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["x"].getString(), "hallo");
+    ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
+
+    // Check the second document.
+    next = transform->getNext();
+    ASSERT_TRUE(next.isAdvanced());
+    nextDoc = next.releaseDocument();
+    ASSERT_EQ(nextDoc["txnNumber"].getLong(), 0LL);
+    ASSERT_EQ(nextDoc[DSChangeStream::kOperationTypeField].getString(),
+              DSChangeStream::kInsertOpType);
+    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["_id"].getInt(), 124);
+    ASSERT_EQ(nextDoc[DSChangeStream::kFullDocumentField]["x"].getString(), "hallo 2");
+    ASSERT_EQ(nextDoc["lsid"].getDocument().toBson().woCompare(lsid.toBSON()), 0);
+
+    next = transform->getNext();
+    ASSERT_FALSE(next.isAdvanced());
 }
 
 TEST_F(ChangeStreamStageTest, MatchFiltersCreateCollection) {
