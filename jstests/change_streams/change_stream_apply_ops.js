@@ -116,6 +116,8 @@
         cst.cleanUp();
     }
 
+    // TODO: SERVER-34302 should allow us to simplify this test, so we're not required to
+    // explicitly run both against a single collection and against the whole DB.
     testChangeStreamsWithTransactions(false);
     testChangeStreamsWithTransactions(true);
 }());

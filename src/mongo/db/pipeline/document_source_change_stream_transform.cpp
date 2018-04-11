@@ -65,6 +65,23 @@ using std::vector;
 
 namespace {
 constexpr auto checkValueType = &DocumentSourceChangeStream::checkValueType;
+
+bool isOpTypeRelevant(const Document& d) {
+    Value op = d["op"];
+    invariant(!op.missing());
+
+    if (op.getString() != "n") {
+        return true;
+    }
+
+    Value type = d.getNestedField("o2.type");
+    if (!type.missing() && type.getString() == "migrateChunkToNewShard") {
+        return true;
+    }
+
+    return false;
+}
+
 }
 
 DocumentSourceOplogTransformation::DocumentSourceOplogTransformation(
@@ -72,7 +89,7 @@ DocumentSourceOplogTransformation::DocumentSourceOplogTransformation(
     : DocumentSource(expCtx), _changeStreamSpec(changeStreamSpec.getOwned()) {
 
     if (expCtx->ns.isCollectionlessAggregateNS()) {
-        _nsRegex.emplace(DocumentSourceChangeStream::buildNsRegex(expCtx->ns));
+        _nsRegex.emplace(DocumentSourceChangeStream::buildAllCollectionsRegex(expCtx->ns));
     }
 }
 
@@ -368,22 +385,6 @@ DocumentSource::GetNextResult DocumentSourceOplogTransformation::getNext() {
     return applyTransformation(input.releaseDocument());
 }
 
-bool isOpTypeRelevant(const Document& d) {
-    Value op = d["op"];
-    invariant(!op.missing());
-
-    if (op.getString() != "n") {
-        return true;
-    }
-
-    Value type = d.getNestedField("o2.type");
-    if (!type.missing() && type.getString() == "migrateChunkToNewShard") {
-        return true;
-    }
-
-    return false;
-}
-
 bool DocumentSourceOplogTransformation::isDocumentRelevant(const Document& d) {
     if (!isOpTypeRelevant(d)) {
         return false;
@@ -405,11 +406,9 @@ boost::optional<Document> DocumentSourceOplogTransformation::extractNextApplyOps
 
     while (_txnContext && _txnContext->pos < _txnContext->arr.size()) {
         Document d = _txnContext->arr[_txnContext->pos++].getDocument();
-        if (!isDocumentRelevant(d)) {
-            continue;
+        if (isDocumentRelevant(d)) {
+            return d;
         }
-
-        return d;
     }
 
     _txnContext = boost::none;

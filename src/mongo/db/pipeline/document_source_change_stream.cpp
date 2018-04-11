@@ -243,9 +243,9 @@ void DocumentSourceChangeStream::checkValueType(const Value v,
             (v.getType() == expectedType));
 }
 
-/*
- * Helpers for building the oplog filter.
- */
+//
+// Helpers for building the oplog filter.
+//
 namespace {
 
 /**
@@ -264,7 +264,7 @@ BSONObj getOpMatchFilter(bool onEntireDB, const NamespaceString& nss) {
     if (onEntireDB) {
         // Match all namespaces that start with db name, followed by ".", then not followed by
         // '$' or 'system.'
-        return BSON("ns" << BSONRegEx(DocumentSourceChangeStream::buildNsRegex(nss))
+        return BSON("ns" << BSONRegEx(DocumentSourceChangeStream::buildAllCollectionsRegex(nss))
                          << OR(normalOpTypeMatch, chunkMigratedMatch));
     } else {
         return BSON("ns" << nss.ns() << OR(normalOpTypeMatch, chunkMigratedMatch));
@@ -284,13 +284,13 @@ BSONObj getTxnApplyOpsFilter(bool onEntireDB, const NamespaceString& nss) {
     const std::string& kApplyOpsNs = "o.applyOps.ns";
     if (onEntireDB) {
         applyOpsBuilder.append(kApplyOpsNs,
-                               BSONRegEx(DocumentSourceChangeStream::buildNsRegex(nss)));
+                               BSONRegEx(DocumentSourceChangeStream::buildAllCollectionsRegex(nss)));
     } else {
         applyOpsBuilder.append(kApplyOpsNs, nss.ns());
     }
     return applyOpsBuilder.obj();
 }
-}
+} // namespace
 
 BSONObj DocumentSourceChangeStream::buildMatchFilter(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -435,7 +435,7 @@ void parseResumeOptions(const intrusive_ptr<ExpressionContext>& expCtx,
 
 }  // namespace
 
-std::string DocumentSourceChangeStream::buildNsRegex(const NamespaceString& nss) {
+std::string DocumentSourceChangeStream::buildAllCollectionsRegex(const NamespaceString& nss) {
     // Match all namespaces that start with db name, followed by ".", then not followed by
     // '$' or 'system.'
     const static auto regexAllCollections = R"(\.(?!(\$|system\.)))";

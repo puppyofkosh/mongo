@@ -100,8 +100,9 @@ private:
 
     BSONObj _changeStreamSpec;
 
-    // Regex for matching the "ns" field in applyOps sub-entries. Only non-boost::none when we're
-    // watching the entire DB.
+    // Regex for matching the "ns" field in applyOps sub-entries. Only used when we have a change
+    // stream on the entire DB. When watching just a single collection, this field is boost::none,
+    // and an exact string equality check is used instead.
     boost::optional<pcrecpp::RE> _nsRegex;
 
     // Represents if the current 'applyOps' we're unwinding, if any.
