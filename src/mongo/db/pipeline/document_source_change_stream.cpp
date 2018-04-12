@@ -545,7 +545,7 @@ intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationSt
     // Mark the transformation stage as independent of any collection if the change stream is
     // watching all collections in the database.
     const bool isIndependentOfAnyCollection = expCtx->ns.isCollectionlessAggregateNS();
-    return intrusive_ptr<DocumentSource>(new Transformation(expCtx,
+    return intrusive_ptr<DocumentSource>(new DocumentSourceOplogTransformation(expCtx,
                                                             changeStreamSpec,
                                                             isIndependentOfAnyCollection));
 }
