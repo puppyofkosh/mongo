@@ -36,96 +36,95 @@
 
 namespace mongo {
 
-    // TODO rename
+// TODO rename
 class DocumentSourceChangeStreamTransform : public DocumentSource {
-    public:
-        DocumentSourceChangeStreamTransform(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                       BSONObj changeStreamSpec,
-                       bool isIndependentOfAnyCollection);
-        Document applyTransformation(const Document& input);
-        DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
-        DocumentSource::GetModPathsReturn getModifiedPaths() const final;
+public:
+    DocumentSourceChangeStreamTransform(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                        BSONObj changeStreamSpec,
+                                        bool isIndependentOfAnyCollection);
+    Document applyTransformation(const Document& input);
+    DocumentSource::GetDepsReturn getDependencies(DepsTracker* deps) const final;
+    DocumentSource::GetModPathsReturn getModifiedPaths() const final;
 
-        Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
-        DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
-        DocumentSource::GetNextResult getNext();
-        const char* getSourceName() const {
-            return DocumentSourceChangeStream::kStageName.rawData();
-        }
+    Value serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
+    DocumentSource::StageConstraints constraints(Pipeline::SplitState pipeState) const final;
+    DocumentSource::GetNextResult getNext();
+    const char* getSourceName() const {
+        return DocumentSourceChangeStream::kStageName.rawData();
+    }
 
-    private:
-        struct DocumentKeyCacheEntry {
-            DocumentKeyCacheEntry() = default;
+private:
+    struct DocumentKeyCacheEntry {
+        DocumentKeyCacheEntry() = default;
 
-            DocumentKeyCacheEntry(std::pair<std::vector<FieldPath>, bool> documentKeyFieldsIn)
-                : documentKeyFields(documentKeyFieldsIn.first),
-                  isFinal(documentKeyFieldsIn.second){};
-            // Fields of the document key, in order, including "_id" and the shard key if the
-            // collection is sharded. Empty until the first oplog entry with a uuid is encountered.
-            // Needed for transforming 'insert' oplog entries.
-            std::vector<FieldPath> documentKeyFields;
+        DocumentKeyCacheEntry(std::pair<std::vector<FieldPath>, bool> documentKeyFieldsIn)
+            : documentKeyFields(documentKeyFieldsIn.first), isFinal(documentKeyFieldsIn.second){};
+        // Fields of the document key, in order, including "_id" and the shard key if the
+        // collection is sharded. Empty until the first oplog entry with a uuid is encountered.
+        // Needed for transforming 'insert' oplog entries.
+        std::vector<FieldPath> documentKeyFields;
 
-            // Set to true if the document key fields for this entry are definitively known and will
-            // not change. This implies that either the collection has become sharded or has been
-            // dropped.
-            bool isFinal;
-        };
+        // Set to true if the document key fields for this entry are definitively known and will
+        // not change. This implies that either the collection has become sharded or has been
+        // dropped.
+        bool isFinal;
+    };
 
-        /**
-         * Represents the DocumentSource's state if it's currently reading from an 'applyOps' entry
-         * which was created as part of a transaction.
-         */
-        struct TransactionContext {
-            MONGO_DISALLOW_COPYING(TransactionContext);
+    /**
+     * Represents the DocumentSource's state if it's currently reading from an 'applyOps' entry
+     * which was created as part of a transaction.
+     */
+    struct TransactionContext {
+        MONGO_DISALLOW_COPYING(TransactionContext);
 
-            // The array of oplog entries from an 'applyOps' representing the transaction. Only kept
-            // around so that the underlying memory of 'arr' isn't freed.
-            Value opArray;
+        // The array of oplog entries from an 'applyOps' representing the transaction. Only kept
+        // around so that the underlying memory of 'arr' isn't freed.
+        Value opArray;
 
-            // Array representation of the 'opArray' field. Stored like this to avoid re-typechecking
-            // each call to next(), or copying the entire array.
-            const std::vector<Value>& arr;
+        // Array representation of the 'opArray' field. Stored like this to avoid re-typechecking
+        // each call to next(), or copying the entire array.
+        const std::vector<Value>& arr;
 
-            // Our current place in the 'opArray'.
-            size_t pos;
+        // Our current place in the 'opArray'.
+        size_t pos;
 
-            // Fields that were taken from the 'applyOps' oplog entry.
-            Document lsid;
-            TxnNumber txnNumber;
+        // Fields that were taken from the 'applyOps' oplog entry.
+        Document lsid;
+        TxnNumber txnNumber;
 
         TransactionContext(const Value& applyOpsVal, const Document& lsidDoc, TxnNumber n)
-        : opArray(applyOpsVal), arr(opArray.getArray()), pos(0), lsid(lsidDoc), txnNumber(n) {}
-        };
+            : opArray(applyOpsVal), arr(opArray.getArray()), pos(0), lsid(lsidDoc), txnNumber(n) {}
+    };
 
-        void initializeTransactionContext(const Document& input);
+    void initializeTransactionContext(const Document& input);
 
-        /**
-         * Gets the next relevant applyOps entry that should be returned. If there is none, returns
-         * empty document.
-         */
-        boost::optional<Document> extractNextApplyOpsEntry();
+    /**
+     * Gets the next relevant applyOps entry that should be returned. If there is none, returns
+     * empty document.
+     */
+    boost::optional<Document> extractNextApplyOpsEntry();
 
-        /**
-         * Helper for extractNextApplyOpsEntry(). Checks the namespace of the given document to see
-         * if it should be returned in the change stream.
-         */
-        bool isDocumentRelevant(const Document& d);
+    /**
+     * Helper for extractNextApplyOpsEntry(). Checks the namespace of the given document to see
+     * if it should be returned in the change stream.
+     */
+    bool isDocumentRelevant(const Document& d);
 
-        BSONObj _changeStreamSpec;
+    BSONObj _changeStreamSpec;
 
-        // Map of collection UUID to document key fields.
-        std::map<UUID, DocumentKeyCacheEntry> _documentKeyCache;
+    // Map of collection UUID to document key fields.
+    std::map<UUID, DocumentKeyCacheEntry> _documentKeyCache;
 
-        // Regex for matching the "ns" field in applyOps sub-entries. Only used when we have a
-        // change stream on the entire DB. When watching just a single collection, this field is
-        // boost::none, and an exact string equality check is used instead.
-        boost::optional<pcrecpp::RE> _nsRegex;
+    // Regex for matching the "ns" field in applyOps sub-entries. Only used when we have a
+    // change stream on the entire DB. When watching just a single collection, this field is
+    // boost::none, and an exact string equality check is used instead.
+    boost::optional<pcrecpp::RE> _nsRegex;
 
-        // Represents if the current 'applyOps' we're unwinding, if any.
-        boost::optional<TransactionContext> _txnContext;
+    // Represents if the current 'applyOps' we're unwinding, if any.
+    boost::optional<TransactionContext> _txnContext;
 
-        // Set to true if this transformation stage can be run on the collectionless namespace.
-        bool _isIndependentOfAnyCollection;
+    // Set to true if this transformation stage can be run on the collectionless namespace.
+    bool _isIndependentOfAnyCollection;
 };
 
-} // namespace mongo
+}  // namespace mongo

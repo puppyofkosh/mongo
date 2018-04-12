@@ -172,6 +172,7 @@ public:
      * field has a certain type. Will uassert() if the field does not have the expected type.
      */
     static void checkValueType(const Value v, const StringData fieldName, BSONType expectedType);
+
 private:
     // It is illegal to construct a DocumentSourceChangeStream directly, use createFromBson()
     // instead.

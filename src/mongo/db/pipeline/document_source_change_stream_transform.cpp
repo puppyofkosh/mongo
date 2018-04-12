@@ -81,10 +81,11 @@ bool isOpTypeRelevant(const Document& d) {
 
     return false;
 }
-} // namespace
+}  // namespace
 
 DocumentSourceChangeStreamTransform::DocumentSourceChangeStreamTransform(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, BSONObj changeStreamSpec,
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    BSONObj changeStreamSpec,
     bool isIndependentOfAnyCollection)
     : DocumentSource(expCtx),
       _changeStreamSpec(changeStreamSpec.getOwned()),
@@ -95,15 +96,15 @@ DocumentSourceChangeStreamTransform::DocumentSourceChangeStreamTransform(
     }
 }
 
-DocumentSource::StageConstraints DocumentSourceChangeStreamTransform::constraints(Pipeline::SplitState pipeState) const {
-    StageConstraints constraints(
-        StreamType::kStreaming,
-        PositionRequirement::kNone,
-        HostTypeRequirement::kNone,
-        DiskUseRequirement::kNoDiskUse,
-        FacetRequirement::kNotAllowed,
-        TransactionRequirement::kNotAllowed,
-        ChangeStreamRequirement::kChangeStreamStage);
+DocumentSource::StageConstraints DocumentSourceChangeStreamTransform::constraints(
+    Pipeline::SplitState pipeState) const {
+    StageConstraints constraints(StreamType::kStreaming,
+                                 PositionRequirement::kNone,
+                                 HostTypeRequirement::kNone,
+                                 DiskUseRequirement::kNoDiskUse,
+                                 FacetRequirement::kNotAllowed,
+                                 TransactionRequirement::kNotAllowed,
+                                 ChangeStreamRequirement::kChangeStreamStage);
 
     constraints.canSwapWithMatch = true;
     constraints.canSwapWithLimit = true;
@@ -255,7 +256,8 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
             operationType = DocumentSourceChangeStream::kNewShardDetectedOpType;
             // Generate a fake document Id for NewShardDetected operation so that we can resume
             // after this operation.
-            documentKey = Value(Document{{DocumentSourceChangeStream::kIdField, input[repl::OplogEntry::kObject2FieldName]}});
+            documentKey = Value(Document{{DocumentSourceChangeStream::kIdField,
+                                          input[repl::OplogEntry::kObject2FieldName]}});
             break;
         }
         default: { MONGO_UNREACHABLE; }
@@ -293,7 +295,8 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
         doc.addField(DocumentSourceChangeStream::kLsidField, Value(_txnContext->lsid));
     }
 
-    doc.addField(DocumentSourceChangeStream::kIdField, Value(ResumeToken(resumeTokenData).toDocument()));
+    doc.addField(DocumentSourceChangeStream::kIdField,
+                 Value(ResumeToken(resumeTokenData).toDocument()));
     doc.addField(DocumentSourceChangeStream::kOperationTypeField, Value(operationType));
 
     // If we're in a sharded environment, we'll need to merge the results by their sort key, so add
@@ -303,12 +306,14 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
     }
 
     // "invalidate" and "newShardDetected" entries have fewer fields.
-    if (operationType == DocumentSourceChangeStream::kInvalidateOpType || operationType == DocumentSourceChangeStream::kNewShardDetectedOpType) {
+    if (operationType == DocumentSourceChangeStream::kInvalidateOpType ||
+        operationType == DocumentSourceChangeStream::kNewShardDetectedOpType) {
         return doc.freeze();
     }
 
     doc.addField(DocumentSourceChangeStream::kFullDocumentField, fullDocument);
-    doc.addField(DocumentSourceChangeStream::kNamespaceField, Value(Document{{"db", nss.db()}, {"coll", nss.coll()}}));
+    doc.addField(DocumentSourceChangeStream::kNamespaceField,
+                 Value(Document{{"db", nss.db()}, {"coll", nss.coll()}}));
     doc.addField(DocumentSourceChangeStream::kDocumentKeyField, documentKey);
 
     // Note that 'updateDescription' might be the 'missing' value, in which case it will not be
@@ -356,8 +361,7 @@ DocumentSource::GetDepsReturn DocumentSourceChangeStreamTransform::getDependenci
     return DocumentSource::GetDepsReturn::EXHAUSTIVE_ALL;
 }
 
-DocumentSource::GetModPathsReturn DocumentSourceChangeStreamTransform::getModifiedPaths()
-    const {
+DocumentSource::GetModPathsReturn DocumentSourceChangeStreamTransform::getModifiedPaths() const {
     // All paths are modified.
     return {DocumentSource::GetModPathsReturn::Type::kAllPaths, std::set<string>{}, {}};
 }

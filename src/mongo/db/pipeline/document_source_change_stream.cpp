@@ -217,7 +217,8 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
 
     auto doc = nextInput.getDocument();
     const auto& kOperationTypeField = DocumentSourceChangeStream::kOperationTypeField;
-    DocumentSourceChangeStream::checkValueType(doc[kOperationTypeField], kOperationTypeField, BSONType::String);
+    DocumentSourceChangeStream::checkValueType(
+        doc[kOperationTypeField], kOperationTypeField, BSONType::String);
     auto operationType = doc[kOperationTypeField].getString();
     if (operationType == DocumentSourceChangeStream::kInvalidateOpType) {
         // Pass the invalidation forward, so that it can be included in the results, or
@@ -231,7 +232,8 @@ DocumentSource::GetNextResult DocumentSourceCloseCursor::getNext() {
 
 }  // namespace
 
-void DocumentSourceChangeStream::checkValueType(const Value v, const StringData filedName,
+void DocumentSourceChangeStream::checkValueType(const Value v,
+                                                const StringData filedName,
                                                 BSONType expectedType) {
     uassert(40532,
             str::stream() << "Entry field \"" << filedName << "\" should be "
@@ -545,8 +547,7 @@ intrusive_ptr<DocumentSource> DocumentSourceChangeStream::createTransformationSt
     // Mark the transformation stage as independent of any collection if the change stream is
     // watching all collections in the database.
     const bool isIndependentOfAnyCollection = expCtx->ns.isCollectionlessAggregateNS();
-    return intrusive_ptr<DocumentSource>(new DocumentSourceChangeStreamTransform(expCtx,
-                                                            changeStreamSpec,
-                                                            isIndependentOfAnyCollection));
+    return intrusive_ptr<DocumentSource>(new DocumentSourceChangeStreamTransform(
+        expCtx, changeStreamSpec, isIndependentOfAnyCollection));
 }
 }  // namespace mongo
