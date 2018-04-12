@@ -207,7 +207,7 @@ public:
         // Create the stages and check that the documents produced matched those in the applyOps.
         vector<intrusive_ptr<DocumentSource>> stages = makeStages(oplogEntry);
         auto transform = stages[2].get();
-        invariant(dynamic_cast<DocumentSourceOplogTransformation*>(transform) != nullptr);
+        invariant(dynamic_cast<DocumentSourceChangeStreamTransform*>(transform) != nullptr);
 
         std::vector<Document> res;
         auto next = transform->getNext();
@@ -825,7 +825,7 @@ TEST_F(ChangeStreamStageTest, TransformationShouldBeAbleToReParseSerializedStage
     vector<intrusive_ptr<DocumentSource>> allStages(std::begin(result), std::end(result));
     ASSERT_EQ(allStages.size(), 3UL);
     auto stage = allStages[1];
-    ASSERT(dynamic_cast<DocumentSourceOplogTransformation*>(stage.get()));
+    ASSERT(dynamic_cast<DocumentSourceChangeStreamTransform*>(stage.get()));
 
     //
     // Serialize the stage and confirm contents.
