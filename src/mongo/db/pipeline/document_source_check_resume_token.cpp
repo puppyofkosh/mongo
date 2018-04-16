@@ -43,15 +43,15 @@ using ResumeStatus = DocumentSourceEnsureResumeTokenPresent::ResumeStatus;
 // that we will never see the token). If the resume token's documentKey contains only the _id field
 // while the pipeline documentKey contains additional fields, then the collection has become
 // sharded since the resume token was generated. In that case, we relax the requirements such that
-// only the timestamp, applyOpsIndex, UUID and documentKey._id need match. This remains correct,
-// since the only circumstances under which the resume token omits the shard key is if it was
-// generated either (1) before the collection was sharded, (2) after the collection was sharded but
-// before the primary shard became aware of that fact, implying that it was before the first chunk
-// moved off the shard, or (3) by a malicious client who has constructed their own resume token. In
-// the first two cases, we can be guaranteed that the _id is unique and the stream can therefore be
-// resumed seamlessly; in the third case, the worst that can happen is that some entries are missed
-// or duplicated. Note that the simple collation is used to compare the resume tokens, and that we
-// purposefully avoid the user's requested collation if present.
+// only the timestamp, version, applyOpsIndex, UUID and documentKey._id need match. This remains
+// correct, since the only circumstances under which the resume token omits the shard key is if it
+// was generated either (1) before the collection was sharded, (2) after the collection was sharded
+// but before the primary shard became aware of that fact, implying that it was before the first
+// chunk moved off the shard, or (3) by a malicious client who has constructed their own resume
+// token. In the first two cases, we can be guaranteed that the _id is unique and the stream can
+// therefore be resumed seamlessly; in the third case, the worst that can happen is that some
+// entries are missed or duplicated. Note that the simple collation is used to compare the resume
+// tokens, and that we purposefully avoid the user's requested collation if present.
 ResumeStatus compareAgainstClientResumeToken(const intrusive_ptr<ExpressionContext>& expCtx,
                                              const Document& documentFromResumedStream,
                                              const ResumeToken& tokenFromClient) {

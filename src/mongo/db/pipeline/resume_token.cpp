@@ -105,11 +105,12 @@ ResumeToken::ResumeToken(const Document& resumeDoc) {
 }
 
 // We encode the resume token as a KeyString with the sequence:
-// clusterTime, applyOpsIndex, uuid, documentKey
+// clusterTime, version, applyOpsIndex, uuid, documentKey
 // Only the clusterTime is required.
 ResumeToken::ResumeToken(const ResumeTokenData& data) {
     BSONObjBuilder builder;
     builder.append("", data.clusterTime);
+    builder.append("", data.version);
     builder.appendNumber("", data.applyOpsIndex);
     uassert(50788,
             "Unexpected resume token with a documentKey but no UUID",
@@ -191,15 +192,24 @@ ResumeTokenData ResumeToken::getData() const {
             break;
         }
         case BSONType::String: {
-            // The new format has applyOpsIndex next.
-            auto elt = i.next();
+            // Next comes the resume token version.
+            auto versionElt = i.next();
             uassert(50790,
                     "Resume Token does not contain applyOpsIndex",
-                    elt.type() == BSONType::NumberInt);
-            result.applyOpsIndex = elt.numberInt();
-            uassert(50791,
+                    versionElt.type() == BSONType::NumberInt);
+            result.version = versionElt.numberInt();
+            uassert(50791, "Invalid Resume Token: only supports version 0", result.version == 0);
+
+            // The new format has applyOpsIndex next.
+            auto applyOpsElt = i.next();
+            uassert(50793,
+                    "Resume Token does not contain applyOpsIndex",
+                    applyOpsElt.type() == BSONType::NumberInt);
+            const int applyOpsInd = applyOpsElt.numberInt();
+            uassert(50794,
                     "Invalid Resume Token: applyOpsIndex should be non-negative",
-                    result.applyOpsIndex >= 0);
+                    applyOpsInd >= 0);
+            result.applyOpsIndex = applyOpsInd;
 
             // In the new format, the UUID comes first, then the documentKey.
             result.uuid = uassertStatusOK(UUID::parse(i.next()));

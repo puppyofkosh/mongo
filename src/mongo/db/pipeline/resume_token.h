@@ -53,6 +53,7 @@ struct ResumeTokenData {
 
     Timestamp clusterTime;
     size_t applyOpsIndex = 0;
+    int version = 0;
     Value documentKey;
     boost::optional<UUID> uuid;
 };
