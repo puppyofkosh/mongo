@@ -45,6 +45,16 @@ struct ResumeTokenData {
                     Value documentKeyIn,
                     const boost::optional<UUID>& uuidIn)
         : clusterTime(clusterTimeIn), documentKey(std::move(documentKeyIn)), uuid(uuidIn){};
+    ResumeTokenData(Timestamp clusterTimeIn,
+                    int versionIn,
+                    size_t applyOpsIndexIn,
+                    Value documentKeyIn,
+                    const boost::optional<UUID>& uuidIn)
+        : clusterTime(clusterTimeIn),
+          version(versionIn),
+          applyOpsIndex(applyOpsIndexIn),
+          documentKey(std::move(documentKeyIn)),
+          uuid(uuidIn){};
 
     bool operator==(const ResumeTokenData& other) const;
     bool operator!=(const ResumeTokenData& other) const {
@@ -52,8 +62,8 @@ struct ResumeTokenData {
     };
 
     Timestamp clusterTime;
-    size_t applyOpsIndex = 0;
     int version = 0;
+    size_t applyOpsIndex = 0;
     Value documentKey;
     boost::optional<UUID> uuid;
 };

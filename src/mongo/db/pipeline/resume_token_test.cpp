@@ -229,20 +229,46 @@ TEST(ResumeToken, WrongVersionToken) {
 
     ResumeTokenData resumeTokenDataIn;
     resumeTokenDataIn.clusterTime = ts;
+    resumeTokenDataIn.version = 0;
 
-    // Test serialization/parsing through Document.
+    // This one with version 0 should succeed.
     auto rtToken =
         ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson());
     ResumeTokenData tokenData = rtToken.getData();
     ASSERT_EQ(resumeTokenDataIn, tokenData);
 
+    // With version 1 it should fail.
     resumeTokenDataIn.version = 1;
-    ASSERT_THROWS(ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson()), AssertionException);
+    rtToken =
+        ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson());
+
+    ASSERT_THROWS(rtToken.getData(), AssertionException);
+}
+
+TEST(ResumeToken, InvalidApplyOpsIndex) {
+    Timestamp ts(1001, 3);
+
+    ResumeTokenData resumeTokenDataIn;
+    resumeTokenDataIn.clusterTime = ts;
+    resumeTokenDataIn.applyOpsIndex = 1234;
+
+    // Should round trip with a non-negative applyOpsIndex.
+    auto rtToken =
+        ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson());
+    ResumeTokenData tokenData = rtToken.getData();
+    ASSERT_EQ(resumeTokenDataIn, tokenData);
+
+    // Should fail with a negative applyOpsIndex.
+    resumeTokenDataIn.applyOpsIndex = std::numeric_limits<size_t>::max();
+    rtToken =
+        ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson());
+
+    ASSERT_THROWS(rtToken.getData(), AssertionException);
 }
 
 TEST(ResumeToken, StringEncodingSortsCorrectly) {
     // Make sure that the string encoding of the resume tokens will compare in the correct order,
-    // namely timestamp, uuid, then documentKey.
+    // namely timestamp, version, applyOpsIndex, uuid, then documentKey.
     Timestamp ts2_2(2, 2);
     Timestamp ts10_4(10, 4);
     Timestamp ts10_5(10, 5);
@@ -270,6 +296,10 @@ TEST(ResumeToken, StringEncodingSortsCorrectly) {
     assertLt({ts10_4, Value(), boost::none}, {ts11_3, Value(), boost::none});
     assertLt({ts10_5, Value(), boost::none}, {ts11_3, Value(), boost::none});
 
+    // Test using Timestamps and version.
+    assertLt({ts2_2, 0, 0, Value(), boost::none}, {ts2_2, 1, 0, Value(), boost::none});
+    assertLt({ts10_4, 5, 0, Value(), boost::none}, {ts10_4, 10, 0, Value(), boost::none});
+
     // Test that the Timestamp is more important than the UUID and documentKey.
     assertLt({ts10_4, Value(Document{{"_id", 0}}), lower_uuid},
              {ts10_5, Value(Document{{"_id", 0}}), lower_uuid});
@@ -281,6 +311,14 @@ TEST(ResumeToken, StringEncodingSortsCorrectly) {
              {ts10_5, Value(Document{{"_id", 0}}), lower_uuid});
     assertLt({ts10_4, Value(Document{{"_id", 0}}), lower_uuid},
              {ts10_5, Value(Document{{"_id", 0}}), higher_uuid});
+
+    // Test that version is more important than applyOpsIndex, UUID, and documentKey
+    assertLt({ts10_4, 1, 50, Value(Document{{"_id", 0}}), lower_uuid},
+             {ts10_4, 5, 1, Value(Document{{"_id", 0}}), lower_uuid});
+    assertLt({ts2_2, 1, 0, Value(Document{{"_id", 0}}), higher_uuid},
+             {ts2_2, 2, 0, Value(Document{{"_id", 0}}), lower_uuid});
+    assertLt({ts10_4, 1, 0, Value(Document{{"_id", 1}}), lower_uuid},
+             {ts10_4, 2, 0, Value(Document{{"_id", 0}}), lower_uuid});
 
     // Test that when the Timestamp is the same, the UUID breaks the tie.
     assertLt({ts2_2, Value(Document{{"_id", 0}}), lower_uuid},
