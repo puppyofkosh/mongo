@@ -194,9 +194,12 @@ ResumeTokenData ResumeToken::getData() const {
             // The new format has applyOpsIndex next.
             auto elt = i.next();
             uassert(50790,
-                    "Resume token does not contain applyOpsIndex",
+                    "Resume Token does not contain applyOpsIndex",
                     elt.type() == BSONType::NumberInt);
             result.applyOpsIndex = elt.numberInt();
+            uassert(50791,
+                    "Invalid Resume Token: applyOpsIndex should be non-negative",
+                    result.applyOpsIndex >= 0);
 
             // In the new format, the UUID comes first, then the documentKey.
             result.uuid = uassertStatusOK(UUID::parse(i.next()));
