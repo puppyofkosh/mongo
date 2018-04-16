@@ -104,11 +104,13 @@ ResumeToken::ResumeToken(const Document& resumeDoc) {
                                     _typeBits.getBinData().type == BinDataGeneral));
 }
 
-// We encode the resume token as a KeyString with the sequence: clusterTime, uuid, documentKey.
+// We encode the resume token as a KeyString with the sequence:
+// clusterTime, applyOpsIndex, uuid, documentKey
 // Only the clusterTime is required.
 ResumeToken::ResumeToken(const ResumeTokenData& data) {
     BSONObjBuilder builder;
     builder.append("", data.clusterTime);
+    builder.appendNumber("", data.applyOpsIndex);
     uassert(50788,
             "Unexpected resume token with a documentKey but no UUID",
             data.uuid || data.documentKey.missing());
@@ -189,6 +191,13 @@ ResumeTokenData ResumeToken::getData() const {
             break;
         }
         case BSONType::String: {
+            // The new format has applyOpsIndex next.
+            auto elt = i.next();
+            uassert(50790,
+                    "Resume token does not contain applyOpsIndex",
+                    elt.type() == BSONType::NumberInt);
+            result.applyOpsIndex = elt.numberInt();
+
             // In the new format, the UUID comes first, then the documentKey.
             result.uuid = uassertStatusOK(UUID::parse(i.next()));
             if (i.more()) {

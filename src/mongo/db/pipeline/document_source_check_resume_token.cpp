@@ -68,6 +68,16 @@ ResumeStatus compareAgainstClientResumeToken(const intrusive_ptr<ExpressionConte
     if (tokenDataFromResumedStream.clusterTime != tokenDataFromClient.clusterTime) {
         return ResumeStatus::kCannotResume;
     }
+
+    if (tokenDataFromResumedStream.applyOpsIndex < tokenDataFromClient.applyOpsIndex) {
+        return ResumeStatus::kCheckNextDoc;
+    } else if (tokenDataFromResumedStream.applyOpsIndex > tokenDataFromClient.applyOpsIndex) {
+        // We should never hit this case! If we stored an applyOps in the oplog, we stored the
+        // whole thing. If we hit this case, we've somehow already skipped over the correct
+        // document.
+        MONGO_UNREACHABLE;
+    }
+
     // It is acceptable for the stream UUID to differ from the client's, if this is a whole-database
     // or cluster-wide stream and we are comparing operations from different shards at the same
     // clusterTime. If the stream UUID sorts after the client's, however, then the stream is not
@@ -84,6 +94,7 @@ ResumeStatus compareAgainstClientResumeToken(const intrusive_ptr<ExpressionConte
                                             tokenDataFromClient.documentKey)) {
         return ResumeStatus::kFoundToken;
     }
+
     // At this point, we know that the tokens differ only by documentKey. The status we return will
     // depend on whether the stream token is logically before or after the client token. If the
     // latter, then we will never see the resume token and the stream cannot be resumed. However,
