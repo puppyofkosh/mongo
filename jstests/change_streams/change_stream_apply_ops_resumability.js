@@ -159,6 +159,12 @@
         // Check for the update on the other stream.
         assert.docEq(change, cst.getOneChange(otherCursor));
 
+        // Now test that we can resume from the _last_ change caused by a transaction.  We will
+        // check that both the initial change stream and the new one find the document that's
+        // inserted outside of the transaction.
+        otherCursor =
+            getChangeStream({cst: cst, watchMode: watchMode, coll: coll, resumeToken: change._id});
+
         // Now check that the document inserted after the transaction is found.
         change = cst.getOneChange(changeStream);
         assert.eq(change.fullDocument._id, 3);

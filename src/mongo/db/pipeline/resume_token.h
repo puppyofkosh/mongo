@@ -42,10 +42,6 @@ namespace mongo {
 struct ResumeTokenData {
     ResumeTokenData(){};
     ResumeTokenData(Timestamp clusterTimeIn,
-                    Value documentKeyIn,
-                    const boost::optional<UUID>& uuidIn)
-        : clusterTime(clusterTimeIn), documentKey(std::move(documentKeyIn)), uuid(uuidIn){};
-    ResumeTokenData(Timestamp clusterTimeIn,
                     int versionIn,
                     size_t applyOpsIndexIn,
                     Value documentKeyIn,
