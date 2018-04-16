@@ -14,20 +14,21 @@
     };
 
     function getChangeStream(cst, watchMode, coll, resumeToken) {
-        const changeStreamDoc = {}
+        const changeStreamDoc = {};
         if (resumeToken) {
             changeStreamDoc.resumeAfter = resumeToken;
         }
-        
+
         if (watchMode == WatchMode.kCluster) {
             changeStreamDoc.allChangesForCluster = true;
         }
         const collArg = (watchMode == WatchMode.kCollection ? coll : 1);
-        
-        return cst.startWatchingChanges({pipeline: [{$changeStream: changeStreamDoc}],
-                                         collection: collArg,
-                                         aggregateOptions: {cursor: {batchSize: 0}}
-                                        });
+
+        return cst.startWatchingChanges({
+            pipeline: [{$changeStream: changeStreamDoc}],
+            collection: collArg,
+            aggregateOptions: {cursor: {batchSize: 0}}
+        });
     }
 
     function testChangeStreamsWithTransactions(watchMode) {
@@ -47,6 +48,10 @@
         let cst = new ChangeStreamTest(dbToStartTestOn);
 
         let changeStream = getChangeStream(cst, watchMode, coll);
+
+        // Do an insert outside of a transaction.
+        assert.commandWorked(coll.insert({_id: 0, a: 123}));
+        let nonTxnChange = cst.getOneChange(changeStream);
 
         const sessionOptions = {causalConsistency: false};
         const session = db.getMongo().startSession(sessionOptions);
@@ -70,19 +75,28 @@
 
         session.commitTransaction();
 
+        // Now insert another document, not part of a transaction.
+        assert.commandWorked(coll.insert({_id: 3, a: 123}));
+
         // Check for the first insert.
         const firstChange = cst.getOneChange(changeStream);
         assert.eq(firstChange.fullDocument._id, 1);
         assert.eq(firstChange.operationType, "insert", tojson(firstChange));
- 
+
         // Check for the second insert.
         const secondChange = cst.getOneChange(changeStream);
         assert.eq(secondChange.fullDocument._id, 2);
         assert.eq(secondChange.operationType, "insert", tojson(secondChange));
 
-        // Resume after the _first_ change. Be sure we see the second document again.
-        changeStream = getChangeStream(cst, watchMode, coll, firstChange._id);
+        // Resume after the first non-transaction change. Be sure we see the documents from the
+        // transaction again.
+        changeStream = getChangeStream(cst, watchMode, coll, nonTxnChange._id);
         // We should see the second change again.
+        assert.docEq(cst.getOneChange(changeStream), firstChange);
+        assert.docEq(cst.getOneChange(changeStream), secondChange);
+
+        // Resume after the first transaction change. Be sure we see the second change again.
+        changeStream = getChangeStream(cst, watchMode, coll, firstChange._id);
         assert.docEq(cst.getOneChange(changeStream), secondChange);
 
         let change = secondChange;
@@ -122,6 +136,17 @@
         assert.eq(tojson(change.updateDescription.updatedFields), tojson({"a": 1}));
 
         // Check for the update on the other stream.
+        assert.docEq(change, cst.getOneChange(otherCursor));
+
+        // Now test that we can resume from the _last_ change caused by a transaction.  We will
+        // check that both the initial change stream and the new one find the document that's
+        // inserted outside of the transaction.
+        otherCursor = getChangeStream(cst, watchMode, coll, change._id);
+
+        // Now check that the document inserted after the transactioni s found.
+        change = cst.getOneChange(changeStream);
+        assert.eq(change.fullDocument._id, 3);
+        assert.eq(change.operationType, "insert", tojson(change));
         assert.docEq(change, cst.getOneChange(otherCursor));
 
         // Drop the collection. This will trigger an "invalidate" event.
