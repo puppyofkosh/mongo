@@ -211,6 +211,11 @@ ResumeTokenData ResumeToken::getData() const {
                     applyOpsInd >= 0);
             result.applyOpsIndex = applyOpsInd;
 
+            // The the UUID and documentKey are not required.
+            if (!i.more()) {
+                return result;
+            }
+
             // In the new format, the UUID comes first, then the documentKey.
             result.uuid = uassertStatusOK(UUID::parse(i.next()));
             if (i.more()) {
