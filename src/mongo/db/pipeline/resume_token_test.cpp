@@ -224,6 +224,22 @@ TEST(ResumeToken, CorruptTokens) {
     ASSERT_THROWS(badTypeBitsToken.getData(), AssertionException);
 }
 
+TEST(ResumeToken, WrongVersionToken) {
+    Timestamp ts(1001, 3);
+
+    ResumeTokenData resumeTokenDataIn;
+    resumeTokenDataIn.clusterTime = ts;
+
+    // Test serialization/parsing through Document.
+    auto rtToken =
+        ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson());
+    ResumeTokenData tokenData = rtToken.getData();
+    ASSERT_EQ(resumeTokenDataIn, tokenData);
+
+    resumeTokenDataIn.version = 1;
+    ASSERT_THROWS(ResumeToken::parse(ResumeToken(resumeTokenDataIn).toDocument(Format::kHexString).toBson()), AssertionException);
+}
+
 TEST(ResumeToken, StringEncodingSortsCorrectly) {
     // Make sure that the string encoding of the resume tokens will compare in the correct order,
     // namely timestamp, uuid, then documentKey.
