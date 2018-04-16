@@ -138,6 +138,32 @@ void DocumentSourceChangeStreamTransform::initializeTransactionContext(const Doc
     _txnContext.emplace(applyOps, clusterTime, lsid.getDocument(), txnNumber.getLong());
 }
 
+ResumeTokenData DocumentSourceChangeStreamTransform::getResumeToken(Value ts,
+                                                                    Value uuid,
+                                                                    Value documentKey) {
+    ResumeTokenData resumeTokenData;
+    if (_txnContext) {
+        // We're in the middle of unwinding an 'applyOps'.
+
+        // Use the clusterTime from the higher level applyOps
+        resumeTokenData.clusterTime = _txnContext->clusterTime;
+
+        // 'pos' points to the _next_ applyOps index, so we must subtract one to get the index of
+        // the entry being examined right now.
+        invariant(_txnContext->pos >= 1);
+        resumeTokenData.applyOpsIndex = _txnContext->pos - 1;
+    } else {
+        resumeTokenData.clusterTime = ts.getTimestamp();
+        resumeTokenData.applyOpsIndex = 0;
+    }
+
+    resumeTokenData.documentKey = documentKey;
+    if (!uuid.missing())
+        resumeTokenData.uuid = uuid.getUuid();
+
+    return resumeTokenData;
+}
+
 Document DocumentSourceChangeStreamTransform::applyTransformation(const Document& input) {
     // If we're executing a change stream pipeline that was forwarded from mongos, then we expect it
     // to "need merge"---we expect to be executing the shards part of a split pipeline. It is never
@@ -281,28 +307,9 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
         documentKey = Value();
     }
 
-    // Note that 'documentKey' and/or 'uuid' might be missing, in which case the missing fields
-    // will not appear in the output.
-    // TODO: move this to separate function
-    ResumeTokenData resumeTokenData;
-    if (_txnContext) {
-        // We're in the middle of unwinding an 'applyOps'.
-
-        // Use the clusterTime from the higher level applyOps
-        resumeTokenData.clusterTime = _txnContext->clusterTime;
-
-        // 'pos' points to the _next_ applyOps index, so we must subtract one to get the index of
-        // the entry being examined right now.
-        invariant(_txnContext->pos >= 1);
-        resumeTokenData.applyOpsIndex = _txnContext->pos - 1;
-    } else {
-        resumeTokenData.clusterTime = ts.getTimestamp();
-        resumeTokenData.applyOpsIndex = 0;
-    }
-
-    resumeTokenData.documentKey = documentKey;
-    if (!uuid.missing())
-        resumeTokenData.uuid = uuid.getUuid();
+    // Note that 'documentKey' and/or 'uuid' might be missing, in which case they will not appear
+    // in the output.
+    ResumeTokenData resumeTokenData = getResumeToken(ts, uuid, documentKey);
 
     // Add some additional fields only relevant to transactions.
     if (_txnContext) {
@@ -319,7 +326,6 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
     // If we're in a sharded environment, we'll need to merge the results by their sort key, so add
     // that as metadata.
     if (pExpCtx->needsMerge) {
-        // TODO SERVER-34314: Sort key may have to be _id.data in FCV 4.0.
         doc.setSortKeyMetaField(BSON("" << ts << "" << uuid << "" << documentKey));
     }
 

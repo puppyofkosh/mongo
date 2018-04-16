@@ -107,6 +107,10 @@ private:
               txnNumber(n) {}
     };
 
+    /**
+     * Helper used for determining what resume token to return.
+     */
+    ResumeTokenData getResumeToken(Value ts, Value uuid, Value documentKey);
     void initializeTransactionContext(const Document& input);
 
     /**
