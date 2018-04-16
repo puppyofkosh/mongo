@@ -61,8 +61,8 @@ public:
 
 protected:
     /**
-     * Pushes a document with a resume token corresponding to the given timestamp, docKey, and
-     * namespace into the mock queue.
+     * Pushes a document with a resume token corresponding to the given timestamp, version,
+     * applyOpsIndex, docKey, and namespace into the mock queue.
      */
     void addDocument(
         Timestamp ts, int version, std::size_t applyOpsIndex, Document docKey, UUID uuid) {
@@ -73,8 +73,8 @@ protected:
     }
 
     /**
-     * Pushes a document with a resume token corresponding to the given timestamp, docKey, and
-     * namespace into the mock queue.
+     * Pushes a document with a resume token corresponding to the given timestamp, version,
+     * applyOpsIndex, docKey, and namespace into the mock queue.
      */
     void addDocument(Timestamp ts, Document docKey, UUID uuid = testUuid()) {
         addDocument(ts, 0, 0, docKey, uuid);
