@@ -1,0 +1,82 @@
+// Tests resuming from $changeStream invalidate entries.
+
+(function() {
+    "use strict";
+
+    load("jstests/libs/change_stream_util.js");
+    load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
+
+    const WatchMode = {
+        kCollection: 1,
+        kDb: 2,
+        kCluster: 3,
+    };
+
+    function getChangeStreamStage(watchMode, resumeToken) {
+        const changeStreamDoc = {};
+        if (resumeToken) {
+            changeStreamDoc.resumeAfter = resumeToken;
+        }
+
+        if (watchMode == WatchMode.kCluster) {
+            changeStreamDoc.allChangesForCluster = true;
+        }
+        return changeStreamDoc;
+    }
+
+    function getChangeStream({cst, watchMode, coll, resumeToken}) {
+        return cst.startWatchingChanges({
+            pipeline: [{$changeStream: getChangeStreamStage(watchMode, resumeToken)}],
+            collection: (watchMode == WatchMode.kCollection ? coll : 1),
+            // Use a batch size of 0 to prevent any notifications from being returned in the first
+            // batch. These would be ignored by ChangeStreamTest.getOneChange().
+            aggregateOptions: {cursor: {batchSize: 0}},
+        });
+    }
+
+    function runTest(watchMode) {
+        const dbToStartOn = watchMode == WatchMode.kCluster ? db.getSiblingDB("admin") : db;
+        const cst = new ChangeStreamTest(dbToStartOn);
+
+        // Write a document to the collection and test that the change stream returns it
+        // and getMore command closes the cursor afterwards.
+        const coll = assertDropAndRecreateCollection(db, "change_stream_invalidate_resumability");
+
+        let cursor = getChangeStream({cst: cst, watchMode: watchMode, coll: coll});
+
+        // Create an 'insert' oplog entry.
+        assert.writeOK(coll.insert({_id: 1}));
+
+        // Drop the collection.
+        assert.commandWorked(db.runCommand({drop: coll.getName()}));
+
+        // We should get 2 oplog entries of type insert and invalidate.
+        let change = cst.getOneChange(cursor);
+        assert.eq(change.operationType, "insert", tojson(change));
+
+        change = cst.getOneChange(cursor, true);
+        assert.eq(change.operationType, "invalidate", tojson(change));
+
+        // Try resuming from the invalidate.
+        const res = dbToStartOn.runCommand({
+            aggregate: (watchMode == WatchMode.kCollection ? coll.getName() : 1),
+            pipeline: [{$changeStream: getChangeStreamStage(watchMode, change._id)}],
+            cursor: {}
+        });
+        print("resuming gave result: " + tojson(res));
+
+        if (watchMode == WatchMode.kCollection) {
+            // TODO: This behavior (or at least, error code) will likely be changed in Nick's patch.
+            assert.commandFailedWithCode(res, 40615);
+        } else {
+            assert.commandWorked(res);
+        }
+
+        cst.cleanUp();
+    }
+
+    for (let modeName of Object.keys(WatchMode)) {
+        jsTestLog("Running test in mode " + modeName);
+        runTest(WatchMode[modeName]);
+    }
+}());
