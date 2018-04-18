@@ -3,6 +3,7 @@
 (function() {
     "use strict";
 
+    load('jstests/replsets/libs/two_phase_drops.js');  // For 'TwoPhaseDropCollectionTest'.
     load("jstests/libs/change_stream_util.js");
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
@@ -38,8 +39,6 @@
         const dbToStartOn = watchMode == WatchMode.kCluster ? db.getSiblingDB("admin") : db;
         const cst = new ChangeStreamTest(dbToStartOn);
 
-        // Write a document to the collection and test that the change stream returns it
-        // and getMore command closes the cursor afterwards.
         const coll = assertDropAndRecreateCollection(db, "change_stream_invalidate_resumability");
 
         let cursor = getChangeStream({cst: cst, watchMode: watchMode, coll: coll});
@@ -49,6 +48,10 @@
 
         // Drop the collection.
         assert.commandWorked(db.runCommand({drop: coll.getName()}));
+        assert.soon(function() {
+            return !TwoPhaseDropCollectionTest.collectionIsPendingDropInDatabase(db,
+                                                                                 coll.getName());
+        });
 
         // We should get 2 oplog entries of type insert and invalidate.
         let change = cst.getOneChange(cursor);
@@ -58,16 +61,27 @@
         assert.eq(change.operationType, "invalidate", tojson(change));
 
         // Try resuming from the invalidate.
-        const res = dbToStartOn.runCommand({
+        const command = {
             aggregate: (watchMode == WatchMode.kCollection ? coll.getName() : 1),
-            pipeline: [{$changeStream: getChangeStreamStage(watchMode, change._id)}],
+            pipeline:
+            [{$changeStream: getChangeStreamStage(watchMode, change._id)},
+             // Throw in another stage, so that a collation is needed.
+             {$project: {x: 5}}],
             cursor: {}
-        });
-        print("resuming gave result: " + tojson(res));
+        };
+        const res = dbToStartOn.runCommand(command);
 
         if (watchMode == WatchMode.kCollection) {
             // TODO: This behavior (or at least, error code) will likely be changed in Nick's patch.
             assert.commandFailedWithCode(res, 40615);
+
+            // Run the command again, but specify a collation.
+            if (false) {
+                // TODO: SERVER-32088 enable once Nick's patch is done.
+                command.collation = {locale: "simple"};
+                const res2 = dbToStartOn.runCommand(command);
+                assert.commandWorked(res2);
+            }
         } else {
             assert.commandWorked(res);
         }
