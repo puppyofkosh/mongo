@@ -1,4 +1,4 @@
-// Tests of invalidate entries for a $changeStream on a whole database.
+// Tests that watching a collection which another collection is renamed _to_ causes an invalidate.
 (function() {
     "use strict";
 
@@ -15,7 +15,7 @@
     let coll = assertDropAndRecreateCollection(testDB, collName1);
     assertDropCollection(testDB, collName2);
 
-    // Watch the collection which doesn't exist yet
+    // Watch the collection which doesn't exist yet.
     let aggCursor =
         cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: collName2});
 
