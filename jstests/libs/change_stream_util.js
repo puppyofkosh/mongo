@@ -300,6 +300,14 @@ ChangeStreamTest.getDBForChangeStream = function(watchMode, dbObj) {
 };
 
 /**
+ * Static method for determining what argument to pass to {aggregate: xyz} based on the watchMode
+ * (see ChangeStreamTest.WatchMode).
+ */
+ChangeStreamTest.getAggregateArg = function(watchMode, coll) {
+    return (watchMode == ChangeStreamTest.WatchMode.kCollection ? coll.getName() : 1);
+};
+
+/**
  * Used in getChangeStream() and getChangeStreamStage() helpers, for specifying which type of
  * changeStream to open.
  */
