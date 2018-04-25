@@ -1,4 +1,4 @@
-// Tests resuming from $changeStream invalidate entries.
+// Tests resuming on a change stream that was invalidated due to rename.
 
 (function() {
     "use strict";
@@ -6,73 +6,47 @@
     load("jstests/libs/change_stream_util.js");
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
-    const WatchMode = {
-        kCollection: 1,
-        kDb: 2,
-        kCluster: 3,
-    };
+    for (let modeName of Object.keys(ChangeStreamTest.WatchMode)) {
+        const watchMode = ChangeStreamTest.WatchMode[modeName];
+        jsTestLog("Running test in mode " + watchMode);
 
-    function getChangeStreamStage(watchMode, resumeToken) {
-        const changeStreamDoc = {};
-        if (resumeToken) {
-            changeStreamDoc.resumeAfter = resumeToken;
-        }
-
-        if (watchMode == WatchMode.kCluster) {
-            changeStreamDoc.allChangesForCluster = true;
-        }
-        return changeStreamDoc;
-    }
-
-    function getChangeStream({cst, watchMode, coll, resumeToken}) {
-        return cst.startWatchingChanges({
-            pipeline: [{$changeStream: getChangeStreamStage(watchMode, resumeToken)}],
-            collection: (watchMode == WatchMode.kCollection ? coll : 1),
-            // Use a batch size of 0 to prevent any notifications from being returned in the first
-            // batch. These would be ignored by ChangeStreamTest.getOneChange().
-            aggregateOptions: {cursor: {batchSize: 0}},
-        });
-    }
-
-    function runTest(watchMode) {
-        const dbToStartOn = watchMode == WatchMode.kCluster ? db.getSiblingDB("admin") : db;
+        const dbToStartOn = ChangeStreamTest.getDBForChangeStream(watchMode, db);
         const cst = new ChangeStreamTest(dbToStartOn);
 
         const coll = assertDropAndRecreateCollection(db, "change_stream_invalidate_resumability");
 
-        let cursor = getChangeStream({cst: cst, watchMode: watchMode, coll: coll});
+        // Drop the collection we'll rename to _before_ starting the changeStream, so that we don't
+        // get accidentally an invalidate when running on the whole DB or cluster.
+        assertDropCollection(db, coll.getName() + "_renamed");
+
+        let cursor = cst.getChangeStream({watchMode: watchMode, coll: coll});
 
         // Create an 'insert' oplog entry.
         assert.writeOK(coll.insert({_id: 1}));
 
-        // Drop the collection.
-        assertDropCollection(db, coll.getName() + "_renamed");
         assert.commandWorked(coll.renameCollection(coll.getName() + "_renamed"));
+
+        // Insert another document after the rename.
+        assert.commandWorked(coll.insert({_id: 2}));
 
         // We should get 2 oplog entries of type insert and invalidate.
         let change = cst.getOneChange(cursor);
         assert.eq(change.operationType, "insert", tojson(change));
+        assert.docEq(change.fullDocument, {_id: 1});
 
         change = cst.getOneChange(cursor, true);
         assert.eq(change.operationType, "invalidate", tojson(change));
 
         // Try resuming from the invalidate.
-        const command = {
-            aggregate: (watchMode == WatchMode.kCollection ? coll.getName() : 1),
-            pipeline:
-            [{$changeStream: getChangeStreamStage(watchMode, change._id)},
-             // Throw in another stage, so that a collation is needed.
-             {$project: {x: 5}}],
-            cursor: {}
-        };
-        const res = dbToStartOn.runCommand(command);
-        assert.commandWorked(res);
+        let resumeCursor = cst.getChangeStream({watchMode: watchMode,
+                                                coll: coll,
+                                                resumeAfter: change._id});
+
+        // Be sure we can see the change after the rename.
+        change = cst.getOneChange(resumeCursor);
+        assert.eq(change.operationType, "insert", tojson(change));
+        assert.docEq(change.fullDocument, {_id: 2});
 
         cst.cleanUp();
-    }
-
-    for (let modeName of Object.keys(WatchMode)) {
-        jsTestLog("Running test in mode " + modeName);
-        runTest(WatchMode[modeName]);
     }
 }());
