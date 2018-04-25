@@ -6,47 +6,43 @@
     load("jstests/libs/change_stream_util.js");
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
-    for (let modeName of Object.keys(ChangeStreamTest.WatchMode)) {
-        const watchMode = ChangeStreamTest.WatchMode[modeName];
-        jsTestLog("Running test in mode " + watchMode);
+    const cst = new ChangeStreamTest(db);
+    const coll = assertDropAndRecreateCollection(db, "change_stream_invalidate_resumability");
 
-        const dbToStartOn = ChangeStreamTest.getDBForChangeStream(watchMode, db);
-        const cst = new ChangeStreamTest(dbToStartOn);
+    // Drop the collection we'll rename to _before_ starting the changeStream, so that we don't
+    // get accidentally an invalidate when running on the whole DB or cluster.
+    assertDropCollection(db, coll.getName() + "_renamed");
 
-        const coll = assertDropAndRecreateCollection(db, "change_stream_invalidate_resumability");
+    let cursor = cst.startWatchingChanges({pipeline: [{$changeStream: {}}],
+                                           collection: coll});
 
-        // Drop the collection we'll rename to _before_ starting the changeStream, so that we don't
-        // get accidentally an invalidate when running on the whole DB or cluster.
-        assertDropCollection(db, coll.getName() + "_renamed");
+    // Create an 'insert' oplog entry.
+    assert.writeOK(coll.insert({_id: 1}));
 
-        let cursor = cst.getChangeStream({watchMode: watchMode, coll: coll});
+    assert.commandWorked(coll.renameCollection(coll.getName() + "_renamed"));
 
-        // Create an 'insert' oplog entry.
-        assert.writeOK(coll.insert({_id: 1}));
+    // Insert another document after the rename.
+    assert.commandWorked(coll.insert({_id: 2}));
 
-        assert.commandWorked(coll.renameCollection(coll.getName() + "_renamed"));
+    // We should get 2 oplog entries of type insert and invalidate.
+    let change = cst.getOneChange(cursor);
+    assert.eq(change.operationType, "insert", tojson(change));
+    assert.docEq(change.fullDocument, {_id: 1});
 
-        // Insert another document after the rename.
-        assert.commandWorked(coll.insert({_id: 2}));
+    change = cst.getOneChange(cursor, true);
+    assert.eq(change.operationType, "invalidate", tojson(change));
 
-        // We should get 2 oplog entries of type insert and invalidate.
-        let change = cst.getOneChange(cursor);
-        assert.eq(change.operationType, "insert", tojson(change));
-        assert.docEq(change.fullDocument, {_id: 1});
+    // Try resuming from the invalidate.
+    const resumeCursor = cst.startWatchingChanges({
+        pipeline: [{$changeStream: {resumeAfter: change._id}}],
+        collection: coll,
+        aggregateOptions: {cursor: {batchSize: 0}}
+    });
 
-        change = cst.getOneChange(cursor, true);
-        assert.eq(change.operationType, "invalidate", tojson(change));
+    // Be sure we can see the change after the rename.
+    change = cst.getOneChange(resumeCursor);
+    assert.eq(change.operationType, "insert", tojson(change));
+    assert.docEq(change.fullDocument, {_id: 2});
 
-        // Try resuming from the invalidate.
-        let resumeCursor = cst.getChangeStream({watchMode: watchMode,
-                                                coll: coll,
-                                                resumeAfter: change._id});
-
-        // Be sure we can see the change after the rename.
-        change = cst.getOneChange(resumeCursor);
-        assert.eq(change.operationType, "insert", tojson(change));
-        assert.docEq(change.fullDocument, {_id: 2});
-
-        cst.cleanUp();
-    }
+    cst.cleanUp();
 }());
