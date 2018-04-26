@@ -36,10 +36,11 @@
 
         const command = {
             aggregate: ChangeStreamTest.getAggregateArg(watchMode, coll),
-            pipeline:
-            [{$changeStream: cst.getChangeStreamStage(watchMode, change._id)},
-             // Throw in another stage, so that a collation is needed.
-             {$project: {x: 5}}],
+            pipeline: [
+                {$changeStream: cst.getChangeStreamStage(watchMode, change._id)},
+                // Throw in another stage, so that a collation is needed.
+                {$project: {x: 5}}
+            ],
             cursor: {}
         };
         const res = dbToAggOn.runCommand(command);
