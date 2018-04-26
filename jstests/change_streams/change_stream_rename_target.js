@@ -6,7 +6,6 @@
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
     const testDB = db.getSiblingDB(jsTestName());
-    let cst = new ChangeStreamTest(testDB);
 
     // Write a document to the collection and test that the change stream returns it
     // and getMore command closes the cursor afterwards.
@@ -14,23 +13,28 @@
     const collName2 = "change_stream_rename_2";
     let coll = assertDropAndRecreateCollection(testDB, collName1);
     assertDropCollection(testDB, collName2);
+    assertDropCollection(testDB, collName2);
 
     // Watch the collection which doesn't exist yet.
-    let aggCursor =
-        cst.startWatchingChanges({pipeline: [{$changeStream: {}}], collection: collName2});
+    let aggCursor = testDB[collName2].watch();
 
     // Insert something to the collection.
     assert.writeOK(coll.insert({_id: 1}));
-    cst.assertNextChangesEqual({cursor: aggCursor, expectedChanges: []});
+
+    assert.eq(aggCursor.hasNext(), false);
 
     // Now rename the collection TO the collection that's being watched. This should invalidate the
     // change stream.
     assert.commandWorked(coll.renameCollection(collName2));
-    cst.assertNextChangesEqual({
-        cursor: aggCursor,
-        expectedChanges: [{operationType: "invalidate"}],
-        expectInvalidate: true
-    });
+    assert.soon(() => aggCursor.hasNext());
+    let invalidate = aggCursor.next();
+    assert.eq(invalidate.operationType, "invalidate");
 
-    cst.cleanUp();
+    // Do another insert.
+    assert.writeOK(testDB[collName2].insert({_id: 2}));
+
+    let cursor = testDB[collName2].watch([], {resumeAfter: invalidate._id});
+    assert.soon(() => cursor.hasNext());
+    let change = cursor.next();
+    assert.docEq(change.fullDocument, {_id: 2});
 }());
