@@ -46,18 +46,11 @@
         const oldPrimary = st.rs0.getPrimary();
         print("Nodes are " + tojson(st.rs0.nodes));
         assert.commandWorked(st.rs0.getSecondary().adminCommand({replSetStepUp: 1}));
-        // assert.throws(function() {
-        //     oldPrimary.adminCommand({replSetStepDown: 30, force: 1});
-        // });
 
         st.rs0.awaitNodesAgreeOnPrimary();
         const newPrimary = st.rs0.getPrimary();
         // Be sure we got a different node that the previous primary.
         assert.neq(newPrimary.port, oldPrimary.port);
-
-        assert.commandFailedWithCode(coll.insert({_id: 8}, {writeConcern: {w: "majority"}}),
-                                    ErrorCodes.NotMaster);
-        assert.writeOK(coll.insert({_id: 8}, {writeConcern: {w: "majority"}}));
 
         // Be sure we can still read from the change stream.
         const expectedChanges = [
@@ -72,7 +65,7 @@
                 fullDocument: {_id: 2},
                 ns: {db: sDB.getName(), coll: coll.getName()},
                 operationType: "insert",
-            }
+            },
         ];
         cst.assertNextChangesEqual({
             cursor: changeStream,
@@ -83,7 +76,7 @@
         const resumeCursor =
             cst.getChangeStream({watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 
-        // Be sure we can read the 2nd and 3rd changes.
+        // Be sure we can read the remaining changes.
         cst.assertNextChangesEqual({
             cursor: resumeCursor,
             expectedChanges: expectedChanges
@@ -93,6 +86,11 @@
         // open on the primary and assume that a stepdown has not happened.
         assert.commandWorked(oldPrimary.adminCommand({replSetStepUp: 1}));
         st.rs0.awaitNodesAgreeOnPrimary();
+
+        // Do another write, which we expect to fail this will force the underlying connection to
+        // reselect which member of the replica set to talk to.
+        assert.commandFailedWithCode(coll.insert({_id: 9}, {writeConcern: {w: "majority"}}),
+                                     ErrorCodes.NotMaster);
     }
 
     st.stop();
