@@ -7,7 +7,10 @@
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
-    const st = new ShardingTest({shards: 2, rs: {nodes: 3}});
+    const st = new ShardingTest({
+        shards: 2,
+        rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
+    });
     if (!supportsMajorityReadConcern()) {
         jsTestLog("Skipping test since storage engine doesn't support majority read concern.");
         return;
@@ -27,8 +30,7 @@
         st.s.setReadPref("primary");
 
         // Open a changeStream.
-        const cst =
-            new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, sDB));
+        const cst = new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, sDB));
 
         let changeStream = cst.getChangeStream({watchMode: watchMode, coll: coll});
 
@@ -55,32 +57,26 @@
         // Be sure we can still read from the change stream.
         const expectedChanges = [
             {
-                documentKey: {_id: 7},
-                fullDocument: {_id: 7},
-                ns: {db: sDB.getName(), coll: coll.getName()},
-                operationType: "insert",
+              documentKey: {_id: 7},
+              fullDocument: {_id: 7},
+              ns: {db: sDB.getName(), coll: coll.getName()},
+              operationType: "insert",
             },
             {
-                documentKey: {_id: 2},
-                fullDocument: {_id: 2},
-                ns: {db: sDB.getName(), coll: coll.getName()},
-                operationType: "insert",
+              documentKey: {_id: 2},
+              fullDocument: {_id: 2},
+              ns: {db: sDB.getName(), coll: coll.getName()},
+              operationType: "insert",
             },
         ];
-        cst.assertNextChangesEqual({
-            cursor: changeStream,
-            expectedChanges: expectedChanges
-        });
+        cst.assertNextChangesEqual({cursor: changeStream, expectedChanges: expectedChanges});
 
         // Now resume using the resume token from the first change (before the failover).
         const resumeCursor =
             cst.getChangeStream({watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 
         // Be sure we can read the remaining changes.
-        cst.assertNextChangesEqual({
-            cursor: resumeCursor,
-            expectedChanges: expectedChanges
-        });
+        cst.assertNextChangesEqual({cursor: resumeCursor, expectedChanges: expectedChanges});
 
         // Step up the old primary again. Necessary since some validation hooks have connections
         // open on the primary and assume that a stepdown has not happened.

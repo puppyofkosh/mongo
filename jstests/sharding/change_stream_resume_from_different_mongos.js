@@ -1,5 +1,4 @@
-// Test resuming a change stream on a node other than the one it was started on. Accomplishes this
-// by triggering a stepdown.
+// Test resuming a change stream on a mongos other than the one the change stream was started on.
 (function() {
     "use strict";
     // For supportsMajorityReadConcern().
@@ -7,56 +6,71 @@
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
-    const st = new ShardingTest({shards: 2, rs: {nodes: 3}});
+    const st = new ShardingTest({
+        shards: 2,
+        mongos: 2,
+        rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
+    });
     if (!supportsMajorityReadConcern()) {
         jsTestLog("Skipping test since storage engine doesn't support majority read concern.");
         return;
     }
 
-    const watchMode = ChangeStreamTest.WatchMode.kCollection;
-    jsTestLog("Running test for mode " + watchMode);
+    for (let key of Object.keys(ChangeStreamTest.WatchMode)) {
+        const watchMode = ChangeStreamTest.WatchMode[key];
+        jsTestLog("Running test for mode " + watchMode);
 
-    const sDB = st.s.getDB("test");
-    const coll = assertDropAndRecreateCollection(sDB, "change_stream_failover");
+        const s0DB = st.s0.getDB("test");
+        const s1DB = st.s1.getDB("test");
+        const coll = assertDropAndRecreateCollection(s0DB, "change_stream_failover");
 
-    // Split so ids < 5 are for one shard, ids >= 5 for another.
-    st.shardColl(coll,
-                 {_id: 1}, // key
-                 {_id: 5}, // split
-                 {_id: 6}, // move
-                 "test",
-                 true);
+        // Split so ids < 5 are for one shard, ids >= 5 for another.
+        st.shardColl(coll,
+                     {_id: 1},  // key
+                     {_id: 5},  // split
+                     {_id: 6},  // move
+                     "test",    // dbName
+                     false      // waitForDelete
+                     );
 
-    // Write some dummy data.
-    assert.writeOK(coll.insert({_id: 1, x: "somestring"}, {writeConcern: {w: "majority"}}));
-    assert.writeOK(coll.insert({_id: 6, x: "somestring"}, {writeConcern: {w: "majority"}}));
+        // Open a changeStream.
+        const cst = new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, s0DB));
+        let changeStream = cst.getChangeStream({watchMode: watchMode, coll: coll});
 
-    // Be sure we'll only read from the primaries.
-    st.s.setReadPref("primary");
+        // Be sure we can read from the change stream. Write some documents that will end up on
+        // each shard.
+        assert.writeOK(coll.insert({_id: 0}));
+        assert.writeOK(coll.insert({_id: 7}));
+        assert.writeOK(coll.insert({_id: 2}));
 
-    // Open a changeStream.
-    const cst =
-          new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, sDB));
+        const firstChange = cst.getOneChange(changeStream);
+        assert.docEq(firstChange.fullDocument, {_id: 0});
 
-    let changeStream = cst.getChangeStream({watchMode: watchMode, coll: coll});
+        const expectedChanges = [
+            {
+              documentKey: {_id: 7},
+              fullDocument: {_id: 7},
+              ns: {db: s0DB.getName(), coll: coll.getName()},
+              operationType: "insert",
+            },
+            {
+              documentKey: {_id: 2},
+              fullDocument: {_id: 2},
+              ns: {db: s0DB.getName(), coll: coll.getName()},
+              operationType: "insert",
+            },
+        ];
 
-    // Be sure we can read from the change stream. Write some documents that will end up on
-    // each shard.
-    assert.writeOK(coll.insert({_id: 0, x: "somestring"}, {writeConcern: {w: "majority"}}));
-    assert.writeOK(coll.insert({_id: 7, x: "somestring"}, {writeConcern: {w: "majority"}}));
-    assert.writeOK(coll.insert({_id: 100, x: "somestring"}, {writeConcern: {w: "majority"}}));
+        // Now resume using the resume token from the first change on a different mongos.
+        const otherCst =
+            new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, s1DB));
 
-    const firstChange = cst.getOneChange(changeStream);
-    print("ian: change is " + tojson(firstChange));
-    assert.docEq(firstChange.fullDocument, {_id: 0, x: "somestring"});
+        const resumeCursor = otherCst.getChangeStream(
+            {watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 
-    let change = cst.getOneChange(changeStream);
-    print("ian: change is " + tojson(change));
-    assert.docEq(change.fullDocument, {_id: 7, x: "somestring"});
-
-    change = cst.getOneChange(changeStream);
-    print("ian: change is " + tojson(change));
-    assert.docEq(change.fullDocument, {_id: 100, x: "somestring"});
+        // Be sure we can read the remaining changes.
+        otherCst.assertNextChangesEqual({cursor: resumeCursor, expectedChanges: expectedChanges});
+    }
 
     st.stop();
 }());
