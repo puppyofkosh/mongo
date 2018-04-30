@@ -83,8 +83,9 @@
         assert.commandWorked(oldPrimary.adminCommand({replSetStepUp: 1}));
         st.rs0.awaitNodesAgreeOnPrimary();
 
-        // Do another write, which we expect to fail this will force the underlying connection to
-        // reselect which member of the replica set to talk to.
+        // Do another write, which we expect to fail. This will force the underlying connection to
+        // reselect which member of the replica set to talk to. Necessary to run so that the
+        // validation hook doesn't fail with the NotMaster error.
         assert.commandFailedWithCode(coll.insert({_id: 9}, {writeConcern: {w: "majority"}}),
                                      ErrorCodes.NotMaster);
     }
