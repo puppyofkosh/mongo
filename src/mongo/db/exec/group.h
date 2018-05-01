@@ -32,6 +32,7 @@
 #include "mongo/db/exec/plan_stage.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/scripting/engine.h"
+#include "mongo/util/fail_point_service.h"
 
 namespace mongo {
 

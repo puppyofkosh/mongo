@@ -34,12 +34,19 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/catalog/collection.h"
 #include "mongo/db/client.h"
+#include "mongo/db/curop_failpoint_helpers.h"
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/stdx/memory.h"
 
 namespace mongo {
 
+// Forces a hang in the javascript execution while initializing the group stage.
+MONGO_FP_DECLARE(hangInGroupJsReduceInit);
+
+// Forces a hang in the javascript execution while cleaning up the group stage.
+MONGO_FP_DECLARE(hangInGroupJsCleanup);
+    
 using std::unique_ptr;
 using std::vector;
 using stdx::make_unique;
@@ -109,8 +116,24 @@ Status GroupStage::initGroupScripting() {
     } catch (const AssertionException& e) {
         return e.toStatus("Failed to initialize group reduce function: ");
     }
-    invariant(_scope->exec(
-        "$arr = [];", "group reduce init 2", false, true, false /*assertOnError*/, 2 * 1000));
+
+    std::string jsCode = "$arr = [];";
+    if (MONGO_FAIL_POINT(hangInGroupJsReduceInit)) {
+        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(),
+                                              "hangInGroupJsReduceInit");
+        jsCode += "while (1) {}";
+    }
+    try {
+        _scope->exec(
+            jsCode,
+            "group reduce init 2",
+            false,
+            true,
+            true /*assertOnError*/,
+            2 * 1000);
+    } catch (const AssertionException& e) {
+        return e.toStatus("Failed to initialize group reduce function: ");
+    }
 
     // Initialize _reduceFunction.
     _reduceFunction = _scope->createFunction(
@@ -195,8 +218,21 @@ StatusWith<BSONObj> GroupStage::finalizeResults() {
 
     BSONObj results = _scope->getObject("$arr").getOwned();
 
-    invariant(_scope->exec(
-        "$arr = [];", "group clean up", false, true, false /*assertOnError*/, 2 * 1000));
+    std::string jsCode = "$arr = [];";
+    if (MONGO_FAIL_POINT(hangInGroupJsCleanup)) {
+        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(),
+                                              "hangInGroupJsCleanup");
+        jsCode += "while (1) {}";
+    }
+
+    // TODO: use try/catch
+    // TODO: See what happens when the stepdown isn't triggered.
+    const bool res = _scope->exec(
+        jsCode, "group clean up", false, true, false /*assertOnError*/, 2 * 1000);
+    if (!res) {
+        return Status(ErrorCodes::OperationFailed, "Error cleaning up group");
+    }
+    // TODO: Should we call this regardless of whether there was an error?
     _scope->gc();
 
     return results;
