@@ -5,19 +5,7 @@
     load("jstests/multiVersion/libs/causal_consistency_helpers.js");
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
-
-    // Check if aSet and bSet are equal.
-    function setEq(aSet, bSet) {
-        if (aSet.size != bSet.size) {
-            return false;
-        }
-        for (var a of aSet) {
-            if (!bSet.has(a)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    load("jstests/libs/misc_util.js");  // For assert[Drop|Create]Collection.
 
     const st = new ShardingTest({
         shards: 2,
@@ -39,14 +27,13 @@
 
         const nDocs = 100;
 
-        // TODO: Use moar docs!~!!
-        // Split so ids < 5 are for one shard, ids >= 5 for another.
+        // Split so ids < nDocs / 2 are for one shard, ids >= nDocs / 2 + 1 for another.
         st.shardColl(coll,
-                     {_id: 1},          // key
-                     {_id: nDocs},      // split
-                     {_id: nDocs + 1},  // move
-                     "test",            // dbName
-                     false              // waitForDelete
+                     {_id: 1},              // key
+                     {_id: nDocs / 2},      // split
+                     {_id: nDocs / 2 + 1},  // move
+                     "test",                // dbName
+                     false                  // waitForDelete
                      );
 
         // Open a change stream.
@@ -61,7 +48,7 @@
             // Interleave elements which will end up on shard 0 with elements that will end up on
             // shard 1.
             kIdsToInsert.push(i);
-            kIdsToInsert.push(i + nDocs);
+            kIdsToInsert.push(i + nDocs / 2);
         }
 
         assert.writeOK(coll.insert(kIdsToInsert.map(objId => {return {_id: objId}})));
@@ -79,8 +66,8 @@
         }
 
         // Assert that we found the documents we inserted (in any order).
-        assert(setEq(new Set(kIdsToInsert),
-                     new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        assert(MiscUtil.setEq(new Set(kIdsToInsert),
+                              new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
 
         // Now resume using the resume token from the first change on a different mongos.
         const otherCst =
