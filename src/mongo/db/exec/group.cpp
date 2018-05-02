@@ -123,7 +123,12 @@ Status GroupStage::initGroupScripting() {
         jsCode += "while (1) {}";
     }
     try {
-        _scope->exec(jsCode, "group reduce init 2", false, true, true /*assertOnError*/, 2 * 1000);
+        _scope->exec(jsCode,
+                     "group reduce init 2",
+                     false,  // printResult
+                     true,   // reportError
+                     true,   // assertOnError
+                     2 * 1000);
     } catch (const AssertionException& e) {
         return e.toStatus("Failed to initialize group reduce function: ");
     }
@@ -228,7 +233,6 @@ StatusWith<BSONObj> GroupStage::finalizeResults() {
         return e.toStatus("Failed to clean up group: ");
     }
 
-    // TODO: Should we call this regardless of whether there was an error?
     _scope->gc();
 
     return results;
