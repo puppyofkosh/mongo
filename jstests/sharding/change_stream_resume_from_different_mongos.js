@@ -6,6 +6,19 @@
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
+    // Check if aSet and bSet are equal.
+    function setEq(aSet, bSet) {
+        if (aSet.size != bSet.size) {
+            return false;
+        }
+        for (var a of aSet) {
+            if (!bSet.has(a)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     const st = new ShardingTest({
         shards: 2,
         mongos: 2,
@@ -24,6 +37,7 @@
         const s1DB = st.s1.getDB("test");
         const coll = assertDropAndRecreateCollection(s0DB, "change_stream_failover");
 
+        // TODO: Use moar docs!~!!
         // Split so ids < 5 are for one shard, ids >= 5 for another.
         st.shardColl(coll,
                      {_id: 1},  // key
@@ -33,34 +47,33 @@
                      false      // waitForDelete
                      );
 
-        // Open a changeStream.
+        // Open a change stream.
         const cst = new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, s0DB));
         let changeStream = cst.getChangeStream({watchMode: watchMode, coll: coll});
 
         // Be sure we can read from the change stream. Write some documents that will end up on
-        // each shard.
-        assert.writeOK(coll.insert({_id: 0}));
-        assert.writeOK(coll.insert({_id: 7}));
-        assert.writeOK(coll.insert({_id: 2}));
+        // each shard. Use a bulk write to increase the chance that two of the writes get the same
+        // cluster time on each shard.
+        const kIdsToInsert = [0, 7, 2];
+        
+        assert.writeOK(coll.insert(kIdsToInsert.map(objId => {return {_id: objId}})));
 
+        // Read from the change stream. The order of the documents isn't guaranteed because we
+        // performed a bulk write.
         const firstChange = cst.getOneChange(changeStream);
-        assert.docEq(firstChange.fullDocument, {_id: 0});
+        const docsFoundInOrder = [firstChange];
+        for (let i = 0; i < 2; i++) {
+            const change = cst.getOneChange(changeStream);
+            assert.docEq(change.ns, {db: s0DB.getName(), coll: coll.getName()});
+            assert.eq(change.operationType, "insert");
 
-        const expectedChanges = [
-            {
-              documentKey: {_id: 7},
-              fullDocument: {_id: 7},
-              ns: {db: s0DB.getName(), coll: coll.getName()},
-              operationType: "insert",
-            },
-            {
-              documentKey: {_id: 2},
-              fullDocument: {_id: 2},
-              ns: {db: s0DB.getName(), coll: coll.getName()},
-              operationType: "insert",
-            },
-        ];
+            docsFoundInOrder.push(change);
+        }
 
+        // Assert that we found the documents we inserted (in any order).
+        assert(setEq(new Set(kIdsToInsert),
+                     new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        
         // Now resume using the resume token from the first change on a different mongos.
         const otherCst =
             new ChangeStreamTest(ChangeStreamTest.getDBForChangeStream(watchMode, s1DB));
@@ -68,8 +81,10 @@
         const resumeCursor = otherCst.getChangeStream(
             {watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 
-        // Be sure we can read the remaining changes.
-        otherCst.assertNextChangesEqual({cursor: resumeCursor, expectedChanges: expectedChanges});
+        // Be sure we can read the remaining changes, in the same order as they were read on the
+        // first stream.
+        otherCst.assertNextChangesEqual({cursor: resumeCursor,
+                                         expectedChanges: docsFoundInOrder.splice(1)});
     }
 
     st.stop();
