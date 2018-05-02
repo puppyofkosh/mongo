@@ -227,11 +227,18 @@ StatusWith<BSONObj> GroupStage::finalizeResults() {
 
     // TODO: use try/catch
     // TODO: See what happens when the stepdown isn't triggered.
-    const bool res = _scope->exec(
-        jsCode, "group clean up", false, true, false /*assertOnError*/, 2 * 1000);
-    if (!res) {
-        return Status(ErrorCodes::OperationFailed, "Error cleaning up group");
+
+    try {
+        _scope->exec(jsCode,
+                     "group clean up",
+                     false,  // printResult
+                     true,   // reportError
+                     true,   // assertOnError
+                     2 * 1000);
+    } catch (const AssertionException& e) {
+        return e.toStatus("Failed to clean up group: ");
     }
+
     // TODO: Should we call this regardless of whether there was an error?
     _scope->gc();
 

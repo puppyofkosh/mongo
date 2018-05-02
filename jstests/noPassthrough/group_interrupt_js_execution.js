@@ -15,10 +15,9 @@
     coll.insert({name: 'fred', foo: 3});
     coll.insert({name: 'fred', foo: 4});
 
-    const kFailPoints = ["hangInGroupJsReduceInit", "hangInGroupJsCleanup"];
 
-    for (let failPointName of kFailPoints) {
-        jsTestLog("Running with failPoint: " + failPointName);
+    function runTest(failPointName, shouldKillOp) {
+        jsTestLog("Running with failPoint: " + failPointName + "shouldKillOp: " + shouldKillOp);
         let awaitShellFn = null;
         try {
             assert.commandWorked(
@@ -39,7 +38,8 @@
                     }
                 }), [], "expected group() to fail");
 
-                assert.eq(err.code, ErrorCodes.OperationFailed);
+                print("ian: the error is " + tojson(err));
+                assert.eq(err.code, ErrorCodes.Interrupted);
             }
             awaitShellFn = startParallelShell(runHangingGroup, master.port);
             print("ian: 2");
@@ -63,11 +63,17 @@
                 opid = arr[0].opid;
                 return true;
             });
-            print("ian: 3");
-
-            // Kill the op running group.
             assert.neq(opid, null);
-            assert.commandWorked(db.killOp(opid));
+
+            if (shouldKillOp) {
+                print("ian: 3");
+
+                // Kill the op running group.
+                assert.commandWorked(db.killOp(opid));
+            } else {
+                // The javascript execution should time out on its own eventually, even if we don't
+                // run killOp.
+            }
 
             print("ian: 4");
         } finally {
@@ -82,6 +88,13 @@
         }
 
         print("ian: 6");
+    }
+
+    const kFailPoints = ["hangInGroupJsReduceInit", "hangInGroupJsCleanup"];
+    for (let failPointName of kFailPoints) {
+        for (let shouldKillOp of [true, false]) {
+            runTest(failPointName, shouldKillOp);
+        }
     }
 
     replTest.stopSet();
