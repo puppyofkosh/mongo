@@ -46,7 +46,7 @@ MONGO_FP_DECLARE(hangInGroupJsReduceInit);
 
 // Forces a hang in the javascript execution while cleaning up the group stage.
 MONGO_FP_DECLARE(hangInGroupJsCleanup);
-    
+
 using std::unique_ptr;
 using std::vector;
 using stdx::make_unique;
@@ -119,18 +119,11 @@ Status GroupStage::initGroupScripting() {
 
     std::string jsCode = "$arr = [];";
     if (MONGO_FAIL_POINT(hangInGroupJsReduceInit)) {
-        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(),
-                                              "hangInGroupJsReduceInit");
+        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupJsReduceInit");
         jsCode += "while (1) {}";
     }
     try {
-        _scope->exec(
-            jsCode,
-            "group reduce init 2",
-            false,
-            true,
-            true /*assertOnError*/,
-            2 * 1000);
+        _scope->exec(jsCode, "group reduce init 2", false, true, true /*assertOnError*/, 2 * 1000);
     } catch (const AssertionException& e) {
         return e.toStatus("Failed to initialize group reduce function: ");
     }
@@ -220,13 +213,9 @@ StatusWith<BSONObj> GroupStage::finalizeResults() {
 
     std::string jsCode = "$arr = [];";
     if (MONGO_FAIL_POINT(hangInGroupJsCleanup)) {
-        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(),
-                                              "hangInGroupJsCleanup");
+        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupJsCleanup");
         jsCode += "while (1) {}";
     }
-
-    // TODO: use try/catch
-    // TODO: See what happens when the stepdown isn't triggered.
 
     try {
         _scope->exec(jsCode,

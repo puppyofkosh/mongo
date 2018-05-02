@@ -76,7 +76,7 @@
 
     const kFailPoints = ["hangInGroupJsReduceInit", "hangInGroupJsCleanup"];
     for (let failPointName of kFailPoints) {
-        for (let shouldKillOp of [true, false]) {
+        for (let shouldKillOp of[true, false]) {
             runTest(failPointName, shouldKillOp);
         }
     }
