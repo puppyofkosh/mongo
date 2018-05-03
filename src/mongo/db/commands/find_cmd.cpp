@@ -235,6 +235,11 @@ public:
 
         auto replCoord = repl::ReplicationCoordinator::get(opCtx);
         auto& qr = qrStatus.getValue();
+        uassert(50842,
+                "It is illegal to open a tailable cursor with readConcern snapshot",
+                !(qr->isTailable() &&
+                  opCtx->recoveryUnit()->getReadConcernLevel() ==
+                      repl::ReadConcernLevel::kSnapshotReadConcern));
 
         // Validate term before acquiring locks, if provided.
         if (auto term = qr->getReplicationTerm()) {
