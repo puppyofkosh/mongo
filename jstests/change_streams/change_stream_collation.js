@@ -22,8 +22,7 @@
         const caseInsensitive = {locale: "en_US", strength: 2};
 
         // $changeStream cannot run on a non-existent database. Create an unrelated collection to
-        // ensure
-        // that the database is present before testing.
+        // ensure that the database is present before testing.
         assertDropAndRecreateCollection(db, "change_stream_ensure_db_exists");
 
         let caseInsensitiveCollection = "change_stream_case_insensitive";
@@ -49,8 +48,7 @@
                 {$changeStream: {}},
                 {$match: {"fullDocument.text": "abc"}},
                 // Be careful not to use _id in this projection, as startWatchingChanges() will
-                // exclude
-                // it by default, assuming it is the resume token.
+                // exclude it by default, assuming it is the resume token.
                 {$project: {docId: "$documentKey._id"}}
             ],
             collection: caseInsensitiveCollection
@@ -81,17 +79,15 @@
 
         assert.writeOK(caseInsensitiveCollection.insert({_id: 2, text: "ABC"}));
 
-        // The existing stream should not see the first insert (to the other collection), but should
-        // see
-        // the second.
+        // The existing stream should not see the first insert (to the other collection), but
+        // should see the second.
         cst.assertNextChangesEqual(
             {cursor: implicitCaseInsensitiveStream, expectedChanges: [{docId: 2}]});
         cst.assertNextChangesEqual(
             {cursor: explicitCaseInsensitiveStream, expectedChanges: [{docId: 2}]});
 
         // Test that creating a collection without a collation does not invalidate any change
-        // streams
-        // that were opened before the collection existed.
+        // streams that were opened before the collection existed.
         (function() {
             let noCollationCollection = "change_stream_no_collation";
             assertDropCollection(db, noCollationCollection);
@@ -130,8 +126,7 @@
         }());
 
         // Test that creating a change stream with a non-default collation, then creating a
-        // collection
-        // with the same collation will not invalidate the change stream.
+        // collection with the same collation will not invalidate the change stream.
         (function() {
             let frenchCollection = "change_stream_french_collation";
             assertDropCollection(db, frenchCollection);
@@ -150,8 +145,7 @@
         }());
 
         // Test that creating a change stream with a non-default collation, then creating a
-        // collection
-        // with *a different* collation will not invalidate the change stream.
+        // collection with *a different* collation will not invalidate the change stream.
         (function() {
             let germanCollection = "change_stream_german_collation";
             assertDropCollection(db, germanCollection);
@@ -174,9 +168,9 @@
                 {cursor: englishCaseInsensitiveStream, expectedChanges: [{docId: 0}]});
         }());
 
-        // Test that creating a change stream with a non-default collation against a collection that
-        // has
-        // a non-simple default collation will use the collation specified on the operation.
+        // Test that creating a change stream with a non-default collation against a collection
+        // that has a non-simple default collation will use the collation specified on the
+        // operation.
         (function() {
             const caseInsensitiveCollection = assertDropAndRecreateCollection(
                 db, "change_stream_case_insensitive", {collation: caseInsensitive});
@@ -198,10 +192,9 @@
                 {cursor: englishCaseSensitiveStream, expectedChanges: [{docId: 1}]});
         }());
 
-        // Test that collation is supported by the shell helper.
-        // Test that creating a change stream with a non-default collation against a collection that
-        // has
-        // a simple default collation will use the collation specified on the operation.
+        // Test that collation is supported by the shell helper. Test that creating a change
+        // stream with a non-default collation against a collection that has a simple default
+        // collation will use the collation specified on the operation.
         (function() {
             const noCollationCollection =
                 assertDropAndRecreateCollection(db, "change_stream_no_collation");
