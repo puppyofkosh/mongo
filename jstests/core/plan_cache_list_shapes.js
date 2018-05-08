@@ -42,8 +42,9 @@
     t.ensureIndex({a: 1, b: 1});
 
     // Run a query.
-    assert.eq(
-        1, t.find({a: 1, b: 1}, {_id: 1, a: 1}).sort({a: -1}).itcount(), 'unexpected document count');
+    assert.eq(1,
+              t.find({a: 1, b: 1}, {_id: 1, a: 1}).sort({a: -1}).itcount(),
+              'unexpected document count');
 
     // We now expect the two indices to be compared and a cache entry to exist.
     // Retrieve query shapes from the test collection
@@ -72,12 +73,14 @@
     const regexQuery = {s: {$regex: 'hello world', $options: 'm'}, a: 3};
     assert.eq(5, t.find(regexQuery).itcount());
 
-    assert.eq(3, getShapes().length, 'unexpected number of shapes in planCacheListQueryShapes result ');
+    assert.eq(
+        3, getShapes().length, 'unexpected number of shapes in planCacheListQueryShapes result ');
 
-    // Run the same query, but with different regex options. We expec that this should cause a
+    // Run the same query, but with different regex options. We expect that this should cause a
     // shape to get added.
     regexQuery.s.$options = 'mi';
     // There is one more result since the query is now case sensitive.
     assert.eq(6, t.find(regexQuery).itcount());
-    assert.eq(4, getShapes().length, 'unexpected number of shapes in planCacheListQueryShapes result');
+    assert.eq(
+        4, getShapes().length, 'unexpected number of shapes in planCacheListQueryShapes result');
 })();
