@@ -1436,6 +1436,19 @@ TEST(PlanCacheTest, ComputeKeyGeoNear) {
         "gnanrsp");
 }
 
+// REGEX cache keys should include the flags.
+TEST(PlanCacheTest, ComputeKeyRegex) {
+    testComputeKey("{a: {$regex: \"sometext\"}}", "{}", "{}", "rea");
+    testComputeKey("{a: {$regex: \"sometext\", $options: \"\"}}", "{}", "{}", "rea");
+
+    testComputeKey("{a: {$regex: \"sometext\", $options: \"s\"}}", "{}", "{}", "reas");
+    testComputeKey("{a: {$regex: \"sometext\", $options: \"ms\"}}", "{}", "{}", "reams");
+
+    // Test that the ordering of $options doesn't matter.
+    testComputeKey("{a: {$regex: \"sometext\", $options: \"im\"}}", "{}", "{}", "reaim");
+    testComputeKey("{a: {$regex: \"sometext\", $options: \"mi\"}}", "{}", "{}", "reaim");
+}
+
 // When a sparse index is present, computeKey() should generate different keys depending on
 // whether or not the predicates in the given query can use the index.
 TEST(PlanCacheTest, ComputeKeySparseIndex) {
