@@ -26,6 +26,8 @@
  *    it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include <boost/optional.hpp>
@@ -44,6 +46,7 @@
 #include "mongo/s/commands/cluster_explain.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/query/cluster_find.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 namespace {
@@ -109,54 +112,76 @@ public:
                    const OpMsgRequest& request,
                    ExplainOptions::Verbosity verbosity,
                    BSONObjBuilder* out) const final {
+        log() << "ian: in cluster find cmd explain";
+
         std::string dbname = request.getDatabase().toString();
-        const BSONObj& cmdObj = request.body;
-        const NamespaceString nss(CommandHelpers::parseNsCollectionRequired(dbname, cmdObj));
+        const BSONObj& originalCmdObj = request.body;
+        const NamespaceString nss(
+            CommandHelpers::parseNsCollectionRequired(dbname, originalCmdObj));
         // Parse the command BSON to a QueryRequest.
         bool isExplain = true;
-        auto swQr = QueryRequest::makeFromFindCommand(std::move(nss), cmdObj, isExplain);
+        auto swQr = QueryRequest::makeFromFindCommand(std::move(nss), originalCmdObj, isExplain);
         if (!swQr.isOK()) {
             return swQr.getStatus();
         }
-        auto& qr = *swQr.getValue();
+        auto& originalQr = *swQr.getValue();
+
+        // Canonicalize the query.
+        CanonicalQuery::canonicalize(opCtx, originalQr);
+        
+
+        /* TODO: replace false */
+        auto qrForShards = ClusterFind::transformQueryForShards(originalQr, false);
+        if (!qrForShards.isOK()) {
+            return qrForShards.getStatus();
+        }
+        auto newCmdObj = qrForShards.getValue()->asFindCommand();
+
+        log() << "ian: Probably want to do the transform here";
+        log() << "ian: old cmd obj is " << originalCmdObj;
+        log() << "ian: new cmd obj is " << newCmdObj;
 
         try {
-            const auto explainCmd = ClusterExplain::wrapAsExplain(cmdObj, verbosity);
+            const auto explainCmd = ClusterExplain::wrapAsExplain(newCmdObj, verbosity);
+            log() << "ian: explain obj is " << explainCmd;
 
             long long millisElapsed;
             std::vector<AsyncRequestsSender::Response> shardResponses;
 
             // We will time how long it takes to run the commands on the shards.
             Timer timer;
-            const auto routingInfo = uassertStatusOK(
-                Grid::get(opCtx)->catalogCache()->getCollectionRoutingInfo(opCtx, qr.nss()));
+            const auto routingInfo =
+                uassertStatusOK(Grid::get(opCtx)->catalogCache()->getCollectionRoutingInfo(
+                    opCtx, originalQr.nss()));
             shardResponses =
                 scatterGatherVersionedTargetByRoutingTable(opCtx,
-                                                           qr.nss().db(),
-                                                           qr.nss(),
+                                                           originalQr.nss().db(),
+                                                           originalQr.nss(),
                                                            routingInfo,
                                                            explainCmd,
                                                            ReadPreferenceSetting::get(opCtx),
                                                            Shard::RetryPolicy::kIdempotent,
-                                                           qr.getFilter(),
-                                                           qr.getCollation());
+                                                           originalQr.getFilter(),
+                                                           originalQr.getCollation());
             millisElapsed = timer.millis();
 
             const char* mongosStageName =
-                ClusterExplain::getStageNameForReadOp(shardResponses.size(), cmdObj);
+                ClusterExplain::getStageNameForReadOp(shardResponses.size(), newCmdObj);
 
             uassertStatusOK(ClusterExplain::buildExplainResult(
                 opCtx,
                 ClusterExplain::downconvert(opCtx, shardResponses),
                 mongosStageName,
                 millisElapsed,
+                originalQr.getSkip(),
+                originalQr.getLimit(),
                 out));
 
             return Status::OK();
         } catch (const ExceptionFor<ErrorCodes::CommandOnShardedViewNotSupportedOnMongod>& ex) {
             out->resetToEmpty();
 
-            auto aggCmdOnView = qr.asAggregationCommand();
+            auto aggCmdOnView = originalQr.asAggregationCommand();
             if (!aggCmdOnView.isOK()) {
                 return aggCmdOnView.getStatus();
             }

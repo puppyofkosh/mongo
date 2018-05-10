@@ -82,93 +82,6 @@ static const BSONObj kGeoNearDistanceMetaProjection = BSON("$meta"
 static const int kPerDocumentOverheadBytesUpperBound = 10;
 
 /**
- * Given the QueryRequest 'qr' being executed by mongos, returns a copy of the query which is
- * suitable for forwarding to the targeted hosts.
- */
-StatusWith<std::unique_ptr<QueryRequest>> transformQueryForShards(
-    const QueryRequest& qr, bool appendGeoNearDistanceProjection) {
-    // If there is a limit, we forward the sum of the limit and the skip.
-    boost::optional<long long> newLimit;
-    if (qr.getLimit()) {
-        long long newLimitValue;
-        if (mongoSignedAddOverflow64(*qr.getLimit(), qr.getSkip().value_or(0), &newLimitValue)) {
-            return Status(
-                ErrorCodes::Overflow,
-                str::stream()
-                    << "sum of limit and skip cannot be represented as a 64-bit integer, limit: "
-                    << *qr.getLimit()
-                    << ", skip: "
-                    << qr.getSkip().value_or(0));
-        }
-        newLimit = newLimitValue;
-    }
-
-    // Similarly, if nToReturn is set, we forward the sum of nToReturn and the skip.
-    boost::optional<long long> newNToReturn;
-    if (qr.getNToReturn()) {
-        // !wantMore and ntoreturn mean the same as !wantMore and limit, so perform the conversion.
-        if (!qr.wantMore()) {
-            long long newLimitValue;
-            if (mongoSignedAddOverflow64(
-                    *qr.getNToReturn(), qr.getSkip().value_or(0), &newLimitValue)) {
-                return Status(ErrorCodes::Overflow,
-                              str::stream()
-                                  << "sum of ntoreturn and skip cannot be represented as a 64-bit "
-                                     "integer, ntoreturn: "
-                                  << *qr.getNToReturn()
-                                  << ", skip: "
-                                  << qr.getSkip().value_or(0));
-            }
-            newLimit = newLimitValue;
-        } else {
-            long long newNToReturnValue;
-            if (mongoSignedAddOverflow64(
-                    *qr.getNToReturn(), qr.getSkip().value_or(0), &newNToReturnValue)) {
-                return Status(ErrorCodes::Overflow,
-                              str::stream()
-                                  << "sum of ntoreturn and skip cannot be represented as a 64-bit "
-                                     "integer, ntoreturn: "
-                                  << *qr.getNToReturn()
-                                  << ", skip: "
-                                  << qr.getSkip().value_or(0));
-            }
-            newNToReturn = newNToReturnValue;
-        }
-    }
-
-    // If there is a sort other than $natural, we send a sortKey meta-projection to the remote node.
-    BSONObj newProjection = qr.getProj();
-    if (!qr.getSort().isEmpty() && !qr.getSort()["$natural"]) {
-        BSONObjBuilder projectionBuilder;
-        projectionBuilder.appendElements(qr.getProj());
-        projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kSortKeyMetaProjection);
-        newProjection = projectionBuilder.obj();
-    }
-
-    if (appendGeoNearDistanceProjection) {
-        invariant(qr.getSort().isEmpty());
-        BSONObjBuilder projectionBuilder;
-        projectionBuilder.appendElements(qr.getProj());
-        projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kGeoNearDistanceMetaProjection);
-        newProjection = projectionBuilder.obj();
-    }
-
-    auto newQR = stdx::make_unique<QueryRequest>(qr);
-    newQR->setProj(newProjection);
-    newQR->setSkip(boost::none);
-    newQR->setLimit(newLimit);
-    newQR->setNToReturn(newNToReturn);
-
-    // Even if the client sends us singleBatch=true (wantMore=false), we may need to retrieve
-    // multiple batches from a shard in order to return the single requested batch to the client.
-    // Therefore, we must always send singleBatch=false (wantMore=true) to the shards.
-    newQR->setWantMore(true);
-
-    invariant(newQR->validate());
-    return std::move(newQR);
-}
-
-/**
  * Constructs the find commands sent to each targeted shard to establish cursors, attaching the
  * shardVersion and txnNumber, if necessary.
  */
@@ -179,8 +92,8 @@ std::vector<std::pair<ShardId, BSONObj>> constructRequestsForShards(
     const CanonicalQuery& query,
     bool appendGeoNearDistanceProjection,
     boost::optional<LogicalTime> atClusterTime) {
-    const auto qrToForward = uassertStatusOK(
-        transformQueryForShards(query.getQueryRequest(), appendGeoNearDistanceProjection));
+    const auto qrToForward = uassertStatusOK(ClusterFind::transformQueryForShards(
+        query.getQueryRequest(), appendGeoNearDistanceProjection));
 
     if (atClusterTime) {
         auto readConcernAtClusterTime =
@@ -407,6 +320,89 @@ Status setUpOperationContextStateForGetMore(OperationContext* opCtx,
 }  // namespace
 
 const size_t ClusterFind::kMaxRetries = 10;
+
+StatusWith<std::unique_ptr<QueryRequest>> ClusterFind::transformQueryForShards(
+    const QueryRequest& qr, bool appendGeoNearDistanceProjection) {
+    // If there is a limit, we forward the sum of the limit and the skip.
+    boost::optional<long long> newLimit;
+    if (qr.getLimit()) {
+        long long newLimitValue;
+        if (mongoSignedAddOverflow64(*qr.getLimit(), qr.getSkip().value_or(0), &newLimitValue)) {
+            return Status(
+                ErrorCodes::Overflow,
+                str::stream()
+                    << "sum of limit and skip cannot be represented as a 64-bit integer, limit: "
+                    << *qr.getLimit()
+                    << ", skip: "
+                    << qr.getSkip().value_or(0));
+        }
+        newLimit = newLimitValue;
+    }
+
+    // Similarly, if nToReturn is set, we forward the sum of nToReturn and the skip.
+    boost::optional<long long> newNToReturn;
+    if (qr.getNToReturn()) {
+        // !wantMore and ntoreturn mean the same as !wantMore and limit, so perform the conversion.
+        if (!qr.wantMore()) {
+            long long newLimitValue;
+            if (mongoSignedAddOverflow64(
+                    *qr.getNToReturn(), qr.getSkip().value_or(0), &newLimitValue)) {
+                return Status(ErrorCodes::Overflow,
+                              str::stream()
+                                  << "sum of ntoreturn and skip cannot be represented as a 64-bit "
+                                     "integer, ntoreturn: "
+                                  << *qr.getNToReturn()
+                                  << ", skip: "
+                                  << qr.getSkip().value_or(0));
+            }
+            newLimit = newLimitValue;
+        } else {
+            long long newNToReturnValue;
+            if (mongoSignedAddOverflow64(
+                    *qr.getNToReturn(), qr.getSkip().value_or(0), &newNToReturnValue)) {
+                return Status(ErrorCodes::Overflow,
+                              str::stream()
+                                  << "sum of ntoreturn and skip cannot be represented as a 64-bit "
+                                     "integer, ntoreturn: "
+                                  << *qr.getNToReturn()
+                                  << ", skip: "
+                                  << qr.getSkip().value_or(0));
+            }
+            newNToReturn = newNToReturnValue;
+        }
+    }
+
+    // If there is a sort other than $natural, we send a sortKey meta-projection to the remote node.
+    BSONObj newProjection = qr.getProj();
+    if (!qr.getSort().isEmpty() && !qr.getSort()["$natural"]) {
+        BSONObjBuilder projectionBuilder;
+        projectionBuilder.appendElements(qr.getProj());
+        projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kSortKeyMetaProjection);
+        newProjection = projectionBuilder.obj();
+    }
+
+    if (appendGeoNearDistanceProjection) {
+        invariant(qr.getSort().isEmpty());
+        BSONObjBuilder projectionBuilder;
+        projectionBuilder.appendElements(qr.getProj());
+        projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kGeoNearDistanceMetaProjection);
+        newProjection = projectionBuilder.obj();
+    }
+
+    auto newQR = stdx::make_unique<QueryRequest>(qr);
+    newQR->setProj(newProjection);
+    newQR->setSkip(boost::none);
+    newQR->setLimit(newLimit);
+    newQR->setNToReturn(newNToReturn);
+
+    // Even if the client sends us singleBatch=true (wantMore=false), we may need to retrieve
+    // multiple batches from a shard in order to return the single requested batch to the client.
+    // Therefore, we must always send singleBatch=false (wantMore=true) to the shards.
+    newQR->setWantMore(true);
+
+    invariant(newQR->validate());
+    return std::move(newQR);
+}
 
 CursorId ClusterFind::runQuery(OperationContext* opCtx,
                                const CanonicalQuery& query,

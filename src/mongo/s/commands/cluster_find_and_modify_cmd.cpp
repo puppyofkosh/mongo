@@ -145,8 +145,13 @@ public:
         std::vector<Strategy::CommandResult> shardResults;
         shardResults.push_back(cmdResult);
 
-        return ClusterExplain::buildExplainResult(
-            opCtx, shardResults, ClusterExplain::kSingleShard, millisElapsed, out);
+        return ClusterExplain::buildExplainResult(opCtx,
+                                                  shardResults,
+                                                  ClusterExplain::kSingleShard,
+                                                  millisElapsed,
+                                                  boost::none,
+                                                  boost::none,
+                                                  out);
     }
 
     bool run(OperationContext* opCtx,

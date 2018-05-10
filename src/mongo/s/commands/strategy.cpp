@@ -781,6 +781,8 @@ void Strategy::explainFind(OperationContext* opCtx,
                                            ClusterExplain::downconvert(opCtx, shardResponses),
                                            mongosStageName,
                                            millisElapsed,
+                                           qr.getSkip(),
+                                           qr.getLimit(),
                                            out));
 }
 }  // namespace mongo

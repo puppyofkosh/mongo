@@ -441,8 +441,13 @@ public:
         cmdResult.result = result.done();
         cmdResult.target = routingInfo.db().primary()->getConnString();
 
-        return ClusterExplain::buildExplainResult(
-            opCtx, {cmdResult}, ClusterExplain::kSingleShard, timer.millis(), out);
+        return ClusterExplain::buildExplainResult(opCtx,
+                                                  {cmdResult},
+                                                  ClusterExplain::kSingleShard,
+                                                  timer.millis(),
+                                                  boost::none,
+                                                  boost::none,
+                                                  out);
     }
 
 } groupCmd;

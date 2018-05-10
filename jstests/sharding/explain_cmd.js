@@ -31,14 +31,14 @@
         {moveChunk: collSharded.getFullName(), find: {a: 2}, to: st.shard1.shardName}));
 
     // Put data on each shard.
-    for (var i = 0; i < 3; i++) {
+    for (var i = -5; i < 5; i++) {
         collSharded.insert({_id: i, a: i, b: 1});
     }
 
     st.printShardingStatus();
 
     // Test a scatter-gather count command.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Explain the scatter-gather count.
     explain = db.runCommand(
@@ -124,7 +124,7 @@
     assert.eq(explain.queryPlanner.winningPlan.shards[0].winningPlan.stage, "DELETE");
     assert.eq(explain.queryPlanner.winningPlan.shards[1].winningPlan.stage, "DELETE");
     // Check that the deletes didn't actually happen.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Explain a delete operation and verify that it hits only one shard with the shard key
     explain = db.runCommand({
@@ -134,7 +134,7 @@
     assert.commandWorked(explain, tojson(explain));
     assert.eq(explain.queryPlanner.winningPlan.shards.length, 1);
     // Check that the deletes didn't actually happen.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Check that we fail gracefully if we try to do an explain of a write batch that has more
     // than one operation in it.
@@ -178,6 +178,44 @@
         verbosity: "allPlansExecution"
     });
     assert.commandFailed(explain, tojson(explain));
+
+    //
+    // Explain a find with a sort on b.
+    //
+    explain = collSharded.explain().find().sort({b: 1}).finish();
+    // The plan should have a sort on the mongos.
+    assert.eq(explain.queryPlanner.winningPlan.stage, "SHARD_MERGE_SORT");
+
+    // Each shard should have a project for the sort key.
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        assert.eq(shardExplain.winningPlan.stage, "PROJECTION");
+        assert.eq(shardExplain.winningPlan.transformBy.$sortKey.$meta, "sortKey");
+    }
+
+    //
+    // Explain a find with a skip.
+    //
+    explain = collSharded.explain("executionStats").find().skip(3).finish();
+    assert.eq(explain.executionStats.nReturned, 10 - 3, tojson(explain));
+    assert.eq(explain.executionStats.totalDocsExamined, 10, tojson(explain));
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        // The shards shouldn't have a SKIP stage.
+        assert.eq(shardExplain.winningPlan.stage, "SHARDING_FILTER");
+        assert.eq(shardExplain.winningPlan.inputStage.stage, "COLLSCAN");
+    }
+
+    //
+    // Explain a find with a limit.
+    //
+    explain = collSharded.explain("executionStats").find().limit(4).finish();
+    assert.eq(explain.executionStats.nReturned, 4);
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        // Each shard should have a LIMIT stage at the top level.
+        assert.eq(shardExplain.winningPlan.stage, "LIMIT");
+        assert.eq(shardExplain.winningPlan.limitAmount, 4);
+        assert.eq(shardExplain.winningPlan.inputStage.stage, "SHARDING_FILTER");
+        assert.eq(shardExplain.winningPlan.inputStage.inputStage.stage, "COLLSCAN");
+    }
 
     st.stop();
 })();

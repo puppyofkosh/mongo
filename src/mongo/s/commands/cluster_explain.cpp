@@ -253,6 +253,8 @@ void ClusterExplain::buildPlannerInfo(OperationContext* opCtx,
 void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shardResults,
                                     const char* mongosStageName,
                                     long long millisElapsed,
+                                    boost::optional<long long> skip,
+                                    boost::optional<long long> limit,
                                     BSONObjBuilder* out) {
     if (!shardResults[0].result.hasField("executionStats")) {
         // The shards don't have execution stats info. Bail out without adding anything
@@ -271,6 +273,9 @@ void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shard
         BSONObj execStats = shardResults[i].result["executionStats"].Obj();
         if (execStats.hasField("nReturned")) {
             nReturned += execStats["nReturned"].numberLong();
+            if (limit && *limit < nReturned) {
+                nReturned = *limit;
+            }
         }
         if (execStats.hasField("totalKeysExamined")) {
             keysExamined += execStats["totalKeysExamined"].numberLong();
@@ -282,6 +287,9 @@ void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shard
             totalChildMillis += execStats["executionTimeMillis"].numberLong();
         }
     }
+
+    // Account for the skip, which was removed from the query sent to each shard.
+    nReturned -= skip.get_value_or(0);
 
     // Fill in top-level stats.
     executionStatsBob.appendNumber("nReturned", nReturned);
@@ -362,6 +370,8 @@ Status ClusterExplain::buildExplainResult(OperationContext* opCtx,
                                           const vector<Strategy::CommandResult>& shardResults,
                                           const char* mongosStageName,
                                           long long millisElapsed,
+                                          boost::optional<long long> skip,
+                                          boost::optional<long long> limit,
                                           BSONObjBuilder* out) {
     // Explain only succeeds if all shards support the explain command.
     Status validateStatus = ClusterExplain::validateShardResults(shardResults);
@@ -370,7 +380,7 @@ Status ClusterExplain::buildExplainResult(OperationContext* opCtx,
     }
 
     buildPlannerInfo(opCtx, shardResults, mongosStageName, out);
-    buildExecStats(shardResults, mongosStageName, millisElapsed, out);
+    buildExecStats(shardResults, mongosStageName, millisElapsed, skip, limit, out);
 
     return Status::OK();
 }
