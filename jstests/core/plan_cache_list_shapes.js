@@ -14,7 +14,7 @@
 
     // Utility function to list query shapes in cache.
     function getShapes(collection) {
-        if (collection == undefined) {
+        if (collection === undefined) {
             collection = t;
         }
         const res = collection.runCommand('planCacheListQueryShapes');
@@ -32,14 +32,14 @@
               getShapes(missingCollection).length,
               'planCacheListQueryShapes should return empty array on non-existent collection');
 
-    t.save({a: 1, b: 1});
-    t.save({a: 1, b: 2});
-    t.save({a: 1, b: 2});
-    t.save({a: 2, b: 2});
+    assert.commandWorked(t.save({a: 1, b: 1}));
+    assert.commandWorked(t.save({a: 1, b: 2}));
+    assert.commandWorked(t.save({a: 1, b: 2}));
+    assert.commandWorked(t.save({a: 2, b: 2}));
 
     // We need two indices so that the MultiPlanRunner is executed.
-    t.ensureIndex({a: 1});
-    t.ensureIndex({a: 1, b: 1});
+    assert.commandWorked(t.ensureIndex({a: 1}));
+    assert.commandWorked(t.ensureIndex({a: 1, b: 1}));
 
     // Run a query.
     assert.eq(1,
@@ -64,9 +64,9 @@
 
     // Insert some documents with strings so we have something to search for.
     for (let i = 0; i < 5; i++) {
-        assert.writeOK(t.insert({a: 3, s: 'hello world'}));
+        assert.commandWorked(t.insert({a: 3, s: 'hello world'}));
     }
-    assert.writeOK(t.insert({a: 3, s: 'hElLo wOrLd'}));
+    assert.commandWorked(t.insert({a: 3, s: 'hElLo wOrLd'}));
 
     // Run a query with a regex. Also must include 'a' so that the query may use more than one
     // index, and thus, must use the MultiPlanner.
