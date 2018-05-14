@@ -280,6 +280,10 @@ public:
     // Annotations from cached runs.  The CachedPlanStage provides these stats about its
     // runs when they complete.
     std::vector<PlanCacheEntryFeedback*> feedback;
+
+    // TODO: comment
+    bool isActive = false;
+    size_t worksThreshold = 0;
 };
 
 /**
@@ -287,12 +291,20 @@ public:
  * mapping, the cache contains information on why that mapping was made and statistics on the
  * cache entry's actual performance on subsequent runs.
  *
+ * TODO: Explain active and inactive entries.
+ *
  */
 class PlanCache {
 private:
     MONGO_DISALLOW_COPYING(PlanCache);
 
 public:
+    enum CacheEntryStatus {
+        kNotPresent,
+        kPresentInactive,
+        kPresentActive,
+    };
+
     /**
      * We don't want to cache every possible query. This function
      * encapsulates the criteria for what makes a canonical query
@@ -304,6 +316,8 @@ public:
      * If omitted, namespace set to empty string.
      */
     PlanCache();
+
+    PlanCache(size_t size);
 
     PlanCache(const std::string& ns);
 
@@ -335,6 +349,8 @@ public:
      *
      * If there is an entry in the cache, populates 'crOut' and returns Status::OK().  Caller
      * owns '*crOut'.
+     *
+     * TODO: Explain that this only returns solutions that are in active entries.
      */
     Status get(const CanonicalQuery& query, CachedSolution** crOut) const;
 
@@ -381,10 +397,8 @@ public:
       *
      * If there is no entry in the cache for the 'query', returns an error Status.
      *
-     * If there is an entry in the cache, populates 'entryOut' and returns Status::OK().  Caller
-     * owns '*entryOut'.
      */
-    Status getEntry(const CanonicalQuery& cq, PlanCacheEntry** entryOut) const;
+    StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
 
     /**
      * Returns a vector of all cache entries.
@@ -395,13 +409,12 @@ public:
     std::vector<PlanCacheEntry*> getAllEntries() const;
 
     /**
-     * Returns true if there is an entry in the cache for the 'query'.
-     * Internally calls hasKey() on the LRU cache.
+     * Look up cq in the cache and return whether or not it's present (and active).
      */
-    bool contains(const CanonicalQuery& cq) const;
+    CacheEntryStatus getEntryStatus(const CanonicalQuery& cq) const;
 
     /**
-     * Returns number of entries in cache.
+     * Returns number of entries in cache. Includes inactive entries.
      * Used for testing.
      */
     size_t size() const;

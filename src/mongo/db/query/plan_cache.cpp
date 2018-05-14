@@ -369,7 +369,7 @@ CachedSolution::CachedSolution(const PlanCacheKey& key, const PlanCacheEntry& en
       sort(entry.sort.getOwned()),
       projection(entry.projection.getOwned()),
       collation(entry.collation.getOwned()),
-      decisionWorks(entry.decision->stats[0]->common.works) {
+      decisionWorks(entry.worksThreshold) {
     // CachedSolution should not having any references into
     // cache entry. All relevant data should be cloned/copied.
     for (size_t i = 0; i < entry.plannerData.size(); ++i) {
@@ -432,6 +432,8 @@ PlanCacheEntry* PlanCacheEntry::clone() const {
     entry->projection = projection.getOwned();
     entry->collation = collation.getOwned();
     entry->timeOfCreation = timeOfCreation;
+    entry->isActive = isActive;
+    entry->worksThreshold = worksThreshold;
 
     // Copy performance stats.
     for (size_t i = 0; i < feedback.size(); ++i) {
@@ -554,7 +556,9 @@ std::string SolutionCacheData::toString() const {
 // PlanCache
 //
 
-PlanCache::PlanCache() : _cache(internalQueryCacheSize.load()) {}
+PlanCache::PlanCache() : PlanCache(internalQueryCacheSize.load()) {}
+
+PlanCache::PlanCache(size_t size) : _cache(size) {}
 
 PlanCache::PlanCache(const std::string& ns) : _cache(internalQueryCacheSize.load()), _ns(ns) {}
 
@@ -726,14 +730,56 @@ Status PlanCache::add(const CanonicalQuery& query,
                       "candidate ordering entries in decision must match solutions");
     }
 
-    PlanCacheEntry* entry = new PlanCacheEntry(solns, why);
-    const QueryRequest& qr = query.getQueryRequest();
-    entry->query = qr.getFilter().getOwned();
-    entry->sort = qr.getSort().getOwned();
-    if (query.getCollator()) {
-        entry->collation = query.getCollator()->getSpec().toBSON();
+    const auto key = computeKey(query);
+    const size_t nWorks = why->stats[0]->common.works;
+    log() << "nWorks for thing being added is " << nWorks;
+    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
+    bool isNewEntryActive = false;
+    PlanCacheEntry* oldEntry;
+    Status cacheStatus = _cache.get(key, &oldEntry);
+
+    if (internalQueryCacheDisableInactiveEntries.load()) {
+        // All entries are always active.
+        isNewEntryActive = true;
+    } else {
+        if (cacheStatus.isOK()) {
+            if (oldEntry->isActive) {
+                LOG(2) << "Active cache entry for query " << redact(query.toStringShort())
+                       << " is being demoted to inactive entry";
+                // This is overwriting (evicting) an existing entry. The new entry will be
+                // inactive, though it will have the same worksThreshold as the old entry.
+                oldEntry->isActive = false;
+                return Status::OK();
+            } else {
+                if (nWorks > oldEntry->worksThreshold) {
+                    // Bump the old entry's worksThreshold.
+                    const size_t grownVal =
+                        oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
+                    oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
+                    return Status::OK();
+                } else {
+                    LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
+                           << " is being promoted to active entry";
+                    // We'll replace the old inactive entry with an active entry.
+                    isNewEntryActive = true;
+                }
+            }
+        } else {
+            LOG(1) << "Creating inactive cache entry for query shape "
+                   << redact(query.toStringShort());
+        }
     }
-    entry->timeOfCreation = now;
+
+    PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
+    const QueryRequest& qr = query.getQueryRequest();
+    newEntry->query = qr.getFilter().getOwned();
+    newEntry->sort = qr.getSort().getOwned();
+    newEntry->isActive = isNewEntryActive;
+    newEntry->worksThreshold = nWorks;
+    if (query.getCollator()) {
+        newEntry->collation = query.getCollator()->getSpec().toBSON();
+    }
+    newEntry->timeOfCreation = now;
 
 
     // Strip projections on $-prefixed fields, as these are added by internal callers of the query
@@ -745,10 +791,9 @@ Status PlanCache::add(const CanonicalQuery& query,
         }
         projBuilder.append(elem);
     }
-    entry->projection = projBuilder.obj();
+    newEntry->projection = projBuilder.obj();
 
-    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
-    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(computeKey(query), entry);
+    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(key, newEntry);
 
     if (NULL != evictedEntry.get()) {
         LOG(1) << _ns << ": plan cache maximum size exceeded - "
@@ -770,9 +815,12 @@ Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const
     }
     invariant(entry);
 
-    *crOut = new CachedSolution(key, *entry);
+    if (entry->isActive) {
+        *crOut = new CachedSolution(key, *entry);
+        return Status::OK();
+    }
 
-    return Status::OK();
+    return Status(ErrorCodes::CacheEntryInactive, "Cache entry is inactive");
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {
@@ -816,9 +864,8 @@ PlanCacheKey PlanCache::computeKey(const CanonicalQuery& cq) const {
     return keyBuilder.str();
 }
 
-Status PlanCache::getEntry(const CanonicalQuery& query, PlanCacheEntry** entryOut) const {
+StatusWith<std::unique_ptr<PlanCacheEntry>> PlanCache::getEntry(const CanonicalQuery& query) const {
     PlanCacheKey key = computeKey(query);
-    verify(entryOut);
 
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* entry;
@@ -828,9 +875,7 @@ Status PlanCache::getEntry(const CanonicalQuery& query, PlanCacheEntry** entryOu
     }
     invariant(entry);
 
-    *entryOut = entry->clone();
-
-    return Status::OK();
+    return std::unique_ptr<PlanCacheEntry>(entry->clone());
 }
 
 std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {
@@ -845,9 +890,14 @@ std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {
     return entries;
 }
 
-bool PlanCache::contains(const CanonicalQuery& cq) const {
-    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
-    return _cache.hasKey(computeKey(cq));
+PlanCache::CacheEntryStatus PlanCache::getEntryStatus(const CanonicalQuery& cq) const {
+    PlanCacheEntry* entry;
+    Status cacheStatus = _cache.get(computeKey(cq), &entry);
+    if (!cacheStatus.isOK()) {
+        return CacheEntryStatus::kNotPresent;
+    }
+    invariant(entry);
+    return entry->isActive ? CacheEntryStatus::kPresentActive : CacheEntryStatus::kPresentInactive;
 }
 
 size_t PlanCache::size() const {

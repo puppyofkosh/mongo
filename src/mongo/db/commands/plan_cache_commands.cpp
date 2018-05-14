@@ -310,7 +310,7 @@ Status PlanCacheClear::clear(OperationContext* opCtx,
 
         unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
-        if (!planCache->contains(*cq)) {
+        if (planCache->getEntryStatus(*cq) == PlanCache::CacheEntryStatus::kNotPresent) {
             // Log if asked to clear non-existent query shape.
             LOG(1) << ns << ": query shape doesn't exist in PlanCache - "
                    << redact(cq->getQueryObj()) << "(sort: " << cq->getQueryRequest().getSort()
@@ -381,7 +381,7 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
     }
     unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
-    if (!planCache.contains(*cq)) {
+    if (planCache.getEntryStatus(*cq) == PlanCache::CacheEntryStatus::kNotPresent) {
         // Return empty plans in results if query shape does not
         // exist in plan cache.
         BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
@@ -389,12 +389,11 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
         return Status::OK();
     }
 
-    PlanCacheEntry* entryRaw;
-    Status result = planCache.getEntry(*cq, &entryRaw);
+    auto result = planCache.getEntry(*cq);
     if (!result.isOK()) {
-        return result;
+        return result.getStatus();
     }
-    unique_ptr<PlanCacheEntry> entry(entryRaw);
+    PlanCacheEntry* entry = result.getValue().get();
 
     BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
     size_t numPlans = entry->plannerData.size();
@@ -442,6 +441,10 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
 
     // Append the time the entry was inserted into the plan cache.
     bob->append("timeOfCreation", entry->timeOfCreation);
+
+    // Append whether or not the entry is active.
+    bob->append("isActive", entry->isActive);
+    bob->append("worksThreshold", static_cast<long long>(entry->worksThreshold));
 
     return Status::OK();
 }

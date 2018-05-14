@@ -26,6 +26,8 @@
  *    then also delete it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/catalog/collection.h"
@@ -54,6 +56,7 @@
 #include "mongo/dbtests/dbtests.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/clock_source_mock.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -119,6 +122,96 @@ protected:
     DBDirectClient _client;
 };
 
+std::unique_ptr<CanonicalQuery> getCanonicalQuery(OperationContext* opCtx,
+                                                  NamespaceString nss,
+                                                  BSONObj filter) {
+    auto qr = stdx::make_unique<QueryRequest>(nss);
+    qr->setFilter(filter);
+    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx, std::move(qr));
+    verify(statusWithCQ.isOK());
+    unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+    verify(NULL != cq.get());
+    return cq;
+}
+
+unique_ptr<PlanStage> getIxScanPlan(OperationContext* opCtx,
+                                    const Collection* coll,
+                                    WorkingSet* sharedWs,
+                                    int desiredFooValue) {
+    std::vector<IndexDescriptor*> indexes;
+    coll->getIndexCatalog()->findIndexesByKeyPattern(opCtx, BSON("foo" << 1), false, &indexes);
+    ASSERT_EQ(indexes.size(), 1U);
+
+    IndexScanParams ixparams;
+    ixparams.descriptor = indexes[0];
+    ixparams.bounds.isSimpleRange = true;
+    ixparams.bounds.startKey = BSON("" << desiredFooValue);
+    ixparams.bounds.endKey = BSON("" << desiredFooValue);
+    ixparams.bounds.boundInclusion = BoundInclusion::kIncludeBothStartAndEndKeys;
+    ixparams.direction = 1;
+
+    IndexScan* ix = new IndexScan(opCtx, ixparams, sharedWs, NULL);
+    unique_ptr<PlanStage> root(new FetchStage(opCtx, sharedWs, ix, NULL, coll));
+
+    return root;
+}
+
+std::pair<unique_ptr<PlanStage>, unique_ptr<MatchExpression>> getCollScanPlan(
+    OperationContext* opCtx, const Collection* coll, WorkingSet* sharedWs, BSONObj filterObj) {
+    CollectionScanParams csparams;
+    csparams.collection = coll;
+    csparams.direction = CollectionScanParams::FORWARD;
+
+    const CollatorInterface* collator = nullptr;
+    const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
+    StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);
+    verify(statusWithMatcher.isOK());
+    unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
+    // Make the stage.
+    unique_ptr<PlanStage> root(new CollectionScan(opCtx, csparams, sharedWs, filter.get()));
+
+    return std::make_pair(std::move(root), std::move(filter));
+}
+
+std::unique_ptr<MultiPlanStage> runMultiPlanner(OperationContext* opCtx,
+                                                const NamespaceString& nss,
+                                                const Collection* coll,
+                                                int desiredFooValue) {
+    // Plan 0: IXScan over foo == desiredFooValue
+    // Every call to work() returns something so this should clearly win (by current scoring
+    // at least).
+    unique_ptr<WorkingSet> sharedWs(new WorkingSet());
+
+
+    unique_ptr<PlanStage> firstRoot = getIxScanPlan(opCtx, coll, sharedWs.get(), desiredFooValue);
+
+    // Plan 1: CollScan.
+    unique_ptr<PlanStage> secondRoot;
+    unique_ptr<MatchExpression> filter;
+    BSONObj filterObj = BSON("foo" << desiredFooValue);
+    std::tie(secondRoot, filter) = getCollScanPlan(opCtx, coll, sharedWs.get(), filterObj);
+
+    // Hand the plans off to the MPS.
+    auto cq = getCanonicalQuery(opCtx, nss, BSON("foo" << desiredFooValue));
+
+    unique_ptr<MultiPlanStage> mps = make_unique<MultiPlanStage>(opCtx, coll, cq.get());
+    mps->addPlan(createQuerySolution(), firstRoot.release(), sharedWs.get());
+    mps->addPlan(createQuerySolution(), secondRoot.release(), sharedWs.get());
+
+    // Plan 0 aka the first plan aka the index scan should be the best.
+    PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
+                                opCtx->getServiceContext()->getFastClockSource());
+    ASSERT_OK(mps->pickBestPlan(&yieldPolicy));
+    ASSERT(mps->bestPlanChosen());
+    ASSERT_EQUALS(0, mps->bestPlanIdx());
+
+    return mps;
+}
+
+size_t getBestPlanWorks(MultiPlanStage* mps) {
+    return mps->getChildren()[mps->bestPlanIdx()]->getStats()->common.works;
+}
+
 
 // Basic ranking test: collection scan vs. highly selective index scan.  Make sure we also get
 // all expected results out as well.
@@ -136,47 +229,17 @@ TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
     // Plan 0: IXScan over foo == 7
     // Every call to work() returns something so this should clearly win (by current scoring
     // at least).
-    std::vector<IndexDescriptor*> indexes;
-    coll->getIndexCatalog()->findIndexesByKeyPattern(
-        _opCtx.get(), BSON("foo" << 1), false, &indexes);
-    ASSERT_EQ(indexes.size(), 1U);
-
-    IndexScanParams ixparams;
-    ixparams.descriptor = indexes[0];
-    ixparams.bounds.isSimpleRange = true;
-    ixparams.bounds.startKey = BSON("" << 7);
-    ixparams.bounds.endKey = BSON("" << 7);
-    ixparams.bounds.boundInclusion = BoundInclusion::kIncludeBothStartAndEndKeys;
-    ixparams.direction = 1;
-
     unique_ptr<WorkingSet> sharedWs(new WorkingSet());
-    IndexScan* ix = new IndexScan(_opCtx.get(), ixparams, sharedWs.get(), NULL);
-    unique_ptr<PlanStage> firstRoot(new FetchStage(_opCtx.get(), sharedWs.get(), ix, NULL, coll));
+    unique_ptr<PlanStage> firstRoot = getIxScanPlan(_opCtx.get(), coll, sharedWs.get(), 7);
 
     // Plan 1: CollScan with matcher.
-    CollectionScanParams csparams;
-    csparams.collection = coll;
-    csparams.direction = CollectionScanParams::FORWARD;
-
-    // Make the filter.
     BSONObj filterObj = BSON("foo" << 7);
-    const CollatorInterface* collator = nullptr;
-    const boost::intrusive_ptr<ExpressionContext> expCtx(
-        new ExpressionContext(_opCtx.get(), collator));
-    StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);
-    verify(statusWithMatcher.isOK());
-    unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
-    // Make the stage.
-    unique_ptr<PlanStage> secondRoot(
-        new CollectionScan(_opCtx.get(), csparams, sharedWs.get(), filter.get()));
+    unique_ptr<MatchExpression> filter;
+    unique_ptr<PlanStage> secondRoot;
+    std::tie(secondRoot, filter) = getCollScanPlan(_opCtx.get(), coll, sharedWs.get(), filterObj);
 
     // Hand the plans off to the MPS.
-    auto qr = stdx::make_unique<QueryRequest>(nss);
-    qr->setFilter(BSON("foo" << 7));
-    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
-    verify(statusWithCQ.isOK());
-    unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
-    verify(NULL != cq.get());
+    auto cq = getCanonicalQuery(_opCtx.get(), nss, filterObj);
 
     unique_ptr<MultiPlanStage> mps =
         make_unique<MultiPlanStage>(_opCtx.get(), ctx.getCollection(), cq.get());
@@ -209,6 +272,60 @@ TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
     }
     ASSERT_EQUALS(PlanExecutor::IS_EOF, state);
     ASSERT_EQUALS(results, N / 10);
+}
+
+TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
+    const int N = 100;
+    for (int i = 0; i < N; ++i) {
+        // Have a larger proportion of 5's than anything else.
+        int toInsert = i % 10 >= 8 ? 5 : i % 10;
+        insert(BSON("foo" << toInsert));
+    }
+
+    addIndex(BSON("foo" << 1));
+
+    AutoGetCollectionForReadCommand ctx(_opCtx.get(), nss);
+    const Collection* coll = ctx.getCollection();
+
+    const auto cq = getCanonicalQuery(_opCtx.get(), nss, BSON("foo" << 7));
+
+    // Run an index scan and collection scan, searching for {foo: 7}.
+    auto mps = runMultiPlanner(_opCtx.get(), nss, coll, 7);
+
+    // Be sure that an inactive cache entry was added.
+    PlanCache* cache = coll->infoCache()->getPlanCache();
+    ASSERT_EQ(cache->size(), 1U);
+    auto entry = assertGet(cache->getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    const size_t firstQueryWorks = getBestPlanWorks(mps.get());
+    ASSERT_EQ(firstQueryWorks, entry->worksThreshold);
+
+    // Run the multi-planner again. The index scan will again win, but the number of works
+    // will be greater, since {foo: 5} appears more frequently in the collection.
+    mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
+
+    // The last plan run should have required far more works than the previous plan. This means
+    // that the 'worksThreshold' in the cache entry should have doubled.
+    ASSERT_EQ(cache->size(), 1U);
+    entry = assertGet(cache->getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(firstQueryWorks * 2, entry->worksThreshold);
+    ASSERT_GT(getBestPlanWorks(mps.get()), entry->worksThreshold);
+
+    // Run the exact same query again. This will still take more works than 'worksThreshold', and
+    // should cause the cache entry's 'worksThreshold' to be doubled again.
+    mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
+    ASSERT_EQ(cache->size(), 1U);
+    entry = assertGet(cache->getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(firstQueryWorks * 2 * 2, entry->worksThreshold);
+
+    // Run the query yet again. This time, an active cache entry should be created.
+    mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
+    ASSERT_EQ(cache->size(), 1U);
+    entry = assertGet(cache->getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
 }
 
 // Case in which we select a blocking plan as the winner, and a non-blocking plan
@@ -431,22 +548,8 @@ TEST_F(QueryStageMultiPlanTest, ShouldReportErrorIfExceedsTimeLimitDuringPlannin
     // Plan 0: IXScan over foo == 7
     // Every call to work() returns something so this should clearly win (by current scoring
     // at least).
-    std::vector<IndexDescriptor*> indexes;
-    coll->getIndexCatalog()->findIndexesByKeyPattern(
-        _opCtx.get(), BSON("foo" << 1), false, &indexes);
-    ASSERT_EQ(indexes.size(), 1U);
-
-    IndexScanParams ixparams;
-    ixparams.descriptor = indexes[0];
-    ixparams.bounds.isSimpleRange = true;
-    ixparams.bounds.startKey = BSON("" << 7);
-    ixparams.bounds.endKey = BSON("" << 7);
-    ixparams.bounds.boundInclusion = BoundInclusion::kIncludeBothStartAndEndKeys;
-    ixparams.direction = 1;
-
     unique_ptr<WorkingSet> sharedWs(new WorkingSet());
-    IndexScan* ix = new IndexScan(_opCtx.get(), ixparams, sharedWs.get(), NULL);
-    unique_ptr<PlanStage> firstRoot(new FetchStage(_opCtx.get(), sharedWs.get(), ix, NULL, coll));
+    unique_ptr<PlanStage> firstRoot = getIxScanPlan(_opCtx.get(), coll, sharedWs.get(), 7);
 
     // Plan 1: CollScan with matcher.
     CollectionScanParams csparams;
@@ -454,16 +557,11 @@ TEST_F(QueryStageMultiPlanTest, ShouldReportErrorIfExceedsTimeLimitDuringPlannin
     csparams.direction = CollectionScanParams::FORWARD;
 
     // Make the filter.
+    // Plan 1: CollScan.
+    unique_ptr<PlanStage> secondRoot;
+    unique_ptr<MatchExpression> filter;
     BSONObj filterObj = BSON("foo" << 7);
-    const CollatorInterface* collator = nullptr;
-    const boost::intrusive_ptr<ExpressionContext> expCtx(
-        new ExpressionContext(_opCtx.get(), collator));
-    StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);
-    verify(statusWithMatcher.isOK());
-    unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
-    // Make the stage.
-    unique_ptr<PlanStage> secondRoot(
-        new CollectionScan(_opCtx.get(), csparams, sharedWs.get(), filter.get()));
+    std::tie(secondRoot, filter) = getCollScanPlan(_opCtx.get(), coll, sharedWs.get(), filterObj);
 
     auto queryRequest = stdx::make_unique<QueryRequest>(nss);
     queryRequest->setFilter(BSON("foo" << 7));
@@ -496,39 +594,14 @@ TEST_F(QueryStageMultiPlanTest, ShouldReportErrorIfKilledDuringPlanning) {
     // Plan 0: IXScan over foo == 7
     // Every call to work() returns something so this should clearly win (by current scoring
     // at least).
-    std::vector<IndexDescriptor*> indexes;
-    coll->getIndexCatalog()->findIndexesByKeyPattern(
-        _opCtx.get(), BSON("foo" << 1), false, &indexes);
-    ASSERT_EQ(indexes.size(), 1U);
-
-    IndexScanParams ixparams;
-    ixparams.descriptor = indexes[0];
-    ixparams.bounds.isSimpleRange = true;
-    ixparams.bounds.startKey = BSON("" << 7);
-    ixparams.bounds.endKey = BSON("" << 7);
-    ixparams.bounds.boundInclusion = BoundInclusion::kIncludeBothStartAndEndKeys;
-    ixparams.direction = 1;
-
     unique_ptr<WorkingSet> sharedWs(new WorkingSet());
-    IndexScan* ix = new IndexScan(_opCtx.get(), ixparams, sharedWs.get(), NULL);
-    unique_ptr<PlanStage> firstRoot(new FetchStage(_opCtx.get(), sharedWs.get(), ix, NULL, coll));
+    unique_ptr<PlanStage> firstRoot = getIxScanPlan(_opCtx.get(), coll, sharedWs.get(), 7);
 
-    // Plan 1: CollScan with matcher.
-    CollectionScanParams csparams;
-    csparams.collection = coll;
-    csparams.direction = CollectionScanParams::FORWARD;
-
-    // Make the filter.
+    // Plan 1: CollScan.
+    unique_ptr<PlanStage> secondRoot;
+    unique_ptr<MatchExpression> filter;
     BSONObj filterObj = BSON("foo" << 7);
-    const CollatorInterface* collator = nullptr;
-    const boost::intrusive_ptr<ExpressionContext> expCtx(
-        new ExpressionContext(_opCtx.get(), collator));
-    StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);
-    verify(statusWithMatcher.isOK());
-    unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
-    // Make the stage.
-    unique_ptr<PlanStage> secondRoot(
-        new CollectionScan(_opCtx.get(), csparams, sharedWs.get(), filter.get()));
+    std::tie(secondRoot, filter) = getCollScanPlan(_opCtx.get(), coll, sharedWs.get(), filterObj);
 
     auto queryRequest = stdx::make_unique<QueryRequest>(nss);
     queryRequest->setFilter(BSON("foo" << BSON("$gte" << 0)));
