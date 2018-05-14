@@ -1,15 +1,7 @@
 'use strict';
 
 /**
- * count.js
- *
- * Base workload for count.
- * Runs count on a non-indexed field and verifies that the count
- * is correct.
- * Each thread picks a random 'modulus' in range [5, 10]
- * and a random 'countPerNum' in range [50, 100]
- * and then inserts 'modulus * countPerNum' documents. [250, 1000]
- * All threads insert into the same collection.
+ * Run group() continuously, occasionally killing them midway.
  */
 load("jstests/libs/fixture_helpers.js");             // For isMongos.
 load('jstests/concurrency/fsm_libs/extend_workload.js');  // for extendWorkload
@@ -50,7 +42,6 @@ var $config = extendWorkload($config, function($config, $super) {
             // Find a group command to kill.
             const countOps = db.currentOp({"command.group.ns": collName}).inprog;
             if (countOps.length > 0) {
-                print("ian: killing op");
                 const op = chooseRandomlyFrom(countOps);
                 const res = db.adminCommand({killOp: 1, op: op.opid});
                 assertAlways.commandWorked(res);
