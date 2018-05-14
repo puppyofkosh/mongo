@@ -42,10 +42,7 @@
 namespace mongo {
 
 // Forces a hang in the javascript execution while initializing the group stage.
-MONGO_FP_DECLARE(hangInGroupJsReduceInit);
-
-// Forces a hang in the javascript execution while cleaning up the group stage.
-MONGO_FP_DECLARE(hangInGroupJsCleanup);
+MONGO_FP_DECLARE(hangInGroupReduceJs);
 
 using std::unique_ptr;
 using std::vector;
@@ -117,13 +114,8 @@ Status GroupStage::initGroupScripting() {
         return e.toStatus("Failed to initialize group reduce function: ");
     }
 
-    std::string jsCode = "$arr = [];";
-    if (MONGO_FAIL_POINT(hangInGroupJsReduceInit)) {
-        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupJsReduceInit");
-        jsCode += "while (1) {}";
-    }
     try {
-        _scope->exec(jsCode,
+        _scope->exec("$arr = [];",
                      "group reduce init 2",
                      false,  // printResult
                      true,   // reportError
@@ -176,6 +168,15 @@ Status GroupStage::processObject(const BSONObj& obj) {
     _scope->setObject("obj", objCopy, true);
     _scope->setNumber("n", n - 1);
 
+    boost::optional<std::string> oldMsg;
+    if (MONGO_FAIL_POINT(hangInGroupReduceJs)) {
+        oldMsg = CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupReduceJs");
+    }
+    auto resetMsgGuard = MakeGuard([&] {
+            if (oldMsg) {
+                CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), *oldMsg);
+            }
+        });
     try {
         _scope->invoke(_reduceFunction, 0, 0, 0, true /*assertOnError*/);
     } catch (const AssertionException& e) {
@@ -216,14 +217,8 @@ StatusWith<BSONObj> GroupStage::finalizeResults() {
 
     BSONObj results = _scope->getObject("$arr").getOwned();
 
-    std::string jsCode = "$arr = [];";
-    if (MONGO_FAIL_POINT(hangInGroupJsCleanup)) {
-        CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupJsCleanup");
-        jsCode += "while (1) {}";
-    }
-
     try {
-        _scope->exec(jsCode,
+        _scope->exec("$arr = [];",
                      "group clean up",
                      false,  // printResult
                      true,   // reportError
