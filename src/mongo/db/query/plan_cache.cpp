@@ -726,14 +726,28 @@ Status PlanCache::add(const CanonicalQuery& query,
                       "candidate ordering entries in decision must match solutions");
     }
 
-    PlanCacheEntry* entry = new PlanCacheEntry(solns, why);
+    // TODO: Check if the entry exists already. If so do some logic to update it or not.
+
+    const auto key = computeKey(query);
+    const size_t nWorks = why->stats[0]->common.works;
+    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
+    PlanCacheEntry* oldEntry;
+    Status cacheStatus = _cache.get(key, &oldEntry);
+    bool isNewEntryActive = (cacheStatus.isOK() && oldEntry->worksThreshold &&
+                             *oldEntry->worksThreshold <= nWorks);
+
+    PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
     const QueryRequest& qr = query.getQueryRequest();
-    entry->query = qr.getFilter().getOwned();
-    entry->sort = qr.getSort().getOwned();
-    if (query.getCollator()) {
-        entry->collation = query.getCollator()->getSpec().toBSON();
+    newEntry->query = qr.getFilter().getOwned();
+    newEntry->sort = qr.getSort().getOwned();
+    if (!isNewEntryActive) {
+        log() << "ian: adding new entry but inactive";
+        newEntry->worksThreshold = nWorks;
     }
-    entry->timeOfCreation = now;
+    if (query.getCollator()) {
+        newEntry->collation = query.getCollator()->getSpec().toBSON();
+    }
+    newEntry->timeOfCreation = now;
 
 
     // Strip projections on $-prefixed fields, as these are added by internal callers of the query
@@ -745,10 +759,9 @@ Status PlanCache::add(const CanonicalQuery& query,
         }
         projBuilder.append(elem);
     }
-    entry->projection = projBuilder.obj();
+    newEntry->projection = projBuilder.obj();
 
-    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
-    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(computeKey(query), entry);
+    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(key, newEntry);
 
     if (NULL != evictedEntry.get()) {
         LOG(1) << _ns << ": plan cache maximum size exceeded - "
@@ -769,6 +782,13 @@ Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const
         return cacheStatus;
     }
     invariant(entry);
+
+    if (entry->worksThreshold) {
+        log() << "found inactive entry";
+        
+        // The entry is inactive.
+        return Status(ErrorCodes::NoSuchKey, "cache entry is inactive");
+    }
 
     *crOut = new CachedSolution(key, *entry);
 

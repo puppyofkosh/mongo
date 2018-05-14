@@ -59,6 +59,8 @@ public:
         // previously existing cache entry for the query shape.
         AlwaysCache,
 
+        CacheWhenActive,
+
         // Write a cache entry for the query shape *unless* we encounter one of the following edge
         // cases:
         //  - Two or more plans tied for the win.

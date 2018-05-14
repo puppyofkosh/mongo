@@ -280,6 +280,11 @@ public:
     // Annotations from cached runs.  The CachedPlanStage provides these stats about its
     // runs when they complete.
     std::vector<PlanCacheEntryFeedback*> feedback;
+
+    // boost::none -> this is an active cache entry.
+    // some -> this cache entry is "inactive." A query with the same shape must be run again
+    // and beat this value of works in order for the plan used for that query to be cached.
+    boost::optional<size_t> worksThreshold;
 };
 
 /**
@@ -329,14 +334,15 @@ public:
 
     /**
      * Look up the cached data access for the provided 'query'.  Used by the query planner
-     * to shortcut planning.
+     * to shortcut planning. TODO: comment for 'returnInactiveEntries'
      *
      * If there is no entry in the cache for the 'query', returns an error Status.
      *
      * If there is an entry in the cache, populates 'crOut' and returns Status::OK().  Caller
      * owns '*crOut'.
      */
-    Status get(const CanonicalQuery& query, CachedSolution** crOut) const;
+    Status get(const CanonicalQuery& query,
+               CachedSolution** crOut) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
