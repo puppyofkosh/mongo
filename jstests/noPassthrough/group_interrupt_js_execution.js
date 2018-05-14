@@ -7,10 +7,10 @@
     const db = conn.getDB("test");
     const coll = db.group_with_stepdown;
 
-    coll.insert({name: "bob", foo: 1});
-    coll.insert({name: "alice", foo: 1});
-    coll.insert({name: "fred", foo: 3});
-    coll.insert({name: "fred", foo: 4});
+    assert.commandWorked(coll.insert({name: "bob", foo: 1}));
+    assert.commandWorked(coll.insert({name: "alice", foo: 1}));
+    assert.commandWorked(coll.insert({name: "fred", foo: 3}));
+    assert.commandWorked(coll.insert({name: "fred", foo: 4}));
 
     // Attempts to run the group command while the given failpoint is enabled. If 'shouldKillOp' is
     // true, it will run killOp on the operation while it is hanging. If 'shouldKillOp' is false,
