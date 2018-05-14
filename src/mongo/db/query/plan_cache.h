@@ -280,6 +280,14 @@ public:
     // Annotations from cached runs.  The CachedPlanStage provides these stats about its
     // runs when they complete.
     std::vector<PlanCacheEntryFeedback*> feedback;
+
+    // Whether or not the cache entry is active. Inactive cache entries should not be used for
+    // planning.
+    bool isActive = false;
+
+    // The number of "works" required for a plan to run on this shape before it becomes active. May
+    // be increased when attempting to add a cache entry.
+    size_t worksThreshold = 0;
 };
 
 /**
@@ -293,6 +301,26 @@ private:
     MONGO_DISALLOW_COPYING(PlanCache);
 
 public:
+    enum CacheEntryStatus {
+        // There is no cache entry for the given canonical query.
+        kNotPresent,
+
+        // There is a cache entry for the given canonical query, but it is inactive, meaning that
+        // is should not be used when planning.
+        kPresentInactive,
+
+        // There is a cache entry for the given canonical query, and it is active.
+        kPresentActive,
+    };
+
+    /**
+     * Encapsulates the value returned from a call to get().
+     */
+    struct GetResult {
+        CacheEntryStatus status;
+        std::unique_ptr<CachedSolution> cachedSolution;
+    };
+
     /**
      * We don't want to cache every possible query. This function
      * encapsulates the criteria for what makes a canonical query
@@ -304,6 +332,8 @@ public:
      * If omitted, namespace set to empty string.
      */
     PlanCache();
+
+    PlanCache(size_t size);
 
     PlanCache(const std::string& ns);
 
@@ -331,12 +361,16 @@ public:
      * Look up the cached data access for the provided 'query'.  Used by the query planner
      * to shortcut planning.
      *
-     * If there is no entry in the cache for the 'query', returns an error Status.
-     *
-     * If there is an entry in the cache, populates 'crOut' and returns Status::OK().  Caller
-     * owns '*crOut'.
+     * The return value will provide the "status" of the cache entry, as well as the CachedSolution
+     * for the query (if there is one).
      */
-    Status get(const CanonicalQuery& query, CachedSolution** crOut) const;
+    GetResult get(const CanonicalQuery& query) const;
+
+    /**
+     * Determine whether or not the cache should be used. If it shouldn't be used because the cache
+     * entry exists but is inactive, log a message.
+     */
+    std::unique_ptr<CachedSolution> decideShouldUseCache(const CanonicalQuery& cq);
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
@@ -381,10 +415,8 @@ public:
       *
      * If there is no entry in the cache for the 'query', returns an error Status.
      *
-     * If there is an entry in the cache, populates 'entryOut' and returns Status::OK().  Caller
-     * owns '*entryOut'.
      */
-    Status getEntry(const CanonicalQuery& cq, PlanCacheEntry** entryOut) const;
+    StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
 
     /**
      * Returns a vector of all cache entries.
@@ -395,13 +427,7 @@ public:
     std::vector<PlanCacheEntry*> getAllEntries() const;
 
     /**
-     * Returns true if there is an entry in the cache for the 'query'.
-     * Internally calls hasKey() on the LRU cache.
-     */
-    bool contains(const CanonicalQuery& cq) const;
-
-    /**
-     * Returns number of entries in cache.
+     * Returns number of entries in cache. Includes inactive entries.
      * Used for testing.
      */
     size_t size() const;

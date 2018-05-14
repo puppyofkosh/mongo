@@ -284,6 +284,13 @@ void assertShouldNotCacheQuery(const char* queryStr) {
     assertShouldNotCacheQuery(*cq);
 }
 
+std::unique_ptr<QuerySolution> getQuerySolutionForCaching() {
+    std::unique_ptr<QuerySolution> qs = std::make_unique<QuerySolution>();
+    qs->cacheData.reset(new SolutionCacheData());
+    qs->cacheData->tree.reset(new PlanCacheIndexTree());
+    return qs;
+}
+
 /**
  * Cacheable queries
  * These queries will be added to the cache with run-time statistics
@@ -428,22 +435,222 @@ TEST(PlanCacheTest, AddEmptySolutions) {
     ASSERT_NOT_OK(planCache.add(*cq, solns, decision.get(), Date_t{}));
 }
 
-TEST(PlanCacheTest, AddValidSolution) {
+void addCacheEntryForShape(const CanonicalQuery& cq, PlanCache* planCache) {
+    invariant(planCache);
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    ASSERT_OK(planCache->add(cq, solns, firstDecision, Date_t{}));
+}
+
+TEST(PlanCacheTest, PlanCacheLRUPolicyRemovesInactiveEntries) {
+    // Use a tiny cache size.
+    const size_t kCacheSize = 2;
+    PlanCache planCache(kCacheSize);
+    QueryTestServiceContext serviceContext;
+
+    unique_ptr<CanonicalQuery> cqA(canonicalize("{a: 1}"));
+    ASSERT_EQ(planCache.get(*cqA).status, PlanCache::CacheEntryStatus::kNotPresent);
+    addCacheEntryForShape(*cqA.get(), &planCache);
+
+    // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cqA).status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // Add a cache entry for another shape.
+    unique_ptr<CanonicalQuery> cqB(canonicalize("{b: 1}"));
+    ASSERT_EQ(planCache.get(*cqB).status, PlanCache::CacheEntryStatus::kNotPresent);
+    addCacheEntryForShape(*cqB.get(), &planCache);
+    ASSERT_EQ(planCache.get(*cqB).status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // Access the cached solution for the {a: 1} shape. Now the entry for {b: 1} will be the least
+    // recently used.
+    auto getRes = planCache.get(*cqA);
+    ASSERT_EQ(getRes.status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // Insert another entry. Since the cache size is 2, we expect the {b: 1} entry to be ejected.
+    unique_ptr<CanonicalQuery> cqC(canonicalize("{c: 1}"));
+    ASSERT_EQ(planCache.get(*cqC).status, PlanCache::CacheEntryStatus::kNotPresent);
+    addCacheEntryForShape(*cqC.get(), &planCache);
+
+    // Check that {b: 1} is gone, but {a: 1} and {c: 1} both still have entries.
+    ASSERT_EQ(planCache.get(*cqB).status, PlanCache::CacheEntryStatus::kNotPresent);
+    ASSERT_EQ(planCache.get(*cqA).status, PlanCache::CacheEntryStatus::kPresentInactive);
+    ASSERT_EQ(planCache.get(*cqC).status, PlanCache::CacheEntryStatus::kPresentInactive);
+}
+
+
+TEST(PlanCacheTest, PlanCacheRemoveDeletesInactiveEntries) {
     PlanCache planCache;
     unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
-    QuerySolution qs;
-    qs.cacheData.reset(new SolutionCacheData());
-    qs.cacheData->tree.reset(new PlanCacheIndexTree());
-    std::vector<QuerySolution*> solns;
-    solns.push_back(&qs);
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // remove() the entry.
+    ASSERT_OK(planCache.remove(*cq));
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+}
+
+TEST(PlanCacheTest, PlanCacheFlushDeletesInactiveEntries) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // Clear the plan cache. The inactive entry should now be removed.
+    planCache.clear();
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+}
+
+TEST(PlanCacheTest, AddActiveCacheEntry) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
 
     // Check if key is in cache before and after add().
-    ASSERT_FALSE(planCache.contains(*cq));
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), Date_t{}));
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    firstDecision->stats[0]->common.works = 20;
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
 
-    ASSERT_TRUE(planCache.contains(*cq));
+    // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+
+    // Calling add() again, with a solution that had a lower works value should create an active
+    // entry.
+    PlanRankingDecision* newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 10;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentActive);
     ASSERT_EQUALS(planCache.size(), 1U);
+
+    // Clear the plan cache. The active entry should now be removed.
+    planCache.clear();
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+}
+
+TEST(PlanCacheTest, WorksValueIncreases) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    firstDecision->stats[0]->common.works = 10;
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    auto entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_EQ(entry->worksThreshold, 10U);
+    ASSERT_FALSE(entry->isActive);
+
+    // Calling add() again, with a solution that had a higher works value. This should cause the
+    // worksThreshold on the original entry to be increased.
+    PlanRankingDecision* newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 50;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The entry should still be inactive. Its worksThreshold should double though.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 20U);
+
+    // Calling add() again, with a solution that had a higher works value. This should cause the
+    // worksThreshold on the original entry to be increased.
+    newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 30;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The entry should still be inactive. Its worksThreshold should have doubled again.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 40U);
+
+    // Calling add() again, with a solution that has a lower works value than what's currently in
+    // the cache.
+    newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 25;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The solution just run should now be in an active cache entry, with a worksThreshold
+    // equal to the number of works the solution took.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->decision->stats[0]->common.works, 25U);
+    ASSERT_EQ(entry->worksThreshold, 25U);
+
+    ASSERT_EQUALS(planCache.size(), 1U);
+
+    // Clear the plan cache. The active entry should now be removed.
+    planCache.clear();
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+}
+
+TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
+    // Set the works growth coefficient to be very low.
+    internalQueryCacheWorksThresholdCoefficient.store(1.10);
+
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    firstDecision->stats[0]->common.works = 3;
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    auto entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_EQ(entry->worksThreshold, 3U);
+    ASSERT_FALSE(entry->isActive);
+
+    // Calling add() again, with a solution that had a higher works value. This should cause the
+    // worksThreshold on the original entry to be increased. In this case, since nWorks is 3,
+    // multiplying by the value 1.10 will give a value of 3 (static_cast<size_t>(1.1 * 3) == 3).
+    // We check that the works value is increased 1 instead.
+    PlanRankingDecision* newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 50;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The entry should still be inactive. Its worksThreshold should increase by 1.
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 4U);
+
+    // Clear the plan cache. The inactive entry should now be removed.
+    planCache.clear();
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
 }
 
 /**

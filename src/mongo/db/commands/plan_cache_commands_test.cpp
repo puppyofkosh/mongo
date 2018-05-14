@@ -660,9 +660,7 @@ TEST(PlanCacheCommandsTest, planCacheListPlansTimeOfCreationIsCorrect) {
     auto now = opCtx->getServiceContext()->getPreciseClockSource()->now();
     ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), now));
 
-    PlanCacheEntry* out;
-    ASSERT_OK(planCache.getEntry(*cq, &out));
-    unique_ptr<PlanCacheEntry> entry(out);
+    auto entry = unittest::assertGet(planCache.getEntry(*cq));
 
     ASSERT_EQ(entry->timeOfCreation, now);
 }
