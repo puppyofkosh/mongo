@@ -3,11 +3,10 @@
 /**
  * Run group() continuously, occasionally killing them midway.
  */
-load("jstests/libs/fixture_helpers.js");             // For isMongos.
-load('jstests/concurrency/fsm_libs/extend_workload.js');  // for extendWorkload
-load('jstests/concurrency/fsm_workloads/group.js');  // for $config
+load("jstests/libs/fixture_helpers.js");                  // For isMongos.
+load('jstests/concurrency/fsm_libs/extend_workload.js');  // For extendWorkload.
+load('jstests/concurrency/fsm_workloads/group.js');       // For $config.
 
-// extendWorkload takes a $config object and a callback, and returns an extended $config object.
 var $config = extendWorkload($config, function($config, $super) {
     var states = (function() {
 
@@ -53,9 +52,7 @@ var $config = extendWorkload($config, function($config, $super) {
     })();
 
     $config.states = states;
-    $config.transitions = {init: {group: 0.7, killOp: 0.3},
-                           group: {init: 1},
-                           killOp: {init: 1}};
+    $config.transitions = {init: {group: 0.7, killOp: 0.3}, group: {init: 1}, killOp: {init: 1}};
     $config.threadCount = 40;
     $config.iterations = 40;
 
