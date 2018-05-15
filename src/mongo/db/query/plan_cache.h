@@ -281,16 +281,18 @@ public:
     // runs when they complete.
     std::vector<PlanCacheEntryFeedback*> feedback;
 
-    // boost::none -> this is an active cache entry.
-    // some -> this cache entry is "inactive." A query with the same shape must be run again
-    // and beat this value of works in order for the plan used for that query to be cached.
-    boost::optional<size_t> worksThreshold;
+    // TODO: comment
+    bool isActive = false;
+    // Only applies to inactive entries.
+    size_t worksThreshold = 0;
 };
 
 /**
  * Caches the best solution to a query.  Aside from the (CanonicalQuery -> QuerySolution)
  * mapping, the cache contains information on why that mapping was made and statistics on the
  * cache entry's actual performance on subsequent runs.
+ *
+ * TODO: Explain active and inactive entries.
  *
  */
 class PlanCache {
@@ -340,9 +342,10 @@ public:
      *
      * If there is an entry in the cache, populates 'crOut' and returns Status::OK().  Caller
      * owns '*crOut'.
+     *
+     * TODO: Explain that this only returns solutions that are in active entries.
      */
-    Status get(const CanonicalQuery& query,
-               CachedSolution** crOut) const;
+    Status get(const CanonicalQuery& query, CachedSolution** crOut) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
@@ -389,6 +392,7 @@ public:
      *
      * If there is an entry in the cache, populates 'entryOut' and returns Status::OK().  Caller
      * owns '*entryOut'.
+     * TODO: smartpointerize
      */
     Status getEntry(const CanonicalQuery& cq, PlanCacheEntry** entryOut) const;
 
@@ -401,13 +405,17 @@ public:
     std::vector<PlanCacheEntry*> getAllEntries() const;
 
     /**
-     * Returns true if there is an entry in the cache for the 'query'.
-     * Internally calls hasKey() on the LRU cache.
+     * Returns true if there is an active entry in the cache for the 'query'.
      */
-    bool contains(const CanonicalQuery& cq) const;
+    bool containsActiveCacheEntry(const CanonicalQuery& cq) const;
 
     /**
-     * Returns number of entries in cache.
+     * Returns true if there is any entry (active or inactive) in the cache for cq.
+     */
+    bool containsCacheEntry(const CanonicalQuery& cq) const;
+
+    /**
+     * Returns number of entries in cache. Includes inactive entries.
      * Used for testing.
      */
     size_t size() const;

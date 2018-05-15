@@ -428,7 +428,7 @@ TEST(PlanCacheTest, AddEmptySolutions) {
     ASSERT_NOT_OK(planCache.add(*cq, solns, decision.get(), Date_t{}));
 }
 
-TEST(PlanCacheTest, AddValidSolution) {
+TEST(PlanCacheTest, AddActiveCacheEntry) {
     PlanCache planCache;
     unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
     QuerySolution qs;
@@ -438,12 +438,85 @@ TEST(PlanCacheTest, AddValidSolution) {
     solns.push_back(&qs);
 
     // Check if key is in cache before and after add().
-    ASSERT_FALSE(planCache.contains(*cq));
+    ASSERT_FALSE(planCache.containsCacheEntry(*cq));
     QueryTestServiceContext serviceContext;
-    ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), Date_t{}));
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    firstDecision->stats[0]->common.works = 20;
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
 
-    ASSERT_TRUE(planCache.contains(*cq));
+    // After add, the planCache should have an inactive entry.
+    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_TRUE(planCache.containsCacheEntry(*cq));
+
+    // Calling add() again, with a solution that had a lower works value should create an active
+    // entry.
+    PlanRankingDecision* newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 10;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_TRUE(planCache.containsActiveCacheEntry(*cq));
+
     ASSERT_EQUALS(planCache.size(), 1U);
+}
+
+TEST(PlanCacheTest, WorksValueIncreases) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    QuerySolution qs;
+    qs.cacheData.reset(new SolutionCacheData());
+    qs.cacheData->tree.reset(new PlanCacheIndexTree());
+    std::vector<QuerySolution*> solns = {&qs};
+
+    ASSERT_FALSE(planCache.containsCacheEntry(*cq));
+    QueryTestServiceContext serviceContext;
+    PlanRankingDecision* firstDecision = createDecision(1U);
+    firstDecision->stats[0]->common.works = 10;
+    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_TRUE(planCache.containsCacheEntry(*cq));
+
+    // Calling add() again, with a solution that had a higher works value. This should cause the
+    // worksThreshold on the original entry to be increased.
+    PlanRankingDecision* newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 50;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The entry should still be inactive. Its worksThreshold should double though.
+    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    PlanCacheEntry* entryRaw;
+    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
+    std::unique_ptr<PlanCacheEntry> entry(entryRaw);
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 20U);
+
+    // Calling add() again, with a solution that had a higher works value. This should cause the
+    // worksThreshold on the original entry to be increased.
+    newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 30;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The entry should still be inactive. Its worksThreshold should be increased though.
+    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
+    entry.reset(entryRaw);
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 30U);
+
+    // Calling add() again, with a solution that has a lower works value than what's currently in
+    // the cache.
+    newDecision = createDecision(1U);
+    newDecision->stats[0]->common.works = 25;
+    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+
+    // The solution just run should now be in an active cache entry.
+    ASSERT_TRUE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
+    entry.reset(entryRaw);
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->decision->stats[0]->common.works, 25U);
+
+    ASSERT_EQUALS(planCache.size(), 1U);    
 }
 
 /**

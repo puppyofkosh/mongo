@@ -432,6 +432,8 @@ PlanCacheEntry* PlanCacheEntry::clone() const {
     entry->projection = projection.getOwned();
     entry->collation = collation.getOwned();
     entry->timeOfCreation = timeOfCreation;
+    entry->isActive = isActive;
+    entry->worksThreshold = worksThreshold;
 
     // Copy performance stats.
     for (size_t i = 0; i < feedback.size(); ++i) {
@@ -726,23 +728,38 @@ Status PlanCache::add(const CanonicalQuery& query,
                       "candidate ordering entries in decision must match solutions");
     }
 
-    // TODO: Check if the entry exists already. If so do some logic to update it or not.
-
     const auto key = computeKey(query);
     const size_t nWorks = why->stats[0]->common.works;
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* oldEntry;
     Status cacheStatus = _cache.get(key, &oldEntry);
-    bool isNewEntryActive = (cacheStatus.isOK() && oldEntry->worksThreshold &&
-                             *oldEntry->worksThreshold <= nWorks);
-
+    bool isNewEntryActive = false;
+    if (cacheStatus.isOK()) {
+        if (oldEntry->isActive) {
+            // This is overwriting an existing entry. The new entry will be inactive.
+            isNewEntryActive = false;
+        } else {
+            if (nWorks > oldEntry->worksThreshold) {
+                // Bump the old entry's worksThreshold.
+                oldEntry->worksThreshold = std::min(nWorks, 2 * oldEntry->worksThreshold);
+                return Status::OK();
+            } else {
+                // Want to replace the old entry with an active entry.
+                isNewEntryActive = true;
+            }
+        }
+    }
+    
     PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
     const QueryRequest& qr = query.getQueryRequest();
     newEntry->query = qr.getFilter().getOwned();
     newEntry->sort = qr.getSort().getOwned();
+    newEntry->isActive = isNewEntryActive;
     if (!isNewEntryActive) {
-        log() << "ian: adding new entry but inactive";
+        log() << "Adding new inactive entry";
         newEntry->worksThreshold = nWorks;
+    } else {
+        log() << "ian: adding new active entry";
     }
     if (query.getCollator()) {
         newEntry->collation = query.getCollator()->getSpec().toBSON();
@@ -783,16 +800,12 @@ Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const
     }
     invariant(entry);
 
-    if (entry->worksThreshold) {
-        log() << "found inactive entry";
-        
-        // The entry is inactive.
-        return Status(ErrorCodes::NoSuchKey, "cache entry is inactive");
+    if (entry->isActive) {
+        *crOut = new CachedSolution(key, *entry);
+        return Status::OK();
     }
 
-    *crOut = new CachedSolution(key, *entry);
-
-    return Status::OK();
+    return Status(ErrorCodes::NoSuchKey, "cache entry is inactive");
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {
@@ -865,7 +878,17 @@ std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {
     return entries;
 }
 
-bool PlanCache::contains(const CanonicalQuery& cq) const {
+bool PlanCache::containsActiveCacheEntry(const CanonicalQuery& cq) const {
+    PlanCacheEntry* entry;
+    Status cacheStatus = _cache.get(computeKey(cq), &entry);
+    if (!cacheStatus.isOK()) {
+        return false;
+    }
+    invariant(entry);
+    return entry->isActive;
+}
+
+bool PlanCache::containsCacheEntry(const CanonicalQuery& cq) const {
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     return _cache.hasKey(computeKey(cq));
 }
