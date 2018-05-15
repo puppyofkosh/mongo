@@ -173,10 +173,10 @@ Status GroupStage::processObject(const BSONObj& obj) {
         oldMsg = CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), "hangInGroupReduceJs");
     }
     auto resetMsgGuard = MakeGuard([&] {
-            if (oldMsg) {
-                CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), *oldMsg);
-            }
-        });
+        if (oldMsg) {
+            CurOpFailpointHelpers::updateCurOpMsg(getOpCtx(), *oldMsg);
+        }
+    });
     try {
         _scope->invoke(_reduceFunction, 0, 0, 0, true /*assertOnError*/);
     } catch (const AssertionException& e) {
