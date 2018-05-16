@@ -743,6 +743,7 @@ Status PlanCache::add(const CanonicalQuery& query,
             if (nWorks > oldEntry->worksThreshold) {
                 // Bump the old entry's worksThreshold.
                 oldEntry->worksThreshold = std::min(nWorks, 2 * oldEntry->worksThreshold);
+                log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
                 return Status::OK();
             } else {
                 // Want to replace the old entry with an active entry.
