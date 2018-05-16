@@ -237,8 +237,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     ASSERT_FALSE(entry->isActive);
     log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(firstQueryWorks * 2, entry->worksThreshold);
-    ASSERT_GT(getBestPlanWorks(mps.get()),
-              entry->worksThreshold);
+    ASSERT_GT(getBestPlanWorks(mps.get()), entry->worksThreshold);
 
     // Run the exact same query again. This will still take more works than 'worksThreshold', and
     // should cause the cache entry's 'worksThreshold' to be bumped again, this time to the exact

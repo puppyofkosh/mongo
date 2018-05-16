@@ -438,23 +438,21 @@ TEST(PlanCacheTest, AddActiveCacheEntry) {
     solns.push_back(&qs);
 
     // Check if key is in cache before and after add().
-    ASSERT_FALSE(planCache.containsCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
     PlanRankingDecision* firstDecision = createDecision(1U);
     firstDecision->stats[0]->common.works = 20;
     ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
 
     // After add, the planCache should have an inactive entry.
-    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
-    ASSERT_TRUE(planCache.containsCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
 
     // Calling add() again, with a solution that had a lower works value should create an active
     // entry.
     PlanRankingDecision* newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 10;
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
-    ASSERT_TRUE(planCache.containsActiveCacheEntry(*cq));
-
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentActive);
     ASSERT_EQUALS(planCache.size(), 1U);
 }
 
@@ -466,7 +464,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     qs.cacheData->tree.reset(new PlanCacheIndexTree());
     std::vector<QuerySolution*> solns = {&qs};
 
-    ASSERT_FALSE(planCache.containsCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
     PlanRankingDecision* firstDecision = createDecision(1U);
     firstDecision->stats[0]->common.works = 10;
@@ -485,7 +483,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
 
     // The entry should still be inactive. Its worksThreshold should double though.
-    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
     ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
     entry.reset(entryRaw);
     ASSERT_FALSE(entry->isActive);
@@ -498,7 +496,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
 
     // The entry should still be inactive. Its worksThreshold should be increased though.
-    ASSERT_FALSE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
     ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
     entry.reset(entryRaw);
     ASSERT_FALSE(entry->isActive);
@@ -511,13 +509,14 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
 
     // The solution just run should now be in an active cache entry.
-    ASSERT_TRUE(planCache.containsActiveCacheEntry(*cq));
+    ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentActive);
     ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
     entry.reset(entryRaw);
     ASSERT_TRUE(entry->isActive);
     ASSERT_EQ(entry->decision->stats[0]->common.works, 25U);
+    ASSERT_EQ(entry->worksThreshold, 25U);
 
-    ASSERT_EQUALS(planCache.size(), 1U);    
+    ASSERT_EQUALS(planCache.size(), 1U);
 }
 
 /**

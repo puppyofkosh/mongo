@@ -300,6 +300,12 @@ private:
     MONGO_DISALLOW_COPYING(PlanCache);
 
 public:
+    enum CacheEntryStatus {
+        kNotPresent,
+        kPresentInactive,
+        kPresentActive,
+    };
+
     /**
      * We don't want to cache every possible query. This function
      * encapsulates the criteria for what makes a canonical query
@@ -405,14 +411,9 @@ public:
     std::vector<PlanCacheEntry*> getAllEntries() const;
 
     /**
-     * Returns true if there is an active entry in the cache for the 'query'.
+     * Look up cq in the cache and return whether or not it's present.
      */
-    bool containsActiveCacheEntry(const CanonicalQuery& cq) const;
-
-    /**
-     * Returns true if there is any entry (active or inactive) in the cache for cq.
-     */
-    bool containsCacheEntry(const CanonicalQuery& cq) const;
+    CacheEntryStatus getEntryStatus(const CanonicalQuery& cq) const;
 
     /**
      * Returns number of entries in cache. Includes inactive entries.

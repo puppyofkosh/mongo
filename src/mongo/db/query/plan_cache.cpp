@@ -751,7 +751,7 @@ Status PlanCache::add(const CanonicalQuery& query,
             }
         }
     }
-    
+
     PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
     const QueryRequest& qr = query.getQueryRequest();
     newEntry->query = qr.getFilter().getOwned();
@@ -875,19 +875,14 @@ std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {
     return entries;
 }
 
-bool PlanCache::containsActiveCacheEntry(const CanonicalQuery& cq) const {
+PlanCache::CacheEntryStatus PlanCache::getEntryStatus(const CanonicalQuery& cq) const {
     PlanCacheEntry* entry;
     Status cacheStatus = _cache.get(computeKey(cq), &entry);
     if (!cacheStatus.isOK()) {
-        return false;
+        return CacheEntryStatus::kNotPresent;
     }
     invariant(entry);
-    return entry->isActive;
-}
-
-bool PlanCache::containsCacheEntry(const CanonicalQuery& cq) const {
-    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
-    return _cache.hasKey(computeKey(cq));
+    return entry->isActive ? CacheEntryStatus::kPresentActive : CacheEntryStatus::kPresentInactive;
 }
 
 size_t PlanCache::size() const {
