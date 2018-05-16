@@ -369,7 +369,7 @@ CachedSolution::CachedSolution(const PlanCacheKey& key, const PlanCacheEntry& en
       sort(entry.sort.getOwned()),
       projection(entry.projection.getOwned()),
       collation(entry.collation.getOwned()),
-      decisionWorks(entry.decision->stats[0]->common.works) {
+      decisionWorks(entry.worksThreshold) {
     // CachedSolution should not having any references into
     // cache entry. All relevant data should be cloned/copied.
     for (size_t i = 0; i < entry.plannerData.size(); ++i) {
@@ -757,12 +757,7 @@ Status PlanCache::add(const CanonicalQuery& query,
     newEntry->query = qr.getFilter().getOwned();
     newEntry->sort = qr.getSort().getOwned();
     newEntry->isActive = isNewEntryActive;
-    if (!isNewEntryActive) {
-        log() << "Adding new inactive entry";
-        newEntry->worksThreshold = nWorks;
-    } else {
-        log() << "ian: adding new active entry";
-    }
+    newEntry->worksThreshold = nWorks;
     if (query.getCollator()) {
         newEntry->collation = query.getCollator()->getSpec().toBSON();
     }

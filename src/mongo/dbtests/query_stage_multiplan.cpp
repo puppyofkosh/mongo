@@ -258,7 +258,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     entry.reset(entryRaw);
     ASSERT_TRUE(entry->isActive);
     log() << "ian 2 " << entry->worksThreshold;
-//    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
+    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
 }
 
 // Case in which we select a blocking plan as the winner, and a non-blocking plan
