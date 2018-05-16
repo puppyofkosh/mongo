@@ -26,6 +26,8 @@
  *    then also delete it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/catalog/collection.h"
@@ -54,6 +56,7 @@
 #include "mongo/dbtests/dbtests.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/clock_source_mock.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -119,11 +122,22 @@ protected:
     DBDirectClient _client;
 };
 
+std::unique_ptr<CanonicalQuery> getCanonicalQuery(OperationContext* opCtx,
+                                                  NamespaceString nss,
+                                                  BSONObj filter) {
+    auto qr = stdx::make_unique<QueryRequest>(nss);
+    qr->setFilter(filter);
+    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx, std::move(qr));
+    verify(statusWithCQ.isOK());
+    unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+    verify(NULL != cq.get());
+    return cq;
+}
 
-// Basic ranking test: collection scan vs. highly selective index scan.  Make sure we also get
-// all expected results out as well.
-TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
-    const int N = 5000;
+// TODO: re add old test.
+    
+TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
+    const int N = 500;
     for (int i = 0; i < N; ++i) {
         insert(BSON("foo" << (i % 10)));
     }
@@ -171,12 +185,7 @@ TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
         new CollectionScan(_opCtx.get(), csparams, sharedWs.get(), filter.get()));
 
     // Hand the plans off to the MPS.
-    auto qr = stdx::make_unique<QueryRequest>(nss);
-    qr->setFilter(BSON("foo" << 7));
-    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
-    verify(statusWithCQ.isOK());
-    unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
-    verify(NULL != cq.get());
+    auto cq = getCanonicalQuery(opCtx(), nss, BSON("foo" << 7));
 
     unique_ptr<MultiPlanStage> mps =
         make_unique<MultiPlanStage>(_opCtx.get(), ctx.getCollection(), cq.get());
@@ -189,26 +198,35 @@ TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
     ASSERT(mps->bestPlanChosen());
     ASSERT_EQUALS(0, mps->bestPlanIdx());
 
-    // Takes ownership of arguments other than 'collection'.
-    auto statusWithPlanExecutor = PlanExecutor::make(_opCtx.get(),
-                                                     std::move(sharedWs),
-                                                     std::move(mps),
-                                                     std::move(cq),
-                                                     coll,
-                                                     PlanExecutor::NO_YIELD);
-    ASSERT_OK(statusWithPlanExecutor.getStatus());
-    auto exec = std::move(statusWithPlanExecutor.getValue());
+    // Be sure that an inactive cache entry was added.
+    PlanCache* cache = coll->infoCache()->getPlanCache();
+    ASSERT_EQ(cache->size(), 1U);
+    PlanCacheEntry* entryRaw;
+    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
+    std::unique_ptr<PlanCacheEntry> entry(entryRaw);
+    ASSERT_FALSE(entry->isActive);
+    log() << "ian " << entry->worksThreshold;
 
-    // Get all our results out.
-    int results = 0;
-    BSONObj obj;
-    PlanExecutor::ExecState state;
-    while (PlanExecutor::ADVANCED == (state = exec->getNext(&obj, NULL))) {
-        ASSERT_EQUALS(obj["foo"].numberInt(), 7);
-        ++results;
+    // Insert a few more documents.
+    // FIXME: Seems weird given we hold a read lock...
+    for (int i = 0; i < 100; ++i) {
+        insert(BSON("foo" << (i % 10)));
     }
-    ASSERT_EQUALS(PlanExecutor::IS_EOF, state);
-    ASSERT_EQUALS(results, N / 10);
+
+    // Run the multi-planner again. The index scan will again win, but the number of works
+    // will be greater.
+
+    // Plan 0 aka the first plan aka the index scan should be the best.
+    ASSERT_OK(mps->pickBestPlan(&yieldPolicy));
+    ASSERT(mps->bestPlanChosen());
+    ASSERT_EQUALS(0, mps->bestPlanIdx());
+
+    // Now the cache entry should be active.
+    ASSERT_EQ(cache->size(), 1U);
+    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
+    entry.reset(entryRaw);
+    ASSERT_FALSE(entry->isActive);
+    log() << "ian " << entry->worksThreshold;
 }
 
 // Case in which we select a blocking plan as the winner, and a non-blocking plan

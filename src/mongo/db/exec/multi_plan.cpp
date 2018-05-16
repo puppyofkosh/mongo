@@ -364,9 +364,11 @@ bool MultiPlanStage::workAllPlans(size_t numResults, PlanYieldPolicy* yieldPolic
 
             // Once a plan returns enough results, stop working.
             if (candidate.results.size() >= numResults) {
+                log() << "ian: Plan " << ix << " hit n docs " << numResults;
                 doneWorking = true;
             }
         } else if (PlanStage::IS_EOF == state) {
+            log() << "ian: Plan " << ix << " hit eof";
             // First plan to hit EOF wins automatically.  Stop evaluating other plans.
             // Assumes that the ranking will pick this plan.
             doneWorking = true;

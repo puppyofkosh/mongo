@@ -730,6 +730,7 @@ Status PlanCache::add(const CanonicalQuery& query,
 
     const auto key = computeKey(query);
     const size_t nWorks = why->stats[0]->common.works;
+    log() << "nWorks for thing being added is " << nWorks;
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* oldEntry;
     Status cacheStatus = _cache.get(key, &oldEntry);
