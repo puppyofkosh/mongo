@@ -283,7 +283,6 @@ public:
 
     // TODO: comment
     bool isActive = false;
-    // Only applies to inactive entries.
     size_t worksThreshold = 0;
 };
 
@@ -342,7 +341,7 @@ public:
 
     /**
      * Look up the cached data access for the provided 'query'.  Used by the query planner
-     * to shortcut planning. TODO: comment for 'returnInactiveEntries'
+     * to shortcut planning.
      *
      * If there is no entry in the cache for the 'query', returns an error Status.
      *

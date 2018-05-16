@@ -732,9 +732,9 @@ Status PlanCache::add(const CanonicalQuery& query,
     const size_t nWorks = why->stats[0]->common.works;
     log() << "nWorks for thing being added is " << nWorks;
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
+    bool isNewEntryActive = false;
     PlanCacheEntry* oldEntry;
     Status cacheStatus = _cache.get(key, &oldEntry);
-    bool isNewEntryActive = false;
     if (cacheStatus.isOK()) {
         if (oldEntry->isActive) {
             // This is overwriting an existing entry. The new entry will be inactive.
@@ -746,7 +746,7 @@ Status PlanCache::add(const CanonicalQuery& query,
                 log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
                 return Status::OK();
             } else {
-                // Want to replace the old entry with an active entry.
+                // We'll replace the old inactive entry with an active entry.
                 isNewEntryActive = true;
             }
         }

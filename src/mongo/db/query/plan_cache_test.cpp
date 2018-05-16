@@ -475,6 +475,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
     std::unique_ptr<PlanCacheEntry> entry(entryRaw);
     ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->worksThreshold, 10U);
 
     // Calling add() again, with a solution that had a higher works value. This should cause the
     // worksThreshold on the original entry to be increased.
@@ -495,7 +496,8 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     newDecision->stats[0]->common.works = 30;
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
 
-    // The entry should still be inactive. Its worksThreshold should be increased though.
+    // The entry should still be inactive. Its worksThreshold should now equal the works for the
+    // plan that was just run.
     ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
     ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
     entry.reset(entryRaw);

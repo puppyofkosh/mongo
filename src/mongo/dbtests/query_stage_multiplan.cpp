@@ -304,6 +304,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
 
     const auto cq = getCanonicalQuery(_opCtx.get(), nss, BSON("foo" << 7));
 
+    // Run an index scan and collection scan, searching for {foo: 7}.
     auto mps = runMultiPlanner(_opCtx.get(), nss, coll, 7);
 
     // Be sure that an inactive cache entry was added.
