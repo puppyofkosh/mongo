@@ -195,7 +195,99 @@ size_t getBestPlanWorks(MultiPlanStage* mps) {
 }
 
 
-// TODO: re add old test.
+
+// Basic ranking test: collection scan vs. highly selective index scan.  Make sure we also get
+// all expected results out as well.
+TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {
+    const int N = 5000;
+    for (int i = 0; i < N; ++i) {
+        insert(BSON("foo" << (i % 10)));
+    }
+
+    addIndex(BSON("foo" << 1));
+
+    AutoGetCollectionForReadCommand ctx(_opCtx.get(), nss);
+    const Collection* coll = ctx.getCollection();
+
+    // TODO: Refactor this test to use the runMultiPlanner helper function.
+
+    // Plan 0: IXScan over foo == 7
+    // Every call to work() returns something so this should clearly win (by current scoring
+    // at least).
+    std::vector<IndexDescriptor*> indexes;
+    coll->getIndexCatalog()->findIndexesByKeyPattern(
+        _opCtx.get(), BSON("foo" << 1), false, &indexes);
+    ASSERT_EQ(indexes.size(), 1U);
+
+    IndexScanParams ixparams;
+    ixparams.descriptor = indexes[0];
+    ixparams.bounds.isSimpleRange = true;
+    ixparams.bounds.startKey = BSON("" << 7);
+    ixparams.bounds.endKey = BSON("" << 7);
+    ixparams.bounds.boundInclusion = BoundInclusion::kIncludeBothStartAndEndKeys;
+    ixparams.direction = 1;
+
+    unique_ptr<WorkingSet> sharedWs(new WorkingSet());
+    IndexScan* ix = new IndexScan(_opCtx.get(), ixparams, sharedWs.get(), NULL);
+    unique_ptr<PlanStage> firstRoot(new FetchStage(_opCtx.get(), sharedWs.get(), ix, NULL, coll));
+
+    // Plan 1: CollScan with matcher.
+    CollectionScanParams csparams;
+    csparams.collection = coll;
+    csparams.direction = CollectionScanParams::FORWARD;
+
+    // Make the filter.
+    BSONObj filterObj = BSON("foo" << 7);
+    const CollatorInterface* collator = nullptr;
+    const boost::intrusive_ptr<ExpressionContext> expCtx(
+        new ExpressionContext(_opCtx.get(), collator));
+    StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);
+    verify(statusWithMatcher.isOK());
+    unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
+    // Make the stage.
+    unique_ptr<PlanStage> secondRoot(
+        new CollectionScan(_opCtx.get(), csparams, sharedWs.get(), filter.get()));
+
+    // Hand the plans off to the MPS.
+    auto qr = stdx::make_unique<QueryRequest>(nss);
+    qr->setFilter(BSON("foo" << 7));
+    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
+    verify(statusWithCQ.isOK());
+    unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+    verify(NULL != cq.get());
+
+    unique_ptr<MultiPlanStage> mps =
+        make_unique<MultiPlanStage>(_opCtx.get(), ctx.getCollection(), cq.get());
+    mps->addPlan(createQuerySolution(), firstRoot.release(), sharedWs.get());
+    mps->addPlan(createQuerySolution(), secondRoot.release(), sharedWs.get());
+
+    // Plan 0 aka the first plan aka the index scan should be the best.
+    PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD, _clock);
+    ASSERT_OK(mps->pickBestPlan(&yieldPolicy));
+    ASSERT(mps->bestPlanChosen());
+    ASSERT_EQUALS(0, mps->bestPlanIdx());
+
+    // Takes ownership of arguments other than 'collection'.
+    auto statusWithPlanExecutor = PlanExecutor::make(_opCtx.get(),
+                                                     std::move(sharedWs),
+                                                     std::move(mps),
+                                                     std::move(cq),
+                                                     coll,
+                                                     PlanExecutor::NO_YIELD);
+    ASSERT_OK(statusWithPlanExecutor.getStatus());
+    auto exec = std::move(statusWithPlanExecutor.getValue());
+
+    // Get all our results out.
+    int results = 0;
+    BSONObj obj;
+    PlanExecutor::ExecState state;
+    while (PlanExecutor::ADVANCED == (state = exec->getNext(&obj, NULL))) {
+        ASSERT_EQUALS(obj["foo"].numberInt(), 7);
+        ++results;
+    }
+    ASSERT_EQUALS(PlanExecutor::IS_EOF, state);
+    ASSERT_EQUALS(results, N / 10);
+}
 
 TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     const int N = 100;
