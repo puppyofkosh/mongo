@@ -110,40 +110,51 @@ public:
                    ExplainOptions::Verbosity verbosity,
                    BSONObjBuilder* out) const final {
         std::string dbname = request.getDatabase().toString();
-        const BSONObj& cmdObj = request.body;
-        const NamespaceString nss(CommandHelpers::parseNsCollectionRequired(dbname, cmdObj));
+        const BSONObj& originalCmdObj = request.body;
+        const NamespaceString nss(
+            CommandHelpers::parseNsCollectionRequired(dbname, originalCmdObj));
         // Parse the command BSON to a QueryRequest.
         bool isExplain = true;
-        auto swQr = QueryRequest::makeFromFindCommand(std::move(nss), cmdObj, isExplain);
+        auto swQr = QueryRequest::makeFromFindCommand(std::move(nss), originalCmdObj, isExplain);
         if (!swQr.isOK()) {
             return swQr.getStatus();
         }
-        auto& qr = *swQr.getValue();
+        const auto& originalQr = *swQr.getValue();
+        auto swQrForShards = ClusterFind::transformQueryForShards(
+            originalQr,
+            // appendGeoNearDistanceProjection: false. $near isn't supported on sharded clusters.
+            false);
+        if (!swQrForShards.isOK()) {
+            return swQrForShards.getStatus();
+        }
+        auto& qrForShards = *swQrForShards.getValue();
+        auto newCmdObj = qrForShards.asFindCommand();
 
         try {
-            const auto explainCmd = ClusterExplain::wrapAsExplain(cmdObj, verbosity);
+            const auto explainCmd = ClusterExplain::wrapAsExplain(newCmdObj, verbosity);
 
             long long millisElapsed;
             std::vector<AsyncRequestsSender::Response> shardResponses;
 
             // We will time how long it takes to run the commands on the shards.
             Timer timer;
-            const auto routingInfo = uassertStatusOK(
-                Grid::get(opCtx)->catalogCache()->getCollectionRoutingInfo(opCtx, qr.nss()));
+            const auto routingInfo =
+                uassertStatusOK(Grid::get(opCtx)->catalogCache()->getCollectionRoutingInfo(
+                    opCtx, qrForShards.nss()));
             shardResponses =
                 scatterGatherVersionedTargetByRoutingTable(opCtx,
-                                                           qr.nss().db(),
-                                                           qr.nss(),
+                                                           qrForShards.nss().db(),
+                                                           qrForShards.nss(),
                                                            routingInfo,
                                                            explainCmd,
                                                            ReadPreferenceSetting::get(opCtx),
                                                            Shard::RetryPolicy::kIdempotent,
-                                                           qr.getFilter(),
-                                                           qr.getCollation());
+                                                           qrForShards.getFilter(),
+                                                           qrForShards.getCollation());
             millisElapsed = timer.millis();
 
             const char* mongosStageName =
-                ClusterExplain::getStageNameForReadOp(shardResponses.size(), cmdObj);
+                ClusterExplain::getStageNameForReadOp(shardResponses.size(), newCmdObj);
 
             uassertStatusOK(ClusterExplain::buildExplainResult(
                 opCtx,
@@ -156,7 +167,7 @@ public:
         } catch (const ExceptionFor<ErrorCodes::CommandOnShardedViewNotSupportedOnMongod>& ex) {
             out->resetToEmpty();
 
-            auto aggCmdOnView = qr.asAggregationCommand();
+            auto aggCmdOnView = qrForShards.asAggregationCommand();
             if (!aggCmdOnView.isOK()) {
                 return aggCmdOnView.getStatus();
             }

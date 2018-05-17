@@ -70,6 +70,13 @@ public:
      */
     static StatusWith<CursorResponse> runGetMore(OperationContext* opCtx,
                                                  const GetMoreRequest& request);
+
+    /**
+     * Given the QueryRequest 'qr' being executed by mongos, returns a copy of the query which is
+     * suitable for forwarding to the targeted hosts.
+     */
+    static StatusWith<std::unique_ptr<QueryRequest>> transformQueryForShards(
+        const QueryRequest& qr, bool appendGeoNearDistanceProjection);
 };
 
 }  // namespace mongo
