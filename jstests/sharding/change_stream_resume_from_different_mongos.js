@@ -5,7 +5,6 @@
     load("jstests/multiVersion/libs/causal_consistency_helpers.js");
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
-    load("jstests/libs/misc_util.js");  // For assert[Drop|Create]Collection.
 
     const st = new ShardingTest({
         shards: 2,
@@ -43,15 +42,17 @@
         // Be sure we can read from the change stream. Write some documents that will end up on
         // each shard. Use a bulk write to increase the chance that two of the writes get the same
         // cluster time on each shard.
-        const kIdsToInsert = [];
+        const kIds = [];
+        const bulk = coll.initializeUnorderedBulkOp();
         for (let i = 0; i < nDocs / 2; i++) {
             // Interleave elements which will end up on shard 0 with elements that will end up on
             // shard 1.
-            kIdsToInsert.push(i);
-            kIdsToInsert.push(i + nDocs / 2);
+            kIds.push(i);
+            bulk.insert({_id: i});
+            kIds.push(i + nDocs / 2);
+            bulk.insert({_id: i + nDocs / 2});
         }
-
-        assert.writeOK(coll.insert(kIdsToInsert.map(objId => {return {_id: objId}})));
+        assert.commandWorked(bulk.execute());
 
         // Read from the change stream. The order of the documents isn't guaranteed because we
         // performed a bulk write.
@@ -66,8 +67,8 @@
         }
 
         // Assert that we found the documents we inserted (in any order).
-        assert(MiscUtil.setEq(new Set(kIdsToInsert),
-                              new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        assert(setEq(new Set(kIds), new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        cst.cleanUp();
 
         // Now resume using the resume token from the first change on a different mongos.
         const otherCst =
@@ -76,10 +77,20 @@
         const resumeCursor = otherCst.getChangeStream(
             {watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 
-        // Be sure we can read the remaining changes, in the same order as they were read on the
-        // first stream.
-        otherCst.assertNextChangesEqual(
-            {cursor: resumeCursor, expectedChanges: docsFoundInOrder.splice(1)});
+        // Get the resume tokens for each change that occurred.
+        const resumeTokens = [firstChange._id];
+        for (let i = 0; i < kIds.length - 1; i++) {
+            resumeTokens.push(otherCst.getOneChange(resumeCursor)._id);
+        }
+
+        // Check that resuming from each possible resume token works.
+        for (let i = 0; i < resumeTokens.length; i++) {
+            const cursor = otherCst.getChangeStream(
+                {watchMode: watchMode, coll: coll, resumeAfter: resumeTokens[i]});
+            otherCst.assertNextChangesEqual(
+                {cursor: cursor, expectedChanges: docsFoundInOrder.splice(i + 1)});
+        }
+        otherCst.cleanUp();
     }
 
     st.stop();
