@@ -98,13 +98,6 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
         cst.assertNextChangesEqual(
             {cursor: resumeCursor, expectedChanges: docsFoundInOrder.splice(1)});
         cst.cleanUp();
-
-        // Step up the old primary again. Necessary since some validation hooks have connections
-        // open on the primary and assume that a stepdown has not happened.
-        assert.commandWorked(oldPrimary.adminCommand({replSetStepUp: 1}));
-
-        st.rs0.waitForState(oldPrimary, ReplSetTest.State.PRIMARY);
-        st.rs0.waitForState(newPrimary, ReplSetTest.State.SECONDARY);
     }
 
     st.stop();
