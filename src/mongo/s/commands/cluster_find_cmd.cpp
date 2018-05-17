@@ -120,15 +120,15 @@ public:
             return swQr.getStatus();
         }
         const auto& originalQr = *swQr.getValue();
-        auto swQrForShards = ClusterFind::transformQueryForShards(
-            originalQr,
-            // appendGeoNearDistanceProjection: false. $near isn't supported on sharded clusters.
-            false);
+        // $near isn't supported on sharded clusters.
+        constexpr bool appendGeoNearDistanceProjection = false;
+        const auto swQrForShards = ClusterFind::transformQueryForShards(
+            originalQr, appendGeoNearDistanceProjection);
         if (!swQrForShards.isOK()) {
             return swQrForShards.getStatus();
         }
-        auto& qrForShards = *swQrForShards.getValue();
-        auto newCmdObj = qrForShards.asFindCommand();
+        const auto& qrForShards = *swQrForShards.getValue();
+        const auto newCmdObj = qrForShards.asFindCommand();
 
         try {
             const auto explainCmd = ClusterExplain::wrapAsExplain(newCmdObj, verbosity);

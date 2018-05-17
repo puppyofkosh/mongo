@@ -74,6 +74,9 @@ public:
     /**
      * Given the QueryRequest 'qr' being executed by mongos, returns a copy of the query which is
      * suitable for forwarding to the targeted hosts.
+     *
+     * 'appendGeoNearDistanceProjection' indicates whether or not to request the projection
+     * {$sortKey: <geoNearDistance>}.
      */
     static StatusWith<std::unique_ptr<QueryRequest>> transformQueryForShards(
         const QueryRequest& qr, bool appendGeoNearDistanceProjection);
