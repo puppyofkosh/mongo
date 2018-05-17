@@ -23,30 +23,29 @@
     // Pre-split the collection to ensure that both shards have chunks. Explicitly
     // move chunks since the balancer is disabled.
     assert.commandWorked(db.adminCommand({split: collSharded.getFullName(), middle: {a: 1}}));
-    printjson(db.adminCommand(
+    assert.commandWorked(db.adminCommand(
         {moveChunk: collSharded.getFullName(), find: {a: 1}, to: st.shard0.shardName}));
 
     assert.commandWorked(db.adminCommand({split: collSharded.getFullName(), middle: {a: 2}}));
-    printjson(db.adminCommand(
+    assert.commandWorked(db.adminCommand(
         {moveChunk: collSharded.getFullName(), find: {a: 2}, to: st.shard1.shardName}));
 
     // Put data on each shard.
-    for (var i = 0; i < 3; i++) {
+    for (var i = -5; i < 5; i++) {
         collSharded.insert({_id: i, a: i, b: 1});
     }
 
     st.printShardingStatus();
 
     // Test a scatter-gather count command.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Explain the scatter-gather count.
     explain = db.runCommand(
         {explain: {count: collSharded.getName(), query: {b: 1}}, verbosity: "allPlansExecution"});
 
     // Validate some basic properties of the result.
-    printjson(explain);
-    assert.commandWorked(explain);
+    assert.commandWorked(explain, tojson(explain));
     assert("queryPlanner" in explain);
     assert("executionStats" in explain);
     assert.eq(2, explain.queryPlanner.winningPlan.shards.length);
@@ -57,8 +56,7 @@
         explain: {nonexistent: collSharded.getName(), query: {b: 1}},
         verbosity: "allPlansExecution"
     });
-    printjson(explain);
-    assert.commandFailed(explain);
+    assert.commandFailed(explain, tojson(explain));
 
     // -------
 
@@ -88,8 +86,7 @@
 
     // Basic validation: a group command can only be passed through to an unsharded collection,
     // so we should confirm that the mongos stage is always SINGLE_SHARD.
-    printjson(explain);
-    assert.commandWorked(explain);
+    assert.commandWorked(explain, tojson(explain));
     assert("queryPlanner" in explain);
     assert("executionStats" in explain);
     assert.eq("SINGLE_SHARD", explain.queryPlanner.winningPlan.stage);
@@ -108,8 +105,7 @@
         },
         verbosity: "allPlansExecution"
     });
-    printjson(explain);
-    assert.commandFailed(explain);
+    assert.commandFailed(explain, tojson(explain));
 
     // -------
 
@@ -124,7 +120,7 @@
     assert.eq(explain.queryPlanner.winningPlan.shards[0].winningPlan.stage, "DELETE");
     assert.eq(explain.queryPlanner.winningPlan.shards[1].winningPlan.stage, "DELETE");
     // Check that the deletes didn't actually happen.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Explain a delete operation and verify that it hits only one shard with the shard key
     explain = db.runCommand({
@@ -134,7 +130,7 @@
     assert.commandWorked(explain, tojson(explain));
     assert.eq(explain.queryPlanner.winningPlan.shards.length, 1);
     // Check that the deletes didn't actually happen.
-    assert.eq(3, collSharded.count({b: 1}));
+    assert.eq(10, collSharded.count({b: 1}));
 
     // Check that we fail gracefully if we try to do an explain of a write batch that has more
     // than one operation in it.
@@ -178,6 +174,46 @@
         verbosity: "allPlansExecution"
     });
     assert.commandFailed(explain, tojson(explain));
+
+    //
+    // Explain a find with a sort on b.
+    //
+    explain = collSharded.explain().find().sort({b: 1}).finish();
+    // The plan should have a sort on the mongos.
+    assert.eq(explain.queryPlanner.winningPlan.stage, "SHARD_MERGE_SORT", tojson(explain));
+
+    // Each shard should have a project for the sort key.
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        assert.eq(shardExplain.winningPlan.stage, "PROJECTION", tojson(explain));
+        assert.eq(shardExplain.winningPlan.transformBy.$sortKey.$meta, "sortKey", tojson(explain));
+    }
+
+    //
+    // Explain a find with a skip.
+    //
+    explain = collSharded.explain("executionStats").find().skip(3).finish();
+    assert.eq(explain.executionStats.nReturned, 10 - 3, tojson(explain));
+    assert.eq(explain.executionStats.totalDocsExamined, 10, tojson(explain));
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        // The shards shouldn't have a SKIP stage.
+        assert.eq(shardExplain.winningPlan.stage, "SHARDING_FILTER", tojson(explain));
+        assert.eq(shardExplain.winningPlan.inputStage.stage, "COLLSCAN", tojson(explain));
+    }
+
+    //
+    // Explain a find with a limit.
+    //
+    explain = collSharded.explain("executionStats").find().limit(4).finish();
+    assert.eq(explain.executionStats.nReturned, 4, tojson(explain));
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        // Each shard should have a LIMIT stage at the top level.
+        assert.eq(shardExplain.winningPlan.stage, "LIMIT", tojson(explain));
+        assert.eq(shardExplain.winningPlan.limitAmount, 4, tojson(explain));
+        assert.eq(shardExplain.winningPlan.inputStage.stage, "SHARDING_FILTER", tojson(explain));
+        assert.eq(shardExplain.winningPlan.inputStage.inputStage.stage,
+                  "COLLSCAN",
+                  tojson(explain));
+    }
 
     st.stop();
 })();
