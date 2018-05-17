@@ -273,9 +273,6 @@ void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shard
         BSONObj execStats = shardResults[i].result["executionStats"].Obj();
         if (execStats.hasField("nReturned")) {
             nReturned += execStats["nReturned"].numberLong();
-            if (limit && *limit < nReturned) {
-                nReturned = *limit;
-            }
         }
         if (execStats.hasField("totalKeysExamined")) {
             keysExamined += execStats["totalKeysExamined"].numberLong();
@@ -290,6 +287,10 @@ void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shard
 
     // Account for the skip, which was removed from the query sent to each shard.
     nReturned -= skip.get_value_or(0);
+
+    if (limit && *limit < nReturned) {
+        nReturned = *limit;
+    }
 
     // Fill in top-level stats.
     executionStatsBob.appendNumber("nReturned", nReturned);

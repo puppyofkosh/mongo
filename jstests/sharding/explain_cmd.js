@@ -215,5 +215,20 @@
                   tojson(explain));
     }
 
+    //
+    // Explain a find with a skip and a limit.
+    //
+    explain = collSharded.explain("executionStats").find().skip(3).limit(4).finish();
+    assert.eq(explain.executionStats.nReturned, 4, tojson(explain));
+    for (let shardExplain of explain.queryPlanner.winningPlan.shards) {
+        // Each shard should have a LIMIT stage at the top level. There should be no SKIP stage.
+        assert.eq(shardExplain.winningPlan.stage, "LIMIT", tojson(explain));
+        assert.eq(shardExplain.winningPlan.limitAmount, 3 + 4, tojson(explain));
+        assert.eq(shardExplain.winningPlan.inputStage.stage, "SHARDING_FILTER", tojson(explain));
+        assert.eq(shardExplain.winningPlan.inputStage.inputStage.stage,
+                  "COLLSCAN",
+                  tojson(explain));
+    }
+
     st.stop();
 })();
