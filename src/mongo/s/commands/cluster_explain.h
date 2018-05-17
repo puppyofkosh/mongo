@@ -78,6 +78,8 @@ public:
                                      const std::vector<Strategy::CommandResult>& shardResults,
                                      const char* mongosStageName,
                                      long long millisElapsed,
+                                     boost::optional<long long> skip,
+                                     boost::optional<long long> limit,
                                      BSONObjBuilder* out);
 
 
@@ -119,6 +121,8 @@ private:
     static void buildExecStats(const std::vector<Strategy::CommandResult>& shardResults,
                                const char* mongosStageName,
                                long long millisElapsed,
+                               boost::optional<long long> skip,
+                               boost::optional<long long> limit,
                                BSONObjBuilder* out);
 };
 

@@ -296,6 +296,8 @@ public:
             ClusterExplain::downconvert(opCtx, shardResponses),
             mongosStageName,
             millisElapsed,
+            boost::none,
+            boost::none,
             out);
     }
 

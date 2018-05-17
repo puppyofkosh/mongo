@@ -161,6 +161,8 @@ public:
                 ClusterExplain::downconvert(opCtx, shardResponses),
                 mongosStageName,
                 millisElapsed,
+                originalQr.getSkip(),
+                originalQr.getLimit(),
                 out));
 
             return Status::OK();
