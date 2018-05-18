@@ -102,6 +102,28 @@ public:
         return &_opCtx;
     }
 
+    static size_t getNumResultsForStage(const WorkingSet& ws,
+                                        CachedPlanStage* cachedPlanStage,
+                                        CanonicalQuery* cq) {
+        size_t numResults = 0;
+        PlanStage::StageState state = PlanStage::NEED_TIME;
+        while (state != PlanStage::IS_EOF) {
+            WorkingSetID id = WorkingSet::INVALID_ID;
+            state = cachedPlanStage->work(&id);
+
+            ASSERT_NE(state, PlanStage::FAILURE);
+            ASSERT_NE(state, PlanStage::DEAD);
+
+            if (state == PlanStage::ADVANCED) {
+                WorkingSetMember* member = ws.get(id);
+                ASSERT(cq->root()->matchesBSON(member->obj.value()));
+                numResults++;
+            }
+        }
+
+        return numResults;
+    }
+
 protected:
     const ServiceContext::UniqueOperationContext _opCtxPtr = cc().makeOperationContext();
     OperationContext& _opCtx = *_opCtxPtr;
@@ -150,24 +172,7 @@ public:
                                     _opCtx.getServiceContext()->getFastClockSource());
         ASSERT_OK(cachedPlanStage.pickBestPlan(&yieldPolicy));
 
-        // Make sure that we get 2 legit results back.
-        size_t numResults = 0;
-        PlanStage::StageState state = PlanStage::NEED_TIME;
-        while (state != PlanStage::IS_EOF) {
-            WorkingSetID id = WorkingSet::INVALID_ID;
-            state = cachedPlanStage.work(&id);
-
-            ASSERT_NE(state, PlanStage::FAILURE);
-            ASSERT_NE(state, PlanStage::DEAD);
-
-            if (state == PlanStage::ADVANCED) {
-                WorkingSetMember* member = _ws.get(id);
-                ASSERT(cq->root()->matchesBSON(member->obj.value()));
-                numResults++;
-            }
-        }
-
-        ASSERT_EQ(numResults, 2U);
+        ASSERT_EQ(getNumResultsForStage(_ws, &cachedPlanStage, cq.get()), 2U);
 
         // Plan cache should still be empty, as we don't write to it when we replan a failed
         // query.
@@ -238,7 +243,72 @@ public:
             }
         }
 
-        ASSERT_EQ(numResults, 2U);
+        ASSERT_EQ(getNumResultsForStage(_ws, &cachedPlanStage, cq.get()), 2U);
+
+        // This time we expect to find something in the plan cache. Replans after hitting the
+        // works threshold result in a cache entry.
+        ASSERT_OK(cache->get(*cq, &rawCachedSolution));
+        const std::unique_ptr<CachedSolution> cachedSolution(rawCachedSolution);
+    }
+};
+
+/**
+ * Test the way cache entries are added (either "active" or "inactive") to the plan cache.
+ */
+class QueryStageCachedPlanAddsActiveCacheEntries : public QueryStageCachedPlanBase {
+public:
+    void run() {
+        AutoGetCollectionForReadCommand ctx(&_opCtx, nss);
+        Collection* collection = ctx.getCollection();
+        ASSERT(collection);
+
+        // Query can be answered by either index on "a" or index on "b".
+        auto qr = stdx::make_unique<QueryRequest>(nss);
+        qr->setFilter(fromjson("{a: {$gte: 8}, b: 1}"));
+        auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
+        ASSERT_OK(statusWithCQ.getStatus());
+        const std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+
+        // We shouldn't have anything in the plan cache for this shape yet.
+        PlanCache* cache = collection->infoCache()->getPlanCache();
+        ASSERT(cache);
+        CachedSolution* rawCachedSolution;
+        ASSERT_NOT_OK(cache->get(*cq, &rawCachedSolution));
+
+        // Step 1: Run the CachedPlanStage with a slow child plan. Replanning should be triggered
+        // and a tombstone will be added.
+
+        // Set up queued data stage to take a long time before returning EOF. Should be long
+        // enough to trigger a replan.
+
+        // Get planner params.
+        QueryPlannerParams plannerParams;
+        fillOutPlannerParams(&_opCtx, collection, cq.get(), &plannerParams);
+
+        const size_t decisionWorks = 10;
+        const size_t mockWorks =
+            1U + static_cast<size_t>(internalQueryCacheEvictionRatio * decisionWorks);
+        auto mockChild = stdx::make_unique<QueuedDataStage>(&_opCtx, &_ws);
+        for (size_t i = 0; i < mockWorks; i++) {
+            mockChild->pushBack(PlanStage::NEED_TIME);
+        }
+
+        CachedPlanStage cachedPlanStage(
+            &_opCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, mockChild.release());
+
+        // This should succeed after triggering a replan.
+        PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
+                                    _opCtx.getServiceContext()->getFastClockSource());
+        ASSERT_OK(cachedPlanStage.pickBestPlan(&yieldPolicy));
+
+        ASSERT_EQ(getNumResultsForStage(_ws, &cachedPlanStage, cq.get()), 2U);
+
+        // Check for an inactive cache entry.
+
+        // Step 2: Run another plan (which will take even longer) and be sure the worksThreshold is
+        // increased on the existing cache entry.
+
+        // Step 3: Run another query which takes less time, and be sure an active entry is created.
 
         // This time we expect to find something in the plan cache. Replans after hitting the
         // works threshold result in a cache entry.
@@ -254,6 +324,7 @@ public:
     void setupTests() {
         add<QueryStageCachedPlanFailure>();
         add<QueryStageCachedPlanHitMaxWorks>();
+        add<QueryStageCachedPlanAddsActiveCacheEntries>();
     }
 };
 
