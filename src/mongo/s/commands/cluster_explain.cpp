@@ -367,13 +367,36 @@ void ClusterExplain::buildExecStats(const vector<Strategy::CommandResult>& shard
 }
 
 // static
+Status ClusterExplain::buildFindCmdExplainResult(
+    OperationContext* opCtx,
+    const vector<Strategy::CommandResult>& shardResults,
+    const char* mongosStageName,
+    long long millisElapsed,
+    const QueryRequest& qr,
+    BSONObjBuilder* out) {
+    return buildExplainResultFromShardResults(
+        opCtx, shardResults, mongosStageName, millisElapsed, qr.getSkip(), qr.getLimit(), out);
+}
+
+// static
 Status ClusterExplain::buildExplainResult(OperationContext* opCtx,
                                           const vector<Strategy::CommandResult>& shardResults,
                                           const char* mongosStageName,
                                           long long millisElapsed,
-                                          boost::optional<long long> skip,
-                                          boost::optional<long long> limit,
                                           BSONObjBuilder* out) {
+    return buildExplainResultFromShardResults(
+        opCtx, shardResults, mongosStageName, millisElapsed, boost::none, boost::none, out);
+}
+
+// static
+Status ClusterExplain::buildExplainResultFromShardResults(
+    OperationContext* opCtx,
+    const vector<Strategy::CommandResult>& shardResults,
+    const char* mongosStageName,
+    long long millisElapsed,
+    boost::optional<long long> skip,
+    boost::optional<long long> limit,
+    BSONObjBuilder* out) {
     // Explain only succeeds if all shards support the explain command.
     Status validateStatus = ClusterExplain::validateShardResults(shardResults);
     if (!validateStatus.isOK()) {

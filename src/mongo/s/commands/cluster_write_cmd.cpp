@@ -333,13 +333,8 @@ private:
                                         explainCmd,
                                         targetingBatchItem,
                                         &shardResults));
-        uassertStatusOK(ClusterExplain::buildExplainResult(opCtx,
-                                                           shardResults,
-                                                           ClusterExplain::kWriteOnShards,
-                                                           timer.millis(),
-                                                           boost::none,
-                                                           boost::none,
-                                                           result));
+        uassertStatusOK(ClusterExplain::buildExplainResult(
+            opCtx, shardResults, ClusterExplain::kWriteOnShards, timer.millis(), result));
     }
 
     NamespaceString ns() const override {

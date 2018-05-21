@@ -776,13 +776,12 @@ void Strategy::explainFind(OperationContext* opCtx,
     const char* mongosStageName =
         ClusterExplain::getStageNameForReadOp(shardResponses.size(), findCommand);
 
-    uassertStatusOK(
-        ClusterExplain::buildExplainResult(opCtx,
-                                           ClusterExplain::downconvert(opCtx, shardResponses),
-                                           mongosStageName,
-                                           millisElapsed,
-                                           qr.getSkip(),
-                                           qr.getLimit(),
-                                           out));
+    uassertStatusOK(ClusterExplain::buildFindCmdExplainResult(
+        opCtx,
+        ClusterExplain::downconvert(opCtx, shardResponses),
+        mongosStageName,
+        millisElapsed,
+        qr,
+        out));
 }
 }  // namespace mongo

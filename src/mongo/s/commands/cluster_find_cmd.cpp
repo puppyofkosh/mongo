@@ -122,8 +122,8 @@ public:
         const auto& originalQr = *swQr.getValue();
         // $near isn't supported on sharded clusters.
         constexpr bool appendGeoNearDistanceProjection = false;
-        const auto swQrForShards = ClusterFind::transformQueryForShards(
-            originalQr, appendGeoNearDistanceProjection);
+        const auto swQrForShards =
+            ClusterFind::transformQueryForShards(originalQr, appendGeoNearDistanceProjection);
         if (!swQrForShards.isOK()) {
             return swQrForShards.getStatus();
         }
@@ -156,13 +156,12 @@ public:
             const char* mongosStageName =
                 ClusterExplain::getStageNameForReadOp(shardResponses.size(), newCmdObj);
 
-            uassertStatusOK(ClusterExplain::buildExplainResult(
+            uassertStatusOK(ClusterExplain::buildFindCmdExplainResult(
                 opCtx,
                 ClusterExplain::downconvert(opCtx, shardResponses),
                 mongosStageName,
                 millisElapsed,
-                originalQr.getSkip(),
-                originalQr.getLimit(),
+                originalQr,
                 out));
 
             return Status::OK();

@@ -78,10 +78,18 @@ public:
                                      const std::vector<Strategy::CommandResult>& shardResults,
                                      const char* mongosStageName,
                                      long long millisElapsed,
-                                     boost::optional<long long> skip,
-                                     boost::optional<long long> limit,
                                      BSONObjBuilder* out);
 
+    /**
+     * Same as buildExplainResult(), but this version is used only for find commands.
+     **/
+    static Status buildFindCmdExplainResult(
+        OperationContext* opCtx,
+        const std::vector<Strategy::CommandResult>& shardResults,
+        const char* mongosStageName,
+        long long millisElapsed,
+        const QueryRequest& qr,
+        BSONObjBuilder* out);
 
     //
     // Names of mock mongos execution stages.
@@ -124,6 +132,15 @@ private:
                                boost::optional<long long> skip,
                                boost::optional<long long> limit,
                                BSONObjBuilder* out);
+
+    static Status buildExplainResultFromShardResults(
+        OperationContext* opCtx,
+        const std::vector<Strategy::CommandResult>& shardResults,
+        const char* mongosStageName,
+        long long millisElapsed,
+        boost::optional<long long> skip,
+        boost::optional<long long> limit,
+        BSONObjBuilder* out);
 };
 
 }  // namespace mongo
