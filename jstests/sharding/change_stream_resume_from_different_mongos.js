@@ -6,15 +6,16 @@
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
+    if (!supportsMajorityReadConcern()) {
+        jsTestLog("Skipping test since storage engine doesn't support majority read concern.");
+        return;
+    }
+
     const st = new ShardingTest({
         shards: 2,
         mongos: 2,
         rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
     });
-    if (!supportsMajorityReadConcern()) {
-        jsTestLog("Skipping test since storage engine doesn't support majority read concern.");
-        return;
-    }
 
     for (let key of Object.keys(ChangeStreamTest.WatchMode)) {
         const watchMode = ChangeStreamTest.WatchMode[key];
@@ -67,7 +68,7 @@
         }
 
         // Assert that we found the documents we inserted (in any order).
-        assert(setEq(new Set(kIds), new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        assert.setEq(new Set(kIds), new Set(docsFoundInOrder.map(doc => doc.fullDocument._id)));
         cst.cleanUp();
 
         // Now resume using the resume token from the first change on a different mongos.

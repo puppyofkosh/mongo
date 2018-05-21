@@ -1,5 +1,7 @@
-// Test resuming a change stream on a node other than the one it was started on. Accomplishes this
-// by triggering a stepdown.
+/**
+ * Test resuming a change stream on a node other than the one it was started on. Accomplishes this
+ * by triggering a stepdown.
+ */
 
 // Checking UUID consistency uses cached connections, which are not valid across restarts or
 // stepdowns.
@@ -12,14 +14,15 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     load("jstests/libs/change_stream_util.js");        // For ChangeStreamTest.
     load("jstests/libs/collection_drop_recreate.js");  // For assert[Drop|Create]Collection.
 
-    const st = new ShardingTest({
-        shards: 2,
-        rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
-    });
     if (!supportsMajorityReadConcern()) {
         jsTestLog("Skipping test since storage engine doesn't support majority read concern.");
         return;
     }
+
+    const st = new ShardingTest({
+        shards: 2,
+        rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
+    });
 
     const sDB = st.s.getDB("test");
     const kCollName = "change_stream_failover";
@@ -69,11 +72,16 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
 
         // Make one of the primaries step down.
         const oldPrimary = st.rs0.getPrimary();
-        assert.commandWorked(st.rs0.getSecondary().adminCommand({replSetStepUp: 1}));
+
+        try {
+            oldPrimary.getDB("admin").runCommand({replSetStepDown: 30, force: true});
+        } catch (e) {
+            // Left empty on purpose.
+        }
 
         st.rs0.awaitNodesAgreeOnPrimary();
         const newPrimary = st.rs0.getPrimary();
-        // Be sure we got a different node that the previous primary.
+        // Be sure the new primary is not the previous primary.
         assert.neq(newPrimary.port, oldPrimary.port);
 
         // Read the remaining documents from the original stream.
@@ -87,10 +95,10 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
         }
 
         // Assert that we found the documents we inserted (in any order).
-        assert(setEq(new Set(kIds),
-                     new Set(docsFoundInOrder.map(doc => doc.fullDocument._id))));
+        assert.setEq(new Set(kIds), new Set(docsFoundInOrder.map(doc => doc.fullDocument._id)));
 
-        // Now resume using the resume token from the first change (before the failover).
+        // Now resume using the resume token from the first change (which was read before the
+        // failover), but on the new primary.
         const resumeCursor =
             cst.getChangeStream({watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 

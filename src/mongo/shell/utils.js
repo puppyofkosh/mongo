@@ -101,18 +101,6 @@ friendlyEqual = function(a, b) {
     return false;
 };
 
-function setEq(aSet, bSet) {
-    if (aSet.size != bSet.size) {
-        return false;
-    }
-    for (var a of aSet) {
-        if (!bSet.has(a)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 printStackTrace = function() {
     try {
         throw new Error("Printing Stack Trace");
