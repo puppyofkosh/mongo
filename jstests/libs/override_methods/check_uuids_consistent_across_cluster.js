@@ -136,21 +136,8 @@ ShardingTest.prototype.checkUUIDsConsistentAcrossCluster = function() {
                       shardConn +
                       " is consistent with the UUID in config.collections on the config server");
 
-                let actualCollMetadata = null;
-                const getCollMetadata = function() {
-                    return shardConn.getDB(dbName).getCollectionInfos({name: collName})[0];
-                }
-                try {
-                    actualCollMetadata = getCollMetadata();
-                } catch (e) {
-                    if (e.code != ErrorCodes.NotMasterNoSlaveOk) {
-                        throw e;
-                    }
-                    // If we got a NotMasterNoSlaveOk error, the shell should send the next
-                    // operation to the primary. Try again.
-                    actualCollMetadata = getCollMetadata();
-                }
-
+                const actualCollMetadata =
+                    shardConn.getDB(dbName).getCollectionInfos({name: collName})[0];
                 assert.eq(authoritativeCollMetadata.collInfo.uuid,
                           actualCollMetadata.info.uuid,
                           "authoritative collection info on config server: " +

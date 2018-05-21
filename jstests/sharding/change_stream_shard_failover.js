@@ -1,6 +1,10 @@
 // Test resuming a change stream on a node other than the one it was started on. Accomplishes this
 // by triggering a stepdown.
 
+// Checking UUID consistency uses cached connections, which are not valid across restarts or
+// stepdowns.
+TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
+
 (function() {
     "use strict";
     // For supportsMajorityReadConcern().
