@@ -268,11 +268,8 @@ public:
         ASSERT(collection);
 
         // Query can be answered by either index on "a" or index on "b".
-        auto qr = stdx::make_unique<QueryRequest>(nss);
-        qr->setFilter(fromjson("{a: {$gte: 11}, b: {$gte: 11}}"));
-        auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
-        ASSERT_OK(statusWithCQ.getStatus());
-        const std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+        const auto cq = assertGet(
+            CanonicalQuery::canonicalize(opCtx(), nss, fromjson("{a: {$gte: 11}, b: {$gte: 11}}")));
 
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
@@ -298,11 +295,8 @@ public:
             worksThreshold *= 2;
             // Step 2: Run another query of the same shape, which is less selective, and therefore
             // takes longer).
-            auto qr2 = stdx::make_unique<QueryRequest>(nss);
-            // Each of the documents {a:1} through {a:9} will match the filter. Therefore this
-            // query will require 9 works for each document, and one for the EOF, adding up to 10.
-            qr2->setFilter(fromjson("{a: {$gte: 1}, b: {$gte: 0}}"));
-            auto cq2 = assertGet(CanonicalQuery::canonicalize(opCtx(), std::move(qr2)));
+            auto cq2 = assertGet(CanonicalQuery::canonicalize(
+                opCtx(), nss, fromjson("{a: {$gte: 1}, b: {$gte: 0}}")));
             forceReplanning(collection, cq2.get());
 
             ASSERT_EQ(cache->getEntryStatus(*cq2.get()),
@@ -313,6 +307,17 @@ public:
         }
 
         // Step 3: Run another query which takes less time, and be sure an active entry is created.
+        auto cq2 = assertGet(CanonicalQuery::canonicalize(
+                                 opCtx(), nss, fromjson("{a: {$gte: 6}, b: {$gte: 0}}")));
+        forceReplanning(collection, cq2.get());
+
+        // Now there should be an active cache entry.
+        ASSERT_EQ(cache->getEntryStatus(*cq2.get()),
+                  PlanCache::CacheEntryStatus::kPresentActive);
+        // The worksThreshold on the cache entry should have doubled.
+        entry = assertGet(cache->getEntry(*cq2.get()));
+        // This will query will match {a: 6} through {a:9} (4 works), plus one for EOF = 5 works.
+        ASSERT_EQ(entry->worksThreshold, 5U);
 
         // This time we expect to find something in the plan cache. Replans after hitting the
         // works threshold result in a cache entry.

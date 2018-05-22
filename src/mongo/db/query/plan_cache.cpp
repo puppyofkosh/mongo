@@ -743,8 +743,7 @@ Status PlanCache::add(const CanonicalQuery& query,
         } else {
             if (nWorks > oldEntry->worksThreshold) {
                 // Bump the old entry's worksThreshold.
-                // TODO: remove min()
-                oldEntry->worksThreshold = std::min(nWorks, 2 * oldEntry->worksThreshold);
+                oldEntry->worksThreshold = 2 * oldEntry->worksThreshold;
                 log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
                 return Status::OK();
             } else {
