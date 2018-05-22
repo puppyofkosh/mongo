@@ -21,7 +21,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
 
     const st = new ShardingTest({
         shards: 2,
-        rs: {nodes: 3, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
+        rs: {nodes: 2, setParameter: {periodicNoopIntervalSecs: 1, writePeriodicNoops: true}}
     });
 
     const sDB = st.s.getDB("test");
@@ -73,11 +73,11 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
         // Make one of the primaries step down.
         const oldPrimary = st.rs0.getPrimary();
 
-        try {
-            oldPrimary.getDB("admin").runCommand({replSetStepDown: 30, force: true});
-        } catch (e) {
-            // Left empty on purpose.
-        }
+        const stepDownError = assert.throws(function() {
+            oldPrimary.getDB("admin").runCommand({replSetStepDown: 45, force: true});
+        });
+        assert(isNetworkError(stepDownError),
+               "replSetStepDown did not disconnect client; failed with " + tojson(stepDownError));
 
         st.rs0.awaitNodesAgreeOnPrimary();
         const newPrimary = st.rs0.getPrimary();
@@ -98,7 +98,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
         assert.setEq(new Set(kIds), new Set(docsFoundInOrder.map(doc => doc.fullDocument._id)));
 
         // Now resume using the resume token from the first change (which was read before the
-        // failover), but on the new primary.
+        // failover). The mongos should talk to the new primary.
         const resumeCursor =
             cst.getChangeStream({watchMode: watchMode, coll: coll, resumeAfter: firstChange._id});
 

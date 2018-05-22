@@ -197,10 +197,10 @@ assert = (function() {
         const failAssertion = function() {
             doassert(_buildAssertionMessage(msg, tojson(aSet) + " != " + tojson(bSet)));
         };
-        if (aSet.size != bSet.size) {
+        if (aSet.size !== bSet.size) {
             failAssertion();
         }
-        for (var a of aSet) {
+        for (let a of aSet) {
             if (!bSet.has(a)) {
                 failAssertion();
             }
