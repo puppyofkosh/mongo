@@ -395,11 +395,8 @@ public:
       *
      * If there is no entry in the cache for the 'query', returns an error Status.
      *
-     * If there is an entry in the cache, populates 'entryOut' and returns Status::OK().  Caller
-     * owns '*entryOut'.
-     * TODO: smartpointerize
      */
-    Status getEntry(const CanonicalQuery& cq, PlanCacheEntry** entryOut) const;
+    StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
 
     /**
      * Returns a vector of all cache entries.
@@ -410,7 +407,7 @@ public:
     std::vector<PlanCacheEntry*> getAllEntries() const;
 
     /**
-     * Look up cq in the cache and return whether or not it's present.
+     * Look up cq in the cache and return whether or not it's present (and active).
      */
     CacheEntryStatus getEntryStatus(const CanonicalQuery& cq) const;
 

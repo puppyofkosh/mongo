@@ -339,8 +339,10 @@ Status MultiPlanStage::pickBestPlan(PlanYieldPolicy* yieldPolicy) {
 
 bool MultiPlanStage::workAllPlans(size_t numResults, PlanYieldPolicy* yieldPolicy) {
     bool doneWorking = false;
+    log() << "# of candidate plans is " << _candidates.size();
 
     for (size_t ix = 0; ix < _candidates.size(); ++ix) {
+        log() << "Plan " << ix;
         CandidatePlan& candidate = _candidates[ix];
         if (candidate.failed) {
             continue;
@@ -355,6 +357,7 @@ bool MultiPlanStage::workAllPlans(size_t numResults, PlanYieldPolicy* yieldPolic
         PlanStage::StageState state = candidate.root->work(&id);
 
         if (PlanStage::ADVANCED == state) {
+            log() << "advanced";
             // Save result for later.
             WorkingSetMember* member = candidate.ws->get(id);
             // Ensure that the BSONObj underlying the WorkingSetMember is owned in case we choose to
@@ -368,11 +371,13 @@ bool MultiPlanStage::workAllPlans(size_t numResults, PlanYieldPolicy* yieldPolic
                 doneWorking = true;
             }
         } else if (PlanStage::IS_EOF == state) {
+            log() << "eof";
             log() << "ian: Plan " << ix << " hit eof";
             // First plan to hit EOF wins automatically.  Stop evaluating other plans.
             // Assumes that the ranking will pick this plan.
             doneWorking = true;
         } else if (PlanStage::NEED_YIELD == state) {
+            log() << "needyield";
             if (id == WorkingSet::INVALID_ID) {
                 if (!yieldPolicy->canAutoYield())
                     throw WriteConflictException();
@@ -407,6 +412,7 @@ bool MultiPlanStage::workAllPlans(size_t numResults, PlanYieldPolicy* yieldPolic
                 return false;
             }
         }
+        log() << "need time";
     }
 
     return !doneWorking;

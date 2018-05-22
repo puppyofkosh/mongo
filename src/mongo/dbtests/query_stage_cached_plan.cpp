@@ -124,6 +124,28 @@ public:
         return numResults;
     }
 
+    void forceReplanning(Collection* collection, CanonicalQuery* cq) {
+        // Get planner params.
+        QueryPlannerParams plannerParams;
+        fillOutPlannerParams(&_opCtx, collection, cq, &plannerParams);
+
+        const size_t decisionWorks = 10;
+        const size_t mockWorks =
+            1U + static_cast<size_t>(internalQueryCacheEvictionRatio * decisionWorks);
+        auto mockChild = stdx::make_unique<QueuedDataStage>(&_opCtx, &_ws);
+        for (size_t i = 0; i < mockWorks; i++) {
+            mockChild->pushBack(PlanStage::NEED_TIME);
+        }
+
+        CachedPlanStage cachedPlanStage(
+            &_opCtx, collection, &_ws, cq, plannerParams, decisionWorks, mockChild.release());
+
+        // This should succeed after triggering a replan.
+        PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
+                                    _opCtx.getServiceContext()->getFastClockSource());
+        ASSERT_OK(cachedPlanStage.pickBestPlan(&yieldPolicy));
+    }
+
 protected:
     const ServiceContext::UniqueOperationContext _opCtxPtr = cc().makeOperationContext();
     OperationContext& _opCtx = *_opCtxPtr;
@@ -226,23 +248,6 @@ public:
                                     _opCtx.getServiceContext()->getFastClockSource());
         ASSERT_OK(cachedPlanStage.pickBestPlan(&yieldPolicy));
 
-        // Make sure that we get 2 legit results back.
-        size_t numResults = 0;
-        PlanStage::StageState state = PlanStage::NEED_TIME;
-        while (state != PlanStage::IS_EOF) {
-            WorkingSetID id = WorkingSet::INVALID_ID;
-            state = cachedPlanStage.work(&id);
-
-            ASSERT_NE(state, PlanStage::FAILURE);
-            ASSERT_NE(state, PlanStage::DEAD);
-
-            if (state == PlanStage::ADVANCED) {
-                WorkingSetMember* member = _ws.get(id);
-                ASSERT(cq->root()->matchesBSON(member->obj.value()));
-                numResults++;
-            }
-        }
-
         ASSERT_EQ(getNumResultsForStage(_ws, &cachedPlanStage, cq.get()), 2U);
 
         // This time we expect to find something in the plan cache. Replans after hitting the
@@ -264,7 +269,7 @@ public:
 
         // Query can be answered by either index on "a" or index on "b".
         auto qr = stdx::make_unique<QueryRequest>(nss);
-        qr->setFilter(fromjson("{a: {$gte: 8}, b: 1}"));
+        qr->setFilter(fromjson("{a: {$gte: 11}, b: {$gte: 11}}"));
         auto statusWithCQ = CanonicalQuery::canonicalize(opCtx(), std::move(qr));
         ASSERT_OK(statusWithCQ.getStatus());
         const std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
@@ -275,38 +280,37 @@ public:
         CachedSolution* rawCachedSolution;
         ASSERT_NOT_OK(cache->get(*cq, &rawCachedSolution));
 
-        // Step 1: Run the CachedPlanStage with a slow child plan. Replanning should be triggered
-        // and a tombstone will be added.
-
-        // Set up queued data stage to take a long time before returning EOF. Should be long
-        // enough to trigger a replan.
-
-        // Get planner params.
-        QueryPlannerParams plannerParams;
-        fillOutPlannerParams(&_opCtx, collection, cq.get(), &plannerParams);
-
-        const size_t decisionWorks = 10;
-        const size_t mockWorks =
-            1U + static_cast<size_t>(internalQueryCacheEvictionRatio * decisionWorks);
-        auto mockChild = stdx::make_unique<QueuedDataStage>(&_opCtx, &_ws);
-        for (size_t i = 0; i < mockWorks; i++) {
-            mockChild->pushBack(PlanStage::NEED_TIME);
-        }
-
-        CachedPlanStage cachedPlanStage(
-            &_opCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, mockChild.release());
-
-        // This should succeed after triggering a replan.
-        PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
-                                    _opCtx.getServiceContext()->getFastClockSource());
-        ASSERT_OK(cachedPlanStage.pickBestPlan(&yieldPolicy));
-
-        ASSERT_EQ(getNumResultsForStage(_ws, &cachedPlanStage, cq.get()), 2U);
+        // Step 1: Run the CachedPlanStage with a long-running child plan. Replanning should be
+        // triggered and a tombstone will be added.
+        forceReplanning(collection, cq.get());
 
         // Check for an inactive cache entry.
+        ASSERT_EQ(cache->getEntryStatus(*cq.get()), PlanCache::CacheEntryStatus::kPresentInactive);
 
-        // Step 2: Run another plan (which will take even longer) and be sure the worksThreshold is
-        // increased on the existing cache entry.
+        // The worksThreshold should be 1 for the entry, since the query we ran should not have any
+        // results.
+        auto entry = assertGet(cache->getEntry(*cq.get()));
+        size_t worksThreshold = 1U;
+        const size_t kExpectedNumWorks = 10;
+        ASSERT_EQ(entry->worksThreshold, worksThreshold);
+
+        for (int i = 0; i < std::ceil(std::log(kExpectedNumWorks) / std::log(2)); ++i) {
+            worksThreshold *= 2;
+            // Step 2: Run another query of the same shape, which is less selective, and therefore
+            // takes longer).
+            auto qr2 = stdx::make_unique<QueryRequest>(nss);
+            // Each of the documents {a:1} through {a:9} will match the filter. Therefore this
+            // query will require 9 works for each document, and one for the EOF, adding up to 10.
+            qr2->setFilter(fromjson("{a: {$gte: 1}, b: {$gte: 0}}"));
+            auto cq2 = assertGet(CanonicalQuery::canonicalize(opCtx(), std::move(qr2)));
+            forceReplanning(collection, cq2.get());
+
+            ASSERT_EQ(cache->getEntryStatus(*cq2.get()),
+                      PlanCache::CacheEntryStatus::kPresentInactive);
+            // The worksThreshold on the cache entry should have doubled.
+            entry = assertGet(cache->getEntry(*cq2.get()));
+            ASSERT_EQ(entry->worksThreshold, worksThreshold);
+        }
 
         // Step 3: Run another query which takes less time, and be sure an active entry is created.
 

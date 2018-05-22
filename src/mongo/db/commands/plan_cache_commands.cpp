@@ -389,13 +389,12 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
         return Status::OK();
     }
 
-    PlanCacheEntry* entryRaw;
-    Status result = planCache.getEntry(*cq, &entryRaw);
+    auto result = planCache.getEntry(*cq);
     // TODO: Report isActive somewhere in here.
     if (!result.isOK()) {
-        return result;
+        return result.getStatus();
     }
-    unique_ptr<PlanCacheEntry> entry(entryRaw);
+    PlanCacheEntry* entry = result.getValue().get();
 
     BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
     size_t numPlans = entry->plannerData.size();

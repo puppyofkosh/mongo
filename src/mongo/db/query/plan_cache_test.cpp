@@ -471,11 +471,9 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
 
     // After add, the planCache should have an inactive entry.
-    PlanCacheEntry* entryRaw;
-    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
-    std::unique_ptr<PlanCacheEntry> entry(entryRaw);
-    ASSERT_FALSE(entry->isActive);
+    auto entry = assertGet(planCache.getEntry(*cq));
     ASSERT_EQ(entry->worksThreshold, 10U);
+    ASSERT_FALSE(entry->isActive);
 
     // Calling add() again, with a solution that had a higher works value. This should cause the
     // worksThreshold on the original entry to be increased.
@@ -485,8 +483,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
 
     // The entry should still be inactive. Its worksThreshold should double though.
     ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
-    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(planCache.getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     ASSERT_EQ(entry->worksThreshold, 20U);
 
@@ -499,8 +496,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     // The entry should still be inactive. Its worksThreshold should now equal the works for the
     // plan that was just run.
     ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
-    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(planCache.getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     ASSERT_EQ(entry->worksThreshold, 30U);
 
@@ -512,8 +508,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
 
     // The solution just run should now be in an active cache entry.
     ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentActive);
-    ASSERT_OK(planCache.getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(planCache.getEntry(*cq));
     ASSERT_TRUE(entry->isActive);
     ASSERT_EQ(entry->decision->stats[0]->common.works, 25U);
     ASSERT_EQ(entry->worksThreshold, 25U);

@@ -737,19 +737,24 @@ Status PlanCache::add(const CanonicalQuery& query,
     Status cacheStatus = _cache.get(key, &oldEntry);
     if (cacheStatus.isOK()) {
         if (oldEntry->isActive) {
+            log() << "overwriting inactive entry";
             // This is overwriting an existing entry. The new entry will be inactive.
             isNewEntryActive = false;
         } else {
             if (nWorks > oldEntry->worksThreshold) {
                 // Bump the old entry's worksThreshold.
+                // TODO: remove min()
                 oldEntry->worksThreshold = std::min(nWorks, 2 * oldEntry->worksThreshold);
                 log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
                 return Status::OK();
             } else {
                 // We'll replace the old inactive entry with an active entry.
+                log() << "replacing old inactive entry";
                 isNewEntryActive = true;
             }
         }
+    } else {
+        log() << "creating new entry";
     }
 
     PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
@@ -846,9 +851,8 @@ PlanCacheKey PlanCache::computeKey(const CanonicalQuery& cq) const {
     return keyBuilder.str();
 }
 
-Status PlanCache::getEntry(const CanonicalQuery& query, PlanCacheEntry** entryOut) const {
+StatusWith<std::unique_ptr<PlanCacheEntry>> PlanCache::getEntry(const CanonicalQuery& query) const {
     PlanCacheKey key = computeKey(query);
-    verify(entryOut);
 
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* entry;
@@ -858,9 +862,7 @@ Status PlanCache::getEntry(const CanonicalQuery& query, PlanCacheEntry** entryOu
     }
     invariant(entry);
 
-    *entryOut = entry->clone();
-
-    return Status::OK();
+    return std::unique_ptr<PlanCacheEntry>(entry->clone());
 }
 
 std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {

@@ -310,9 +310,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     // Be sure that an inactive cache entry was added.
     PlanCache* cache = coll->infoCache()->getPlanCache();
     ASSERT_EQ(cache->size(), 1U);
-    PlanCacheEntry* entryRaw;
-    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
-    std::unique_ptr<PlanCacheEntry> entry(entryRaw);
+    auto entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     const size_t firstQueryWorks = getBestPlanWorks(mps.get());
     ASSERT_EQ(firstQueryWorks, entry->worksThreshold);
@@ -325,8 +323,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     // The last plan run should have required far more works than the previous plan. This means
     // that the 'worksThreshold' in the cache entry should have doubled.
     ASSERT_EQ(cache->size(), 1U);
-    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(firstQueryWorks * 2, entry->worksThreshold);
@@ -337,8 +334,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     // value of the number of works the plan took.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
-    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
@@ -346,8 +342,7 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     // Run the query yet again. This time, an active cache entry should be created.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
-    ASSERT_OK(cache->getEntry(*cq, &entryRaw));
-    entry.reset(entryRaw);
+    entry = assertGet(cache->getEntry(*cq));
     ASSERT_TRUE(entry->isActive);
     log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
