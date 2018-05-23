@@ -493,12 +493,11 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     newDecision->stats[0]->common.works = 30;
     ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
 
-    // The entry should still be inactive. Its worksThreshold should now equal the works for the
-    // plan that was just run.
+    // The entry should still be inactive. Its worksThreshold should have doubled again.
     ASSERT_EQ(planCache.getEntryStatus(*cq), PlanCache::CacheEntryStatus::kPresentInactive);
     entry = assertGet(planCache.getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
-    ASSERT_EQ(entry->worksThreshold, 30U);
+    ASSERT_EQ(entry->worksThreshold, 40U);
 
     // Calling add() again, with a solution that has a lower works value than what's currently in
     // the cache.

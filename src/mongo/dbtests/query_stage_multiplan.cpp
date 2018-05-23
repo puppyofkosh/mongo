@@ -314,10 +314,9 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     ASSERT_FALSE(entry->isActive);
     const size_t firstQueryWorks = getBestPlanWorks(mps.get());
     ASSERT_EQ(firstQueryWorks, entry->worksThreshold);
-    log() << "ian 1 " << entry->worksThreshold;
 
     // Run the multi-planner again. The index scan will again win, but the number of works
-    // will be greater.
+    // will be greater, since {foo: 5} appears more frequently in the collection.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
 
     // The last plan run should have required far more works than the previous plan. This means
@@ -325,26 +324,22 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
-    log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(firstQueryWorks * 2, entry->worksThreshold);
     ASSERT_GT(getBestPlanWorks(mps.get()), entry->worksThreshold);
 
     // Run the exact same query again. This will still take more works than 'worksThreshold', and
-    // should cause the cache entry's 'worksThreshold' to be bumped again, this time to the exact
-    // value of the number of works the plan took.
+    // should cause the cache entry's 'worksThreshold' to be doubled again.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
-    log() << "ian 2 " << entry->worksThreshold;
-    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
+    ASSERT_EQ(firstQueryWorks * 2 * 2, entry->worksThreshold);
 
     // Run the query yet again. This time, an active cache entry should be created.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_TRUE(entry->isActive);
-    log() << "ian 2 " << entry->worksThreshold;
     ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
 }
 
