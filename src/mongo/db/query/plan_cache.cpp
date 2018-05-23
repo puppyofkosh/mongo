@@ -747,8 +747,8 @@ Status PlanCache::add(const CanonicalQuery& query,
         } else {
             if (nWorks > oldEntry->worksThreshold) {
                 // Bump the old entry's worksThreshold.
-                // TODO: 2 should be a sever parameter.
-                oldEntry->worksThreshold = 2 * oldEntry->worksThreshold;
+                oldEntry->worksThreshold =
+                    internalQueryCacheWorksThresholdCoefficient * oldEntry->worksThreshold;
                 log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
                 return Status::OK();
             } else {
