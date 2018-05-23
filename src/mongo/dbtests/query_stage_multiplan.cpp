@@ -195,7 +195,6 @@ size_t getBestPlanWorks(MultiPlanStage* mps) {
 }
 
 
-
 // Basic ranking test: collection scan vs. highly selective index scan.  Make sure we also get
 // all expected results out as well.
 TEST_F(QueryStageMultiPlanTest, MPSCollectionScanVsHighlySelectiveIXScan) {

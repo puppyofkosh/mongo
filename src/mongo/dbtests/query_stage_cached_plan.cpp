@@ -307,13 +307,12 @@ public:
         }
 
         // Step 3: Run another query which takes less time, and be sure an active entry is created.
-        auto cq2 = assertGet(CanonicalQuery::canonicalize(
-                                 opCtx(), nss, fromjson("{a: {$gte: 6}, b: {$gte: 0}}")));
+        auto cq2 = assertGet(
+            CanonicalQuery::canonicalize(opCtx(), nss, fromjson("{a: {$gte: 6}, b: {$gte: 0}}")));
         forceReplanning(collection, cq2.get());
 
         // Now there should be an active cache entry.
-        ASSERT_EQ(cache->getEntryStatus(*cq2.get()),
-                  PlanCache::CacheEntryStatus::kPresentActive);
+        ASSERT_EQ(cache->getEntryStatus(*cq2.get()), PlanCache::CacheEntryStatus::kPresentActive);
         // The worksThreshold on the cache entry should have doubled.
         entry = assertGet(cache->getEntry(*cq2.get()));
         // This will query will match {a: 6} through {a:9} (4 works), plus one for EOF = 5 works.
