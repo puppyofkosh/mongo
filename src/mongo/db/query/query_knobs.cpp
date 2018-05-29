@@ -46,6 +46,9 @@ MONGO_EXPORT_SERVER_PARAMETER(internalQueryCacheEvictionRatio, double, 10.0);
 
 MONGO_EXPORT_SERVER_PARAMETER(internalQueryCacheWorksThresholdCoefficient, double, 2.0);
 
+// TODO: False by default in 4.2, but should be _true_ by default in 4.0.
+MONGO_EXPORT_SERVER_PARAMETER(internalQueryCacheDisableInactiveEntries, bool, false);
+
 MONGO_EXPORT_SERVER_PARAMETER(internalQueryPlannerMaxIndexedSolutions, int, 64);
 
 MONGO_EXPORT_SERVER_PARAMETER(internalQueryEnumerationMaxOrSolutions, int, 10);

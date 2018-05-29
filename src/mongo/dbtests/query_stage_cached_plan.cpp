@@ -322,6 +322,19 @@ public:
         // works threshold result in a cache entry.
         ASSERT_OK(cache->get(*cq, &rawCachedSolution));
         const std::unique_ptr<CachedSolution> cachedSolution(rawCachedSolution);
+
+        // Test the case where an active cache entry is set back to inactive.
+        // Run another query which takes long enough to evict the active cache entry. It should
+        // be replaced with an inactive entry.
+        auto cq3 = assertGet(
+            CanonicalQuery::canonicalize(opCtx(), nss, fromjson("{a: {$gte: 0}, b: {$gte: 0}}")));
+        forceReplanning(collection, cq2.get());
+        ASSERT_EQ(cache->getEntryStatus(*cq2.get()),
+                  PlanCache::CacheEntryStatus::kPresentInactive);
+        // The cache entry should have the same worksThreshold as it did before. The only difference
+        // is that it's inactive now.
+        entry = assertGet(cache->getEntry(*cq2.get()));
+        ASSERT_EQ(entry->worksThreshold, 5U);
     }
 };
 

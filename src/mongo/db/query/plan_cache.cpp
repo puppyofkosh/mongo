@@ -734,31 +734,42 @@ Status PlanCache::add(const CanonicalQuery& query,
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     bool isNewEntryActive = false;
     PlanCacheEntry* oldEntry;
-    // TODO: Guard with feature flag.
-    // TODO: Log things at the correct level and with less hacky messages.
     // TODO: larger unit test
     // TODO: Re-read doc and look for anything missing.
     Status cacheStatus = _cache.get(key, &oldEntry);
-    if (cacheStatus.isOK()) {
-        if (oldEntry->isActive) {
-            log() << "overwriting inactive entry";
-            // This is overwriting an existing entry. The new entry will be inactive.
-            isNewEntryActive = false;
-        } else {
-            if (nWorks > oldEntry->worksThreshold) {
-                // Bump the old entry's worksThreshold.
-                oldEntry->worksThreshold =
-                    internalQueryCacheWorksThresholdCoefficient * oldEntry->worksThreshold;
-                log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
+
+    if (internalQueryCacheDisableInactiveEntries.load()) {
+        // All entries are always active.
+        isNewEntryActive = true;
+    } else {
+        if (cacheStatus.isOK()) {
+            if (oldEntry->isActive) {
+                // TODO: test this case. Also argue for a log message here.
+                LOG(2) << "Active cache entry for query " << redact(query.toStringShort())
+                       << " is being demoted to inactive entry";
+                // This is overwriting (evicting) an existing entry. The new entry will be
+                // inactive, though it will have the same worksThreshold as the old entry.
+                oldEntry->isActive = false;
                 return Status::OK();
             } else {
-                // We'll replace the old inactive entry with an active entry.
-                log() << "replacing old inactive entry";
-                isNewEntryActive = true;
+                if (nWorks > oldEntry->worksThreshold) {
+                    // Bump the old entry's worksThreshold.
+                    oldEntry->worksThreshold *= internalQueryCacheWorksThresholdCoefficient;
+                    log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
+                    return Status::OK();
+                } else {
+                    LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
+                           << " is being promoted to active entry";
+                    // We'll replace the old inactive entry with an active entry.
+                    log() << "replacing old inactive entry";
+                    isNewEntryActive = true;
+                }
             }
+        } else {
+            LOG(1) << "Creating inactive cache entry for query shape "
+                   << redact(query.toStringShort());
+            log() << "creating new entry";
         }
-    } else {
-        log() << "creating new entry";
     }
 
     PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
@@ -811,7 +822,7 @@ Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const
         return Status::OK();
     }
 
-    return Status(ErrorCodes::NoSuchKey, "cache entry is inactive");
+    return Status(ErrorCodes::CacheEntryInactive, "cache entry is still inactive");
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {

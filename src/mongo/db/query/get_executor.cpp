@@ -121,6 +121,25 @@ namespace {
 // The body is below in the "count hack" section but getExecutor calls it.
 bool turnIxscanIntoCount(QuerySolution* soln);
 
+/*
+ * Determine whether or not the cache should be used. If it shouldn't be used because the cache
+ * entry exists but is inactive, log a message.
+ */
+bool decideShouldUseCache(const CanonicalQuery& cq,
+                          const Collection* collection,
+                          CachedSolution** rawCS) {
+    if (PlanCache::shouldCacheQuery(cq)) {
+        Status cacheEntryStatus = collection->infoCache()->getPlanCache()->get(cq, rawCS);
+        if (cacheEntryStatus == ErrorCodes::CacheEntryInactive) {
+            LOG(2) << "Not using cached entry for " << redact(cq.toStringShort())
+                   << " since it is inactive";
+        }
+
+        return cacheEntryStatus.isOK();
+    }
+    return false;
+}
+
 }  // namespace
 
 
@@ -361,12 +380,14 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
     }
 
     // Try to look up a cached solution for the query.
-    CachedSolution* rawCS;
-    if (PlanCache::shouldCacheQuery(*canonicalQuery) &&
-        collection->infoCache()->getPlanCache()->get(*canonicalQuery, &rawCS).isOK()) {
+    CachedSolution* rawCS = nullptr;
+    const bool useCache = decideShouldUseCache(*canonicalQuery, collection, &rawCS);
+
+    if (useCache) {
         // We have a CachedSolution.  Have the planner turn it into a QuerySolution.
         unique_ptr<CachedSolution> cs(rawCS);
         auto statusWithQs = QueryPlanner::planFromCache(*canonicalQuery, plannerParams, *cs);
+        // TODO: suspicious that we discard this return value if it's an error.
 
         if (statusWithQs.isOK()) {
             auto querySolution = std::move(statusWithQs.getValue());
