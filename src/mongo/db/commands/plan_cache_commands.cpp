@@ -390,7 +390,6 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
     }
 
     auto result = planCache.getEntry(*cq);
-    // TODO: Report isActive somewhere in here.
     if (!result.isOK()) {
         return result.getStatus();
     }
@@ -442,6 +441,10 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
 
     // Append the time the entry was inserted into the plan cache.
     bob->append("timeOfCreation", entry->timeOfCreation);
+
+    // Append whether or not the entry is active.
+    bob->append("isActive", entry->isActive);
+    bob->append("worksThreshold", static_cast<long long>(entry->worksThreshold));
 
     return Status::OK();
 }

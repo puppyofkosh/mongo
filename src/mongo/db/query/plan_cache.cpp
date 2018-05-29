@@ -556,7 +556,9 @@ std::string SolutionCacheData::toString() const {
 // PlanCache
 //
 
-PlanCache::PlanCache() : _cache(internalQueryCacheSize.load()) {}
+PlanCache::PlanCache() : PlanCache(internalQueryCacheSize.load()) {}
+
+PlanCache::PlanCache(size_t size) : _cache(size) {}
 
 PlanCache::PlanCache(const std::string& ns) : _cache(internalQueryCacheSize.load()), _ns(ns) {}
 
@@ -744,7 +746,6 @@ Status PlanCache::add(const CanonicalQuery& query,
     } else {
         if (cacheStatus.isOK()) {
             if (oldEntry->isActive) {
-                // TODO: test this case. Also argue for a log message here.
                 LOG(2) << "Active cache entry for query " << redact(query.toStringShort())
                        << " is being demoted to inactive entry";
                 // This is overwriting (evicting) an existing entry. The new entry will be
@@ -754,8 +755,9 @@ Status PlanCache::add(const CanonicalQuery& query,
             } else {
                 if (nWorks > oldEntry->worksThreshold) {
                     // Bump the old entry's worksThreshold.
-                    oldEntry->worksThreshold *= internalQueryCacheWorksThresholdCoefficient;
-                    log() << "ian: bumped works threshold to " << oldEntry->worksThreshold;
+                    const size_t grownVal =
+                        oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
+                    oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
                     return Status::OK();
                 } else {
                     LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())

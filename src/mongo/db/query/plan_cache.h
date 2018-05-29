@@ -317,6 +317,8 @@ public:
      */
     PlanCache();
 
+    PlanCache(size_t size);
+
     PlanCache(const std::string& ns);
 
     ~PlanCache();
