@@ -212,18 +212,6 @@ StatusWith<std::unique_ptr<CanonicalQuery>> CanonicalQuery::canonicalize(
     return std::move(cq);
 }
 
-StatusWith<std::unique_ptr<CanonicalQuery>> CanonicalQuery::canonicalize(OperationContext* opCtx,
-                                                                         const NamespaceString& nss,
-                                                                         BSONObj filter) {
-    auto qr = stdx::make_unique<QueryRequest>(nss);
-    qr->setFilter(filter);
-    auto statusWithCQ = CanonicalQuery::canonicalize(opCtx, std::move(qr));
-    if (!statusWithCQ.isOK()) {
-        return statusWithCQ;
-    }
-    return std::move(statusWithCQ.getValue());
-}
-
 Status CanonicalQuery::init(OperationContext* opCtx,
                             std::unique_ptr<QueryRequest> qr,
                             bool canHaveNoopMatchNodes,

@@ -92,13 +92,6 @@ public:
                                                                     MatchExpression* root);
 
     /**
-     * Convenience method for creating a CanonicalQuery just from a filter.
-     */
-    static StatusWith<std::unique_ptr<CanonicalQuery>> canonicalize(OperationContext* opCtx,
-                                                                    const NamespaceString& nss,
-                                                                    BSONObj filter);
-
-    /**
      * Returns true if "query" describes an exact-match query on _id.
      */
     static bool isSimpleIdQuery(const BSONObj& query);
