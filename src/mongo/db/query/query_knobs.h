@@ -77,8 +77,6 @@ extern AtomicDouble internalQueryCacheEvictionRatio;
 extern AtomicDouble internalQueryCacheWorksThresholdCoefficient;
 
 // Whether or not cache entries can be marked as "inactive."
-// TODO: Used this name instead of the proposed 'internalQueryCacheDisableTombstones'
-// we should probably discuss this during code review.
 extern AtomicBool internalQueryCacheDisableInactiveEntries;
 
 //

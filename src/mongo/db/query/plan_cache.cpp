@@ -749,16 +749,14 @@ Status PlanCache::add(const CanonicalQuery& query,
 
     const auto key = computeKey(query);
     const size_t nWorks = why->stats[0]->common.works;
-    log() << "nWorks for thing being added is " << nWorks;
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     bool isNewEntryActive = false;
-    PlanCacheEntry* oldEntry;
-    Status cacheStatus = _cache.get(key, &oldEntry);
-
     if (internalQueryCacheDisableInactiveEntries.load()) {
         // All entries are always active.
         isNewEntryActive = true;
     } else {
+        PlanCacheEntry* oldEntry;
+        Status cacheStatus = _cache.get(key, &oldEntry);
         if (cacheStatus.isOK()) {
             if (oldEntry->isActive) {
                 LOG(2) << "Active cache entry for query " << redact(query.toStringShort())
@@ -767,19 +765,21 @@ Status PlanCache::add(const CanonicalQuery& query,
                 // inactive, though it will have the same worksThreshold as the old entry.
                 oldEntry->isActive = false;
                 return Status::OK();
+            } else if (nWorks > oldEntry->worksThreshold) {
+                // Bump the old entry's worksThreshold.
+                const size_t grownVal =
+                    oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
+
+                // Be sure that the worksThreshold value always grows by at least 1, in case
+                // the current value and internalQueryCacheWorksThresholdCoefficient are low enough
+                // that grownVal cast to size_t is the same as the old worksThreshold.
+                oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
+                return Status::OK();
             } else {
-                if (nWorks > oldEntry->worksThreshold) {
-                    // Bump the old entry's worksThreshold.
-                    const size_t grownVal =
-                        oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
-                    oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
-                    return Status::OK();
-                } else {
-                    LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
-                           << " is being promoted to active entry";
-                    // We'll replace the old inactive entry with an active entry.
-                    isNewEntryActive = true;
-                }
+                LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
+                       << " is being promoted to active entry";
+                // We'll replace the old inactive entry with an active entry.
+                isNewEntryActive = true;
             }
         } else {
             LOG(1) << "Creating inactive cache entry for query shape "
