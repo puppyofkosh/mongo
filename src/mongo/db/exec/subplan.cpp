@@ -134,7 +134,8 @@ Status SubplanStage::planSubqueries() {
         // TODO: Call decideShouldUseCache here
         // Plan the i-th child. We might be able to find a plan for the i-th child in the plan
         // cache. If there's no cached plan, then we generate and rank plans using the MPS.
-        auto cachedSol = _collection->infoCache()->getPlanCache()->decideShouldUseCache(*branchResult->canonicalQuery);
+        auto cachedSol = _collection->infoCache()->getPlanCache()->decideShouldUseCache(
+            *branchResult->canonicalQuery);
         if (cachedSol) {
             // We have a CachedSolution. Store it for later.
             LOG(5) << "Subplanner: cached plan found for child " << i << " of "
