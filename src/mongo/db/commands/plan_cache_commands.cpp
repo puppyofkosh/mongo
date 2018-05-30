@@ -310,7 +310,8 @@ Status PlanCacheClear::clear(OperationContext* opCtx,
 
         unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
-        if (planCache->getEntryStatus(*cq) == PlanCache::CacheEntryStatus::kNotPresent) {
+        auto getRes = planCache->get(*cq);
+        if (getRes.status == PlanCache::CacheEntryStatus::kNotPresent) {
             // Log if asked to clear non-existent query shape.
             LOG(1) << ns << ": query shape doesn't exist in PlanCache - "
                    << redact(cq->getQueryObj()) << "(sort: " << cq->getQueryRequest().getSort()
@@ -381,18 +382,18 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
     }
     unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
-    if (planCache.getEntryStatus(*cq) == PlanCache::CacheEntryStatus::kNotPresent) {
+    auto result = planCache.getEntry(*cq);
+
+    if (result == ErrorCodes::NoSuchKey) {
         // Return empty plans in results if query shape does not
         // exist in plan cache.
         BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
         plansBuilder.doneFast();
         return Status::OK();
-    }
-
-    auto result = planCache.getEntry(*cq);
-    if (!result.isOK()) {
+    } else if (!result.isOK()) {
         return result.getStatus();
     }
+
     PlanCacheEntry* entry = result.getValue().get();
 
     BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));

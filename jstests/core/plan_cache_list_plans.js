@@ -63,7 +63,7 @@
     // Retrieve plans for valid cache entry.
     let entry = getEntry({a: 1, b: 1}, {a: -1}, {_id: 0, a: 1});
     assert(entry.hasOwnProperty('worksThreshold'),
-           'worksThreshold missing from planCacheListPlans() result');
+           'worksThreshold missing from planCacheListPlans() result ' + tojson(entry));
 
     let plans = entry.plans;
     assert.eq(entry.isActive, false);

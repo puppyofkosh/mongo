@@ -564,6 +564,23 @@ PlanCache::PlanCache(const std::string& ns) : _cache(internalQueryCacheSize.load
 
 PlanCache::~PlanCache() {}
 
+/*
+ * Determine whether or not the cache should be used. If it shouldn't be used because the cache
+ * entry exists but is inactive, log a message.
+ */
+std::unique_ptr<CachedSolution> PlanCache::decideShouldUseCache(const CanonicalQuery& cq) {
+    if (PlanCache::shouldCacheQuery(cq)) {
+        PlanCache::GetResult res = get(cq);
+        if (res.status == PlanCache::CacheEntryStatus::kPresentInactive) {
+            LOG(2) << "Not using cached entry for " << redact(cq.toStringShort())
+                   << " since it is inactive";
+        }
+
+        return std::move(res.cachedSolution);
+    }
+    return nullptr;
+}
+
 /**
  * Traverses expression tree pre-order.
  * Appends an encoding of each node's match type and path name
@@ -803,24 +820,25 @@ Status PlanCache::add(const CanonicalQuery& query,
     return Status::OK();
 }
 
-Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const {
+PlanCache::GetResult PlanCache::get(const CanonicalQuery& query) const {
     PlanCacheKey key = computeKey(query);
-    verify(crOut);
+    GetResult res;
 
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* entry;
     Status cacheStatus = _cache.get(key, &entry);
     if (!cacheStatus.isOK()) {
-        return cacheStatus;
+        invariant(cacheStatus == ErrorCodes::NoSuchKey);
+        return {CacheEntryStatus::kNotPresent, nullptr};
     }
     invariant(entry);
 
     if (entry->isActive) {
-        *crOut = new CachedSolution(key, *entry);
-        return Status::OK();
+        return {CacheEntryStatus::kPresentActive,
+                std::unique_ptr<CachedSolution>(new CachedSolution(key, *entry))};
     }
 
-    return Status(ErrorCodes::CacheEntryInactive, "Cache entry is inactive");
+    return {CacheEntryStatus::kPresentInactive, nullptr};
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {
@@ -888,16 +906,6 @@ std::vector<PlanCacheEntry*> PlanCache::getAllEntries() const {
     }
 
     return entries;
-}
-
-PlanCache::CacheEntryStatus PlanCache::getEntryStatus(const CanonicalQuery& cq) const {
-    PlanCacheEntry* entry;
-    Status cacheStatus = _cache.get(computeKey(cq), &entry);
-    if (!cacheStatus.isOK()) {
-        return CacheEntryStatus::kNotPresent;
-    }
-    invariant(entry);
-    return entry->isActive ? CacheEntryStatus::kPresentActive : CacheEntryStatus::kPresentInactive;
 }
 
 size_t PlanCache::size() const {

@@ -300,9 +300,23 @@ private:
 
 public:
     enum CacheEntryStatus {
+        // There is no cache entry for the given canonical query.
         kNotPresent,
+
+        // There is a cache entry for the given canonical query, but it is inactive, meaning that
+        // is should not be used when planning.
         kPresentInactive,
+
+        // There is a cache entry for the given canonical query, and it is active.
         kPresentActive,
+    };
+
+    /**
+     * Encapsulates the value returned from a call to get().
+     */
+    struct GetResult {
+        CacheEntryStatus status;
+        std::unique_ptr<CachedSolution> cachedSolution;
     };
 
     /**
@@ -352,100 +366,101 @@ public:
      *
      * TODO: Explain that this only returns solutions that are in active entries.
      */
-    Status get(const CanonicalQuery& query, CachedSolution** crOut) const;
+    GetResult get(const CanonicalQuery& query) const;
 
     /**
-     * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
-     * plan's performance.  The CachedPlanStage calls feedback(...) after executing the cached
-     * plan for a trial period in order to do this.
-     *
-     * Cache takes ownership of 'feedback'.
-     *
-     * If the entry corresponding to 'cq' isn't in the cache anymore, the feedback is ignored
-     * and an error Status is returned.
-     *
-     * If the entry corresponding to 'cq' still exists, 'feedback' is added to the run
-     * statistics about the plan.  Status::OK() is returned.
+     * Determine whether or not the cache should be used. If it shouldn't be used because the cache
+     * entry exists but is inactive, log a message.
      */
-    Status feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback);
+    std::unique_ptr<CachedSolution> decideShouldUseCache(const CanonicalQuery& cq);
 
-    /**
-     * Remove the entry corresponding to 'ck' from the cache.  Returns Status::OK() if the plan
-     * was present and removed and an error status otherwise.
-     */
-    Status remove(const CanonicalQuery& canonicalQuery);
+        /**
+         * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
+         * plan's performance.  The CachedPlanStage calls feedback(...) after executing the cached
+         * plan for a trial period in order to do this.
+         *
+         * Cache takes ownership of 'feedback'.
+         *
+         * If the entry corresponding to 'cq' isn't in the cache anymore, the feedback is ignored
+         * and an error Status is returned.
+         *
+         * If the entry corresponding to 'cq' still exists, 'feedback' is added to the run
+         * statistics about the plan.  Status::OK() is returned.
+         */
+        Status feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback);
 
-    /**
-     * Remove *all* cached plans.  Does not clear index information.
-     */
-    void clear();
+        /**
+         * Remove the entry corresponding to 'ck' from the cache.  Returns Status::OK() if the plan
+         * was present and removed and an error status otherwise.
+         */
+        Status remove(const CanonicalQuery& canonicalQuery);
 
-    /**
-     * Get the cache key corresponding to the given canonical query.  The query need not already
-     * be cached.
-     *
-     * This is provided in the public API simply as a convenience for consumers who need some
-     * description of query shape (e.g. index filters).
-     *
-     * Callers must hold the collection lock when calling this method.
-     */
-    PlanCacheKey computeKey(const CanonicalQuery&) const;
+        /**
+         * Remove *all* cached plans.  Does not clear index information.
+         */
+        void clear();
 
-    /**
-     * Returns a copy of a cache entry.
-     * Used by planCacheListPlans to display plan details.
-      *
-     * If there is no entry in the cache for the 'query', returns an error Status.
-     *
-     */
-    StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
+        /**
+         * Get the cache key corresponding to the given canonical query.  The query need not already
+         * be cached.
+         *
+         * This is provided in the public API simply as a convenience for consumers who need some
+         * description of query shape (e.g. index filters).
+         *
+         * Callers must hold the collection lock when calling this method.
+         */
+        PlanCacheKey computeKey(const CanonicalQuery&) const;
 
-    /**
-     * Returns a vector of all cache entries.
-     * Caller owns the result vector and is responsible for cleaning up
-     * the cache entry copies.
-     * Used by planCacheListQueryShapes and index_filter_commands_test.cpp.
-     */
-    std::vector<PlanCacheEntry*> getAllEntries() const;
+        /**
+         * Returns a copy of a cache entry.
+         * Used by planCacheListPlans to display plan details.
+          *
+         * If there is no entry in the cache for the 'query', returns an error Status.
+         *
+         */
+        StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
 
-    /**
-     * Look up cq in the cache and return whether or not it's present (and active).
-     */
-    CacheEntryStatus getEntryStatus(const CanonicalQuery& cq) const;
+        /**
+         * Returns a vector of all cache entries.
+         * Caller owns the result vector and is responsible for cleaning up
+         * the cache entry copies.
+         * Used by planCacheListQueryShapes and index_filter_commands_test.cpp.
+         */
+        std::vector<PlanCacheEntry*> getAllEntries() const;
 
-    /**
-     * Returns number of entries in cache. Includes inactive entries.
-     * Used for testing.
-     */
-    size_t size() const;
+        /**
+         * Returns number of entries in cache. Includes inactive entries.
+         * Used for testing.
+         */
+        size_t size() const;
 
-    /**
-     * Updates internal state kept about the collection's indexes.  Must be called when the set
-     * of indexes on the associated collection have changed.
-     *
-     * Callers must hold the collection lock in exclusive mode when calling this method.
-     */
-    void notifyOfIndexEntries(const std::vector<IndexEntry>& indexEntries);
+        /**
+         * Updates internal state kept about the collection's indexes.  Must be called when the set
+         * of indexes on the associated collection have changed.
+         *
+         * Callers must hold the collection lock in exclusive mode when calling this method.
+         */
+        void notifyOfIndexEntries(const std::vector<IndexEntry>& indexEntries);
 
-private:
-    void encodeKeyForMatch(const MatchExpression* tree, StringBuilder* keyBuilder) const;
-    void encodeKeyForSort(const BSONObj& sortObj, StringBuilder* keyBuilder) const;
-    void encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuilder) const;
+    private:
+        void encodeKeyForMatch(const MatchExpression* tree, StringBuilder* keyBuilder) const;
+        void encodeKeyForSort(const BSONObj& sortObj, StringBuilder* keyBuilder) const;
+        void encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuilder) const;
 
-    LRUKeyValue<PlanCacheKey, PlanCacheEntry> _cache;
+        LRUKeyValue<PlanCacheKey, PlanCacheEntry> _cache;
 
-    // Protects _cache.
-    mutable stdx::mutex _cacheMutex;
+        // Protects _cache.
+        mutable stdx::mutex _cacheMutex;
 
-    // Full namespace of collection.
-    std::string _ns;
+        // Full namespace of collection.
+        std::string _ns;
 
-    // Holds computed information about the collection's indexes.  Used for generating plan
-    // cache keys.
-    //
-    // Concurrent access is synchronized by the collection lock.  Multiple concurrent readers
-    // are allowed.
-    PlanCacheIndexabilityState _indexabilityState;
-};
+        // Holds computed information about the collection's indexes.  Used for generating plan
+        // cache keys.
+        //
+        // Concurrent access is synchronized by the collection lock.  Multiple concurrent readers
+        // are allowed.
+        PlanCacheIndexabilityState _indexabilityState;
+    };
 
 }  // namespace mongo
