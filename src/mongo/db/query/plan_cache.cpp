@@ -736,8 +736,6 @@ Status PlanCache::add(const CanonicalQuery& query,
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     bool isNewEntryActive = false;
     PlanCacheEntry* oldEntry;
-    // TODO: larger unit test
-    // TODO: Re-read doc and look for anything missing.
     Status cacheStatus = _cache.get(key, &oldEntry);
 
     if (internalQueryCacheDisableInactiveEntries.load()) {
@@ -763,14 +761,12 @@ Status PlanCache::add(const CanonicalQuery& query,
                     LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
                            << " is being promoted to active entry";
                     // We'll replace the old inactive entry with an active entry.
-                    log() << "replacing old inactive entry";
                     isNewEntryActive = true;
                 }
             }
         } else {
             LOG(1) << "Creating inactive cache entry for query shape "
                    << redact(query.toStringShort());
-            log() << "creating new entry";
         }
     }
 
@@ -824,7 +820,7 @@ Status PlanCache::get(const CanonicalQuery& query, CachedSolution** crOut) const
         return Status::OK();
     }
 
-    return Status(ErrorCodes::CacheEntryInactive, "cache entry is still inactive");
+    return Status(ErrorCodes::CacheEntryInactive, "Cache entry is inactive");
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {

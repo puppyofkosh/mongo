@@ -387,7 +387,6 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
         // We have a CachedSolution.  Have the planner turn it into a QuerySolution.
         unique_ptr<CachedSolution> cs(rawCS);
         auto statusWithQs = QueryPlanner::planFromCache(*canonicalQuery, plannerParams, *cs);
-        // TODO: suspicious that we discard this return value if it's an error.
 
         if (statusWithQs.isOK()) {
             auto querySolution = std::move(statusWithQs.getValue());

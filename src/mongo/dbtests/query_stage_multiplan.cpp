@@ -162,7 +162,6 @@ std::pair<unique_ptr<PlanStage>, unique_ptr<MatchExpression>> getCollScanPlan(
     csparams.collection = coll;
     csparams.direction = CollectionScanParams::FORWARD;
 
-    // BSONObj filterObj = BSON("foo" << desiredFooValue);
     const CollatorInterface* collator = nullptr;
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
     StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj, expCtx);

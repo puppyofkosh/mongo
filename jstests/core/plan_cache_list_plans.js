@@ -48,7 +48,7 @@
     t.ensureIndex({a: 1, b: 1});
 
     // Invalid key should be an error.
-    assert.eq(0,
+    assert.eq([],
               getEntry({unknownfield: 1}, {}, {}).plans,
               'planCacheListPlans should return empty results on unknown query shape');
 
