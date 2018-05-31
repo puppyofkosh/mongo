@@ -726,7 +726,7 @@ void PlanCache::encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuild
 
 Status PlanCache::add(const CanonicalQuery& query,
                       const std::vector<QuerySolution*>& solns,
-                      PlanRankingDecision* why,
+                      std::unique_ptr<PlanRankingDecision> why,
                       Date_t now) {
     invariant(why);
 
@@ -787,7 +787,7 @@ Status PlanCache::add(const CanonicalQuery& query,
         }
     }
 
-    PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why);
+    PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why.release());
     const QueryRequest& qr = query.getQueryRequest();
     newEntry->query = qr.getFilter().getOwned();
     newEntry->sort = qr.getSort().getOwned();

@@ -237,7 +237,7 @@ struct GenerateQuerySolution {
 /**
  * Utility function to create a PlanRankingDecision
  */
-PlanRankingDecision* createDecision(size_t numPlans) {
+std::unique_ptr<PlanRankingDecision> createDecision(size_t numPlans) {
     unique_ptr<PlanRankingDecision> why(new PlanRankingDecision());
     for (size_t i = 0; i < numPlans; ++i) {
         CommonStats common("COLLSCAN");
@@ -247,7 +247,7 @@ PlanRankingDecision* createDecision(size_t numPlans) {
         why->scores.push_back(0U);
         why->candidateOrder.push_back(i);
     }
-    return why.release();
+    return why;
 }
 
 /**
@@ -432,7 +432,7 @@ TEST(PlanCacheTest, AddEmptySolutions) {
     std::vector<QuerySolution*> solns;
     unique_ptr<PlanRankingDecision> decision(createDecision(1U));
     QueryTestServiceContext serviceContext;
-    ASSERT_NOT_OK(planCache.add(*cq, solns, decision.get(), Date_t{}));
+    ASSERT_NOT_OK(planCache.add(*cq, solns, std::move(decision), Date_t{}));
 }
 
 void addCacheEntryForShape(const CanonicalQuery& cq, PlanCache* planCache) {
@@ -440,8 +440,7 @@ void addCacheEntryForShape(const CanonicalQuery& cq, PlanCache* planCache) {
     auto qs = getQuerySolutionForCaching();
     std::vector<QuerySolution*> solns = {qs.get()};
 
-    PlanRankingDecision* firstDecision = createDecision(1U);
-    ASSERT_OK(planCache->add(cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache->add(cq, solns, createDecision(1U), Date_t{}));
 }
 
 TEST(PlanCacheTest, PlanCacheLRUPolicyRemovesInactiveEntries) {
@@ -488,8 +487,7 @@ TEST(PlanCacheTest, PlanCacheRemoveDeletesInactiveEntries) {
 
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    PlanRankingDecision* firstDecision = createDecision(1U);
-    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -508,8 +506,7 @@ TEST(PlanCacheTest, PlanCacheFlushDeletesInactiveEntries) {
 
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    PlanRankingDecision* firstDecision = createDecision(1U);
-    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -529,18 +526,18 @@ TEST(PlanCacheTest, AddActiveCacheEntry) {
     // Check if key is in cache before and after add().
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    PlanRankingDecision* firstDecision = createDecision(1U);
+    auto firstDecision = createDecision(1U);
     firstDecision->stats[0]->common.works = 20;
-    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(firstDecision), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
 
     // Calling add() again, with a solution that had a lower works value should create an active
     // entry.
-    PlanRankingDecision* newDecision = createDecision(1U);
+    auto newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 10;
-    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(newDecision), Date_t{}));
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentActive);
     ASSERT_EQUALS(planCache.size(), 1U);
 
@@ -558,9 +555,9 @@ TEST(PlanCacheTest, WorksValueIncreases) {
 
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    PlanRankingDecision* firstDecision = createDecision(1U);
+    auto firstDecision = createDecision(1U);
     firstDecision->stats[0]->common.works = 10;
-    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(firstDecision), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
     auto entry = assertGet(planCache.getEntry(*cq));
@@ -569,9 +566,9 @@ TEST(PlanCacheTest, WorksValueIncreases) {
 
     // Calling add() again, with a solution that had a higher works value. This should cause the
     // worksThreshold on the original entry to be increased.
-    PlanRankingDecision* newDecision = createDecision(1U);
+    auto newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 50;
-    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(newDecision), Date_t{}));
 
     // The entry should still be inactive. Its worksThreshold should double though.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -583,7 +580,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     // worksThreshold on the original entry to be increased.
     newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 30;
-    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(newDecision), Date_t{}));
 
     // The entry should still be inactive. Its worksThreshold should have doubled again.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -595,7 +592,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     // the cache.
     newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 25;
-    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(newDecision), Date_t{}));
 
     // The solution just run should now be in an active cache entry, with a worksThreshold
     // equal to the number of works the solution took.
@@ -624,9 +621,9 @@ TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
 
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
     QueryTestServiceContext serviceContext;
-    PlanRankingDecision* firstDecision = createDecision(1U);
+    auto firstDecision = createDecision(1U);
     firstDecision->stats[0]->common.works = 3;
-    ASSERT_OK(planCache.add(*cq, solns, firstDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(firstDecision), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
     auto entry = assertGet(planCache.getEntry(*cq));
@@ -637,9 +634,9 @@ TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
     // worksThreshold on the original entry to be increased. In this case, since nWorks is 3,
     // multiplying by the value 1.10 will give a value of 3 (static_cast<size_t>(1.1 * 3) == 3).
     // We check that the works value is increased 1 instead.
-    PlanRankingDecision* newDecision = createDecision(1U);
+    auto newDecision = createDecision(1U);
     newDecision->stats[0]->common.works = 50;
-    ASSERT_OK(planCache.add(*cq, solns, newDecision, Date_t{}));
+    ASSERT_OK(planCache.add(*cq, solns, std::move(newDecision), Date_t{}));
 
     // The entry should still be inactive. Its worksThreshold should increase by 1.
     ASSERT_EQ(planCache.get(*cq).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -892,7 +889,7 @@ protected:
         qs.cacheData.reset(soln.cacheData->clone());
         std::vector<QuerySolution*> solutions;
         solutions.push_back(&qs);
-        PlanCacheEntry entry(solutions, createDecision(1U));
+        PlanCacheEntry entry(solutions, createDecision(1U).release());
         CachedSolution cachedSoln(ck, entry);
 
         auto statusWithQs = QueryPlanner::planFromCache(*scopedCq, params, cachedSoln);
