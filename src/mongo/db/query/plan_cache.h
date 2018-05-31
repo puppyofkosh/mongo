@@ -354,7 +354,7 @@ public:
      */
     Status add(const CanonicalQuery& query,
                const std::vector<QuerySolution*>& solns,
-               PlanRankingDecision* why,
+               std::unique_ptr<PlanRankingDecision> why,
                Date_t now);
 
     /**
