@@ -258,9 +258,9 @@ public:
  * Test the way cache entries are added (either "active" or "inactive") to the plan cache.
  */
 class QueryStageCachedPlanAddsActiveCacheEntries : public QueryStageCachedPlanBase {
-    StatusWith<std::unique_ptr<CanonicalQuery>> canonicalizeFilter(OperationContext* opCtx,
-                                                                   const NamespaceString& nss,
-                                                                   BSONObj filter) {
+    StatusWith<std::unique_ptr<CanonicalQuery>> filterToCanonicalQuery(OperationContext* opCtx,
+                                                                       const NamespaceString& nss,
+                                                                       BSONObj filter) {
         auto qr = stdx::make_unique<QueryRequest>(nss);
         qr->setFilter(filter);
         auto statusWithCQ = CanonicalQuery::canonicalize(opCtx, std::move(qr));
@@ -277,8 +277,8 @@ public:
         ASSERT(collection);
 
         // Query can be answered by either index on "a" or index on "b".
-        const auto cq =
-            assertGet(canonicalizeFilter(opCtx(), nss, fromjson("{a: {$gte: 11}, b: {$gte: 11}}")));
+        const auto cq = assertGet(
+            filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 11}, b: {$gte: 11}}")));
 
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
@@ -304,7 +304,7 @@ public:
             // Step 2: Run another query of the same shape, which is less selective, and therefore
             // takes longer).
             auto cq2 = assertGet(
-                canonicalizeFilter(opCtx(), nss, fromjson("{a: {$gte: 1}, b: {$gte: 0}}")));
+                filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 1}, b: {$gte: 0}}")));
             forceReplanning(collection, cq2.get());
 
             ASSERT_EQ(cache->get(*cq2.get()).status, PlanCache::CacheEntryStatus::kPresentInactive);
@@ -314,8 +314,8 @@ public:
         }
 
         // Step 3: Run another query which takes less time, and be sure an active entry is created.
-        auto cq2 =
-            assertGet(canonicalizeFilter(opCtx(), nss, fromjson("{a: {$gte: 6}, b: {$gte: 0}}")));
+        auto cq2 = assertGet(
+            filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 6}, b: {$gte: 0}}")));
         forceReplanning(collection, cq2.get());
 
         // Now there should be an active cache entry.
@@ -332,8 +332,8 @@ public:
         // Test the case where an active cache entry is set back to inactive.
         // Run another query which takes long enough to evict the active cache entry. It should
         // be replaced with an inactive entry.
-        auto cq3 =
-            assertGet(canonicalizeFilter(opCtx(), nss, fromjson("{a: {$gte: 0}, b: {$gte: 0}}")));
+        auto cq3 = assertGet(
+            filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 0}, b: {$gte: 0}}")));
         forceReplanning(collection, cq2.get());
         ASSERT_EQ(cache->get(*cq2.get()).status, PlanCache::CacheEntryStatus::kPresentInactive);
         // The cache entry should have the same worksThreshold as it did before. The only difference

@@ -822,7 +822,6 @@ Status PlanCache::add(const CanonicalQuery& query,
 
 PlanCache::GetResult PlanCache::get(const CanonicalQuery& query) const {
     PlanCacheKey key = computeKey(query);
-    GetResult res;
 
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* entry;
