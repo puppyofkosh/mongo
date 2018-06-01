@@ -770,9 +770,9 @@ Status PlanCache::add(const CanonicalQuery& query,
                 const size_t grownVal =
                     oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
 
-                // Be sure that the worksThreshold value always grows by at least 1, in case
-                // the current value and internalQueryCacheWorksThresholdCoefficient are low enough
-                // that grownVal cast to size_t is the same as the old worksThreshold.
+                // Be sure that 'worksThreshold' always grows by at least 1, in case its current
+                // value and 'internalQueryCacheWorksThresholdCoefficient' are low enough that
+                // 'grownVal' cast to size_t is the same as the previous value of 'worksThreshold'.
                 oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
                 return Status::OK();
             } else {

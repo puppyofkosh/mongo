@@ -393,7 +393,6 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
     } else if (!result.isOK()) {
         return result.getStatus();
     }
-
     PlanCacheEntry* entry = result.getValue().get();
 
     BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
