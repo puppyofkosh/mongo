@@ -112,7 +112,7 @@ SolutionCacheData* createSolutionCacheData() {
 /**
  * Utility function to create a PlanRankingDecision
  */
-PlanRankingDecision* createDecision(size_t numPlans) {
+std::unique_ptr<PlanRankingDecision> createDecision(size_t numPlans) {
     unique_ptr<PlanRankingDecision> why(new PlanRankingDecision());
     for (size_t i = 0; i < numPlans; ++i) {
         CommonStats common("COLLSCAN");
@@ -122,7 +122,7 @@ PlanRankingDecision* createDecision(size_t numPlans) {
         why->scores.push_back(0U);
         why->candidateOrder.push_back(i);
     }
-    return why.release();
+    return why;
 }
 
 TEST(PlanCacheCommandsTest, planCacheListQueryShapesEmpty) {
@@ -489,6 +489,9 @@ vector<BSONObj> getPlans(const PlanCache& planCache,
     BSONObj cmdObj = cmdObjBuilder.obj();
     ASSERT_OK(PlanCacheListPlans::list(opCtx.get(), planCache, nss.ns(), cmdObj, &bob));
     BSONObj resultObj = bob.obj();
+    ASSERT_TRUE(resultObj.hasField("isActive"));
+    ASSERT_TRUE(resultObj.hasField("worksThreshold"));
+
     BSONElement plansElt = resultObj.getField("plans");
     ASSERT_EQUALS(plansElt.type(), mongo::Array);
     vector<BSONElement> planEltArray = plansElt.Array();
