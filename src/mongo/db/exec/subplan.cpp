@@ -131,7 +131,6 @@ Status SubplanStage::planSubqueries() {
 
         branchResult->canonicalQuery = std::move(statusWithCQ.getValue());
 
-        // TODO: Call decideShouldUseCache here
         // Plan the i-th child. We might be able to find a plan for the i-th child in the plan
         // cache. If there's no cached plan, then we generate and rank plans using the MPS.
         auto cachedSol = _collection->infoCache()->getPlanCache()->decideShouldUseCache(
