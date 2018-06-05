@@ -285,8 +285,9 @@ public:
     // planning.
     bool isActive = false;
 
-    // The number of "works" required for a plan to run on this shape before it becomes active. May
-    // be increased when attempting to add a cache entry.
+    // The number of "works" required for a plan to run on this shape before it becomes
+    // active. Running a query of the same shape while this cache entry is inactive may cause this
+    // value to be increased.
     size_t worksThreshold = 0;
 };
 
@@ -294,14 +295,18 @@ public:
  * Caches the best solution to a query.  Aside from the (CanonicalQuery -> QuerySolution)
  * mapping, the cache contains information on why that mapping was made and statistics on the
  * cache entry's actual performance on subsequent runs.
- *
  */
 class PlanCache {
 private:
     MONGO_DISALLOW_COPYING(PlanCache);
 
 public:
-    enum CacheEntryStatus {
+    // We have three states for a cache entry to be in. Rather than just 'present' or 'not
+    // present', we use a notion of 'inactive entries' as a way of remembering how performant our
+    // original solution to the query was. This information is useful to prevent much slower
+    // queries from putting their plans in the cache immediately, which could cause faster queries
+    // to run with a sub-optimal plan.
+    enum CacheEntryState {
         // There is no cache entry for the given canonical query.
         kNotPresent,
 
@@ -317,7 +322,7 @@ public:
      * Encapsulates the value returned from a call to get().
      */
     struct GetResult {
-        CacheEntryStatus status;
+        CacheEntryState state;
         std::unique_ptr<CachedSolution> cachedSolution;
     };
 
