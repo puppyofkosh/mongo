@@ -13,7 +13,6 @@
     let t = db.jstests_plan_cache_list_plans;
     t.drop();
 
-    // Utility function to list plans for a query.
     function getEntry(query, sort, projection) {
         let key = {query: query, sort: sort, projection: projection};
         let res = t.runCommand('planCacheListPlans', key);
@@ -64,9 +63,9 @@
     let entry = getEntry({a: 1, b: 1}, {a: -1}, {_id: 0, a: 1});
     assert(entry.hasOwnProperty('worksThreshold'),
            'worksThreshold missing from planCacheListPlans() result ' + tojson(entry));
+    assert.eq(entry.isActive, false);
 
     let plans = entry.plans;
-    assert.eq(entry.isActive, false);
     assert.eq(2, plans.length, 'unexpected number of plans cached for query');
 
     // Print every plan

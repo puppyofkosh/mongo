@@ -173,7 +173,7 @@ public:
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
         ASSERT(cache);
-        ASSERT_EQ(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
 
         // Get planner params.
         QueryPlannerParams plannerParams;
@@ -197,7 +197,7 @@ public:
 
         // Plan cache should still be empty, as we don't write to it when we replan a failed
         // query.
-        ASSERT_EQ(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
     }
 };
 
@@ -222,7 +222,7 @@ public:
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
         ASSERT(cache);
-        ASSERT_EQ(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
 
         // Get planner params.
         QueryPlannerParams plannerParams;
@@ -250,7 +250,7 @@ public:
 
         // This time we expect to find something in the plan cache. Replans after hitting the
         // works threshold result in a cache entry.
-        ASSERT_NE(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_NE(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
     }
 };
 
@@ -283,14 +283,14 @@ public:
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
         ASSERT(cache);
-        ASSERT_EQ(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
 
         // Step 1: Run the CachedPlanStage with a long-running child plan. Replanning should be
         // triggered and a tombstone will be added.
         forceReplanning(collection, cq.get());
 
         // Check for an inactive cache entry.
-        ASSERT_EQ(cache->get(*cq.get()).status, PlanCache::CacheEntryStatus::kPresentInactive);
+        ASSERT_EQ(cache->get(*cq.get()).state, PlanCache::CacheEntryState::kPresentInactive);
 
         // The worksThreshold should be 1 for the entry, since the query we ran should not have any
         // results.
@@ -307,7 +307,7 @@ public:
                 filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 1}, b: {$gte: 0}}")));
             forceReplanning(collection, cq2.get());
 
-            ASSERT_EQ(cache->get(*cq2.get()).status, PlanCache::CacheEntryStatus::kPresentInactive);
+            ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentInactive);
             // The worksThreshold on the cache entry should have doubled.
             entry = assertGet(cache->getEntry(*cq2.get()));
             ASSERT_EQ(entry->worksThreshold, worksThreshold);
@@ -319,7 +319,7 @@ public:
         forceReplanning(collection, cq2.get());
 
         // Now there should be an active cache entry.
-        ASSERT_EQ(cache->get(*cq2.get()).status, PlanCache::CacheEntryStatus::kPresentActive);
+        ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentActive);
         // The worksThreshold on the cache entry should have doubled.
         entry = assertGet(cache->getEntry(*cq2.get()));
         // This will query will match {a: 6} through {a:9} (4 works), plus one for EOF = 5 works.
@@ -327,7 +327,7 @@ public:
 
         // This time we expect to find something in the plan cache. Replans after hitting the
         // works threshold result in a cache entry.
-        ASSERT_NE(cache->get(*cq).status, PlanCache::CacheEntryStatus::kNotPresent);
+        ASSERT_NE(cache->get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
 
         // Test the case where an active cache entry is set back to inactive.
         // Run another query which takes long enough to evict the active cache entry. It should
@@ -335,7 +335,7 @@ public:
         auto cq3 = assertGet(
             filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 0}, b: {$gte: 0}}")));
         forceReplanning(collection, cq2.get());
-        ASSERT_EQ(cache->get(*cq2.get()).status, PlanCache::CacheEntryStatus::kPresentInactive);
+        ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentInactive);
         // The cache entry should have the same worksThreshold as it did before. The only difference
         // is that it's inactive now.
         entry = assertGet(cache->getEntry(*cq2.get()));

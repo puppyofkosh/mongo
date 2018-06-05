@@ -569,16 +569,17 @@ PlanCache::~PlanCache() {}
  * entry exists but is inactive, log a message.
  */
 std::unique_ptr<CachedSolution> PlanCache::decideShouldUseCache(const CanonicalQuery& cq) {
-    if (PlanCache::shouldCacheQuery(cq)) {
-        PlanCache::GetResult res = get(cq);
-        if (res.status == PlanCache::CacheEntryStatus::kPresentInactive) {
-            LOG(2) << "Not using cached entry for " << redact(cq.toStringShort())
-                   << " since it is inactive";
-        }
-
-        return std::move(res.cachedSolution);
+    if (!PlanCache::shouldCacheQuery(cq)) {
+        return nullptr;
     }
-    return nullptr;
+
+    PlanCache::GetResult res = get(cq);
+    if (res.state == PlanCache::CacheEntryState::kPresentInactive) {
+        LOG(2) << "Not using cached entry for " << redact(cq.toStringShort())
+               << " since it is inactive";
+    }
+
+    return std::move(res.cachedSolution);
 }
 
 /**
@@ -766,7 +767,9 @@ Status PlanCache::add(const CanonicalQuery& query,
                 oldEntry->isActive = false;
                 return Status::OK();
             } else if (nWorks > oldEntry->worksThreshold) {
-                // Bump the old entry's worksThreshold.
+                // This plan performed worse than expected. Rather than immediately overwriting the
+                // cache, lower the bar to what is considered good performance, and keep the entry
+                // inactive.
                 const size_t grownVal =
                     oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
 
@@ -776,6 +779,9 @@ Status PlanCache::add(const CanonicalQuery& query,
                 oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
                 return Status::OK();
             } else {
+                // This plan performed just as well or better than we expected, based on the
+                // inactive entry's worksThreshold. We use this as an indicator that it's safe to
+                // cache (as an active entry) the plan this query used for the future.
                 LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
                        << " is being promoted to active entry";
                 // We'll replace the old inactive entry with an active entry.
@@ -828,16 +834,16 @@ PlanCache::GetResult PlanCache::get(const CanonicalQuery& query) const {
     Status cacheStatus = _cache.get(key, &entry);
     if (!cacheStatus.isOK()) {
         invariant(cacheStatus == ErrorCodes::NoSuchKey);
-        return {CacheEntryStatus::kNotPresent, nullptr};
+        return {CacheEntryState::kNotPresent, nullptr};
     }
     invariant(entry);
 
     if (entry->isActive) {
-        return {CacheEntryStatus::kPresentActive,
+        return {CacheEntryState::kPresentActive,
                 std::unique_ptr<CachedSolution>(new CachedSolution(key, *entry))};
     }
 
-    return {CacheEntryStatus::kPresentInactive, nullptr};
+    return {CacheEntryState::kPresentInactive, nullptr};
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {
