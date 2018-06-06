@@ -557,7 +557,6 @@ TEST_F(QueryStageMultiPlanTest, ShouldReportErrorIfExceedsTimeLimitDuringPlannin
     csparams.direction = CollectionScanParams::FORWARD;
 
     // Make the filter.
-    // Plan 1: CollScan.
     unique_ptr<PlanStage> secondRoot;
     unique_ptr<MatchExpression> filter;
     BSONObj filterObj = BSON("foo" << 7);

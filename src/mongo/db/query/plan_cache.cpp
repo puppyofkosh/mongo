@@ -568,7 +568,7 @@ PlanCache::~PlanCache() {}
  * Determine whether or not the cache should be used. If it shouldn't be used because the cache
  * entry exists but is inactive, log a message.
  */
-std::unique_ptr<CachedSolution> PlanCache::decideShouldUseCache(const CanonicalQuery& cq) {
+std::unique_ptr<CachedSolution> PlanCache::decideShouldUseCache(const CanonicalQuery& cq) const {
     if (!PlanCache::shouldCacheQuery(cq)) {
         return nullptr;
     }
