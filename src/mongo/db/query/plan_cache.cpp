@@ -725,7 +725,7 @@ void PlanCache::encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuild
     }
 }
 
-Status PlanCache::add(const CanonicalQuery& query,
+Status PlanCache::set(const CanonicalQuery& query,
                       const std::vector<QuerySolution*>& solns,
                       std::unique_ptr<PlanRankingDecision> why,
                       Date_t now) {
