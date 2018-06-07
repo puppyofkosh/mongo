@@ -310,8 +310,7 @@ Status PlanCacheClear::clear(OperationContext* opCtx,
 
         unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
-        auto getRes = planCache->get(*cq);
-        if (getRes.state == PlanCache::CacheEntryState::kNotPresent) {
+        if (planCache->get(*cq).state == PlanCache::CacheEntryState::kNotPresent) {
             // Log if asked to clear non-existent query shape.
             LOG(1) << ns << ": query shape doesn't exist in PlanCache - "
                    << redact(cq->getQueryObj()) << "(sort: " << cq->getQueryRequest().getSort()

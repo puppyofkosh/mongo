@@ -326,7 +326,7 @@ Status MultiPlanStage::pickBestPlan(PlanYieldPolicy* yieldPolicy) {
         if (validSolutions) {
             _collection->infoCache()
                 ->getPlanCache()
-                ->add(*_query,
+                ->set(*_query,
                       solutions,
                       std::move(ranking),
                       getOpCtx()->getServiceContext()->getPreciseClockSource()->now())

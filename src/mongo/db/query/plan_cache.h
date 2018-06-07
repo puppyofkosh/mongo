@@ -352,12 +352,9 @@ public:
      * for passing the current time so that the time the plan cache entry was created is stored
      * in the plan cache.
      *
-     * Takes ownership of 'why'.
-     *
-     * If the mapping was added successfully, returns Status::OK().
-     * If the mapping already existed or some other error occurred, returns another Status.
+     * If the mapping was set successfully, returns Status::OK(), even if it evicted another entry.
      */
-    Status add(const CanonicalQuery& query,
+    Status set(const CanonicalQuery& query,
                const std::vector<QuerySolution*>& solns,
                std::unique_ptr<PlanRankingDecision> why,
                Date_t now);
