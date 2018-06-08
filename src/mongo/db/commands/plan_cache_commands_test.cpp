@@ -151,7 +151,7 @@ TEST(PlanCacheCommandsTest, planCacheListQueryShapesOneKey) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    ASSERT_OK(planCache.set(*cq,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -186,7 +186,7 @@ TEST(PlanCacheCommandsTest, planCacheClearAllShapes) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    ASSERT_OK(planCache.set(*cq,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -327,11 +327,11 @@ TEST(PlanCacheCommandsTest, planCacheClearOneKey) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cqA,
+    ASSERT_OK(planCache.set(*cqA,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
-    ASSERT_OK(planCache.add(*cqB,
+    ASSERT_OK(planCache.set(*cqB,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -390,11 +390,11 @@ TEST(PlanCacheCommandsTest, planCacheClearOneKeyCollation) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    ASSERT_OK(planCache.set(*cq,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
-    ASSERT_OK(planCache.add(*cqCollation,
+    ASSERT_OK(planCache.set(*cqCollation,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -467,14 +467,12 @@ BSONObj getPlan(const BSONElement& elt) {
     return obj.getOwned();
 }
 
-/**
- * Utility function to get list of plan IDs for a query in the cache.
- */
-vector<BSONObj> getPlans(const PlanCache& planCache,
-                         const BSONObj& query,
-                         const BSONObj& sort,
-                         const BSONObj& projection,
-                         const BSONObj& collation) {
+BSONObj getCmdResult(const PlanCache& planCache,
+                     const BSONObj& query,
+                     const BSONObj& sort,
+                     const BSONObj& projection,
+                     const BSONObj& collation) {
+
     QueryTestServiceContext serviceContext;
     auto opCtx = serviceContext.makeOperationContext();
 
@@ -489,6 +487,19 @@ vector<BSONObj> getPlans(const PlanCache& planCache,
     BSONObj cmdObj = cmdObjBuilder.obj();
     ASSERT_OK(PlanCacheListPlans::list(opCtx.get(), planCache, nss.ns(), cmdObj, &bob));
     BSONObj resultObj = bob.obj();
+
+    return resultObj;
+}
+
+/**
+ * Utility function to get list of plan IDs for a query in the cache.
+ */
+vector<BSONObj> getPlans(const PlanCache& planCache,
+                         const BSONObj& query,
+                         const BSONObj& sort,
+                         const BSONObj& projection,
+                         const BSONObj& collation) {
+    BSONObj resultObj = getCmdResult(planCache, query, sort, projection, collation);
     ASSERT_TRUE(resultObj.hasField("isActive"));
     ASSERT_TRUE(resultObj.hasField("works"));
 
@@ -542,19 +553,22 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionTrue) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
+    auto decision = createDecision(1U);
+    decision->stats[0]->common.works = 123;
     ASSERT_OK(planCache.set(*cq,
                             solns,
-                            createDecision(1U),
+                            std::move(decision),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
 
-    vector<BSONObj> plans = getPlans(planCache,
+    BSONObj resultObj = getCmdResult(planCache,
                                      cq->getQueryObj(),
                                      cq->getQueryRequest().getSort(),
                                      cq->getQueryRequest().getProj(),
                                      cq->getQueryRequest().getCollation());
-    ASSERT_EQUALS(plans.size(), 1U);
-    ASSERT_EQ(plans[0]["isActive"], false);
-    ASSERT_EQ(plans[0]["works"], 0L);
+
+    ASSERT_EQ(resultObj.getObjectField("plans").nFields(), 1);
+    ASSERT_EQ(resultObj.getBoolField("isActive"), false);
+    ASSERT_EQ(resultObj.getIntField("works"), 123L);
 }
 
 TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionFalse) {
@@ -576,17 +590,22 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionFalse) {
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    auto decision = createDecision(2U);
+    decision->stats[0]->common.works = 333;
+    ASSERT_OK(planCache.set(*cq,
                             solns,
-                            createDecision(2U),
+                            std::move(decision),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
 
-    vector<BSONObj> plans = getPlans(planCache,
+    BSONObj resultObj = getCmdResult(planCache,
                                      cq->getQueryObj(),
                                      cq->getQueryRequest().getSort(),
                                      cq->getQueryRequest().getProj(),
                                      cq->getQueryRequest().getCollation());
-    ASSERT_EQUALS(plans.size(), 2U);
+
+    ASSERT_EQ(resultObj.getObjectField("plans").nFields(), 2);
+    ASSERT_EQ(resultObj.getBoolField("isActive"), false);
+    ASSERT_EQ(resultObj.getIntField("works"), 333);
 }
 
 
@@ -616,14 +635,14 @@ TEST(PlanCacheCommandsTest, planCacheListPlansCollation) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    ASSERT_OK(planCache.set(*cq,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
     std::vector<QuerySolution*> twoSolns;
     twoSolns.push_back(&qs);
     twoSolns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cqCollation,
+    ASSERT_OK(planCache.set(*cqCollation,
                             twoSolns,
                             createDecision(2U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -663,7 +682,7 @@ TEST(PlanCacheCommandsTest, planCacheListPlansTimeOfCreationIsCorrect) {
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
     auto now = opCtx->getServiceContext()->getPreciseClockSource()->now();
-    ASSERT_OK(planCache.add(*cq, solns, createDecision(1U), now));
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U), now));
 
     auto entry = unittest::assertGet(planCache.getEntry(*cq));
 
