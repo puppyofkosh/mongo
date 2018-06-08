@@ -369,7 +369,7 @@ CachedSolution::CachedSolution(const PlanCacheKey& key, const PlanCacheEntry& en
       sort(entry.sort.getOwned()),
       projection(entry.projection.getOwned()),
       collation(entry.collation.getOwned()),
-      decisionWorks(entry.worksThreshold) {
+      decisionWorks(entry.works) {
     // CachedSolution should not having any references into
     // cache entry. All relevant data should be cloned/copied.
     for (size_t i = 0; i < entry.plannerData.size(); ++i) {
@@ -433,7 +433,7 @@ PlanCacheEntry* PlanCacheEntry::clone() const {
     entry->collation = collation.getOwned();
     entry->timeOfCreation = timeOfCreation;
     entry->isActive = isActive;
-    entry->worksThreshold = worksThreshold;
+    entry->works = works;
 
     // Copy performance stats.
     for (size_t i = 0; i < feedback.size(); ++i) {
@@ -568,7 +568,7 @@ PlanCache::~PlanCache() {}
  * Determine whether or not the cache should be used. If it shouldn't be used because the cache
  * entry exists but is inactive, log a message.
  */
-std::unique_ptr<CachedSolution> PlanCache::decideShouldUseCache(const CanonicalQuery& cq) const {
+std::unique_ptr<CachedSolution> PlanCache::shouldUseCache(const CanonicalQuery& cq) const {
     if (!PlanCache::shouldCacheQuery(cq)) {
         return nullptr;
     }
@@ -763,24 +763,24 @@ Status PlanCache::set(const CanonicalQuery& query,
                 LOG(2) << "Active cache entry for query " << redact(query.toStringShort())
                        << " is being demoted to inactive entry";
                 // This is overwriting (evicting) an existing entry. The new entry will be
-                // inactive, though it will have the same worksThreshold as the old entry.
+                // inactive, though it will have the same works as the old entry.
                 oldEntry->isActive = false;
                 return Status::OK();
-            } else if (nWorks > oldEntry->worksThreshold) {
+            } else if (nWorks > oldEntry->works) {
                 // This plan performed worse than expected. Rather than immediately overwriting the
                 // cache, lower the bar to what is considered good performance, and keep the entry
                 // inactive.
                 const size_t grownVal =
-                    oldEntry->worksThreshold * internalQueryCacheWorksThresholdCoefficient;
+                    oldEntry->works * internalQueryCacheWorksThresholdCoefficient;
 
-                // Be sure that 'worksThreshold' always grows by at least 1, in case its current
+                // Be sure that 'works' always grows by at least 1, in case its current
                 // value and 'internalQueryCacheWorksThresholdCoefficient' are low enough that
-                // 'grownVal' cast to size_t is the same as the previous value of 'worksThreshold'.
-                oldEntry->worksThreshold = std::max(oldEntry->worksThreshold + 1, grownVal);
+                // 'grownVal' cast to size_t is the same as the previous value of 'works'.
+                oldEntry->works = std::max(oldEntry->works + 1, grownVal);
                 return Status::OK();
             } else {
                 // This plan performed just as well or better than we expected, based on the
-                // inactive entry's worksThreshold. We use this as an indicator that it's safe to
+                // inactive entry's works. We use this as an indicator that it's safe to
                 // cache (as an active entry) the plan this query used for the future.
                 LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
                        << " is being promoted to active entry";
@@ -798,7 +798,7 @@ Status PlanCache::set(const CanonicalQuery& query,
     newEntry->query = qr.getFilter().getOwned();
     newEntry->sort = qr.getSort().getOwned();
     newEntry->isActive = isNewEntryActive;
-    newEntry->worksThreshold = nWorks;
+    newEntry->works = nWorks;
     if (query.getCollator()) {
         newEntry->collation = query.getCollator()->getSpec().toBSON();
     }

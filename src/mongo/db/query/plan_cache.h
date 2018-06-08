@@ -288,7 +288,7 @@ public:
     // The number of "works" required for a plan to run on this shape before it becomes
     // active. Running a query of the same shape while this cache entry is inactive may cause this
     // value to be increased.
-    size_t worksThreshold = 0;
+    size_t works = 0;
 };
 
 /**
@@ -372,7 +372,7 @@ public:
      * Determine whether or not the cache should be used. If it shouldn't be used because the cache
      * entry exists but is inactive, log a message.
      */
-    std::unique_ptr<CachedSolution> decideShouldUseCache(const CanonicalQuery& cq) const;
+    std::unique_ptr<CachedSolution> shouldUseCache(const CanonicalQuery& cq) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the

@@ -286,15 +286,15 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanAddsActiveCacheEntries) {
     // Check for an inactive cache entry.
     ASSERT_EQ(cache->get(*cq.get()).state, PlanCache::CacheEntryState::kPresentInactive);
 
-    // The worksThreshold should be 1 for the entry, since the query we ran should not have any
+    // The works should be 1 for the entry, since the query we ran should not have any
     // results.
     auto entry = assertGet(cache->getEntry(*cq.get()));
-    size_t worksThreshold = 1U;
+    size_t works = 1U;
     const size_t kExpectedNumWorks = 10;
-    ASSERT_EQ(entry->worksThreshold, worksThreshold);
+    ASSERT_EQ(entry->works, works);
 
     for (int i = 0; i < std::ceil(std::log(kExpectedNumWorks) / std::log(2)); ++i) {
-        worksThreshold *= 2;
+        works *= 2;
         // Step 2: Run another query of the same shape, which is less selective, and therefore
         // takes longer).
         auto cq2 = assertGet(
@@ -302,9 +302,9 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanAddsActiveCacheEntries) {
         forceReplanning(collection, cq2.get());
 
         ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentInactive);
-        // The worksThreshold on the cache entry should have doubled.
+        // The works on the cache entry should have doubled.
         entry = assertGet(cache->getEntry(*cq2.get()));
-        ASSERT_EQ(entry->worksThreshold, worksThreshold);
+        ASSERT_EQ(entry->works, works);
     }
 
     // Step 3: Run another query which takes less time, and be sure an active entry is created.
@@ -314,10 +314,10 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanAddsActiveCacheEntries) {
 
     // Now there should be an active cache entry.
     ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentActive);
-    // The worksThreshold on the cache entry should have doubled.
+    // The works on the cache entry should have doubled.
     entry = assertGet(cache->getEntry(*cq2.get()));
     // This will query will match {a: 6} through {a:9} (4 works), plus one for EOF = 5 works.
-    ASSERT_EQ(entry->worksThreshold, 5U);
+    ASSERT_EQ(entry->works, 5U);
 
     // This time we expect to find something in the plan cache. Replans after hitting the
     // works threshold result in a cache entry.
@@ -330,10 +330,10 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanAddsActiveCacheEntries) {
         assertGet(filterToCanonicalQuery(opCtx(), nss, fromjson("{a: {$gte: 0}, b: {$gte: 0}}")));
     forceReplanning(collection, cq2.get());
     ASSERT_EQ(cache->get(*cq2.get()).state, PlanCache::CacheEntryState::kPresentInactive);
-    // The cache entry should have the same worksThreshold as it did before. The only difference
+    // The cache entry should have the same works as it did before. The only difference
     // is that it's inactive now.
     entry = assertGet(cache->getEntry(*cq2.get()));
-    ASSERT_EQ(entry->worksThreshold, 5U);
+    ASSERT_EQ(entry->works, 5U);
 }
 
 }  // namespace QueryStageCachedPlan
