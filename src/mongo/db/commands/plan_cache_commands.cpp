@@ -392,7 +392,7 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
     } else if (!lookupResult.isOK()) {
         return lookupResult.getStatus();
     }
-    PlanCacheEntry* entry = lookupResult.getValue().get();
+    std::unique_ptr<PlanCacheEntry> entry = std::move(lookupResult.getValue());
 
     BSONArrayBuilder plansBuilder(bob->subarrayStart("plans"));
     size_t numPlans = entry->plannerData.size();
@@ -443,7 +443,7 @@ Status PlanCacheListPlans::list(OperationContext* opCtx,
 
     // Append whether or not the entry is active.
     bob->append("isActive", entry->isActive);
-    bob->append("worksThreshold", static_cast<long long>(entry->worksThreshold));
+    bob->append("works", static_cast<long long>(entry->works));
 
     return Status::OK();
 }

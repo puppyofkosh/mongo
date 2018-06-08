@@ -72,7 +72,7 @@ extern AtomicInt32 internalQueryCacheFeedbacksStored;
 // and replanning?
 extern AtomicDouble internalQueryCacheEvictionRatio;
 
-// How quickly the the 'worksThreshold' value in an inactive cache entry will grow.
+// How quickly the the 'works' value in an inactive cache entry will grow.
 // (It grows exponentially. The value of this server parameter is the base).
 extern AtomicDouble internalQueryCacheWorksThresholdCoefficient;
 

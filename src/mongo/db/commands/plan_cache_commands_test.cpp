@@ -490,7 +490,7 @@ vector<BSONObj> getPlans(const PlanCache& planCache,
     ASSERT_OK(PlanCacheListPlans::list(opCtx.get(), planCache, nss.ns(), cmdObj, &bob));
     BSONObj resultObj = bob.obj();
     ASSERT_TRUE(resultObj.hasField("isActive"));
-    ASSERT_TRUE(resultObj.hasField("worksThreshold"));
+    ASSERT_TRUE(resultObj.hasField("works"));
 
     BSONElement plansElt = resultObj.getField("plans");
     ASSERT_EQUALS(plansElt.type(), mongo::Array);
@@ -542,7 +542,7 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionTrue) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    ASSERT_OK(planCache.add(*cq,
+    ASSERT_OK(planCache.set(*cq,
                             solns,
                             createDecision(1U),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
@@ -553,6 +553,8 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionTrue) {
                                      cq->getQueryRequest().getProj(),
                                      cq->getQueryRequest().getCollation());
     ASSERT_EQUALS(plans.size(), 1U);
+    ASSERT_EQ(plans[0]["isActive"], false);
+    ASSERT_EQ(plans[0]["works"], 0L);
 }
 
 TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionFalse) {

@@ -298,34 +298,34 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     auto entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
     const size_t firstQueryWorks = getBestPlanWorks(mps.get());
-    ASSERT_EQ(firstQueryWorks, entry->worksThreshold);
+    ASSERT_EQ(firstQueryWorks, entry->works);
 
     // Run the multi-planner again. The index scan will again win, but the number of works
     // will be greater, since {foo: 5} appears more frequently in the collection.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
 
     // The last plan run should have required far more works than the previous plan. This means
-    // that the 'worksThreshold' in the cache entry should have doubled.
+    // that the 'works' in the cache entry should have doubled.
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
-    ASSERT_EQ(firstQueryWorks * 2, entry->worksThreshold);
-    ASSERT_GT(getBestPlanWorks(mps.get()), entry->worksThreshold);
+    ASSERT_EQ(firstQueryWorks * 2, entry->works);
+    ASSERT_GT(getBestPlanWorks(mps.get()), entry->works);
 
-    // Run the exact same query again. This will still take more works than 'worksThreshold', and
-    // should cause the cache entry's 'worksThreshold' to be doubled again.
+    // Run the exact same query again. This will still take more works than 'works', and
+    // should cause the cache entry's 'works' to be doubled again.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_FALSE(entry->isActive);
-    ASSERT_EQ(firstQueryWorks * 2 * 2, entry->worksThreshold);
+    ASSERT_EQ(firstQueryWorks * 2 * 2, entry->works);
 
     // Run the query yet again. This time, an active cache entry should be created.
     mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
     ASSERT_EQ(cache->size(), 1U);
     entry = assertGet(cache->getEntry(*cq));
     ASSERT_TRUE(entry->isActive);
-    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->worksThreshold);
+    ASSERT_EQ(getBestPlanWorks(mps.get()), entry->works);
 }
 
 // Case in which we select a blocking plan as the winner, and a non-blocking plan
