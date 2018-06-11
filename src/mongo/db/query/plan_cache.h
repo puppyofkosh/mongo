@@ -372,7 +372,7 @@ public:
      * Determine whether or not the cache should be used. If it shouldn't be used because the cache
      * entry exists but is inactive, log a message.
      */
-    std::unique_ptr<CachedSolution> shouldUseCache(const CanonicalQuery& cq) const;
+    std::unique_ptr<CachedSolution> getCachedSolutionIfAvailable(const CanonicalQuery& cq) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the
