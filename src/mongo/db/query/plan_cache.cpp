@@ -568,7 +568,8 @@ PlanCache::~PlanCache() {}
  * Determine whether or not the cache should be used. If it shouldn't be used because the cache
  * entry exists but is inactive, log a message.
  */
-std::unique_ptr<CachedSolution> PlanCache::shouldUseCache(const CanonicalQuery& cq) const {
+std::unique_ptr<CachedSolution> PlanCache::getCachedSolutionIfAvailable(
+    const CanonicalQuery& cq) const {
     if (!PlanCache::shouldCacheQuery(cq)) {
         return nullptr;
     }
@@ -749,7 +750,7 @@ Status PlanCache::set(const CanonicalQuery& query,
     }
 
     const auto key = computeKey(query);
-    const size_t nWorks = why->stats[0]->common.works;
+    const size_t newWorks = why->stats[0]->common.works;
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     bool isNewEntryActive = false;
     if (internalQueryCacheDisableInactiveEntries.load()) {
@@ -766,39 +767,40 @@ Status PlanCache::set(const CanonicalQuery& query,
                 // inactive, though it will have the same works as the old entry.
                 oldEntry->isActive = false;
                 return Status::OK();
-            } else if (nWorks > oldEntry->works) {
+            } else if (newWorks > oldEntry->works) {
                 // This plan performed worse than expected. Rather than immediately overwriting the
                 // cache, lower the bar to what is considered good performance, and keep the entry
                 // inactive.
-                const size_t grownVal =
+                const size_t newWorks =
                     oldEntry->works * internalQueryCacheWorksThresholdCoefficient;
 
                 // Be sure that 'works' always grows by at least 1, in case its current
                 // value and 'internalQueryCacheWorksThresholdCoefficient' are low enough that
                 // 'grownVal' cast to size_t is the same as the previous value of 'works'.
-                oldEntry->works = std::max(oldEntry->works + 1, grownVal);
+                oldEntry->works = std::max(oldEntry->works + 1u, newWorks);
                 return Status::OK();
             } else {
                 // This plan performed just as well or better than we expected, based on the
                 // inactive entry's works. We use this as an indicator that it's safe to
                 // cache (as an active entry) the plan this query used for the future.
                 LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
-                       << " is being promoted to active entry";
+                       << " with works " << oldEntry->works
+                       << " is being promoted to active entry with works value " << newWorks;
                 // We'll replace the old inactive entry with an active entry.
                 isNewEntryActive = true;
             }
         } else {
             LOG(1) << "Creating inactive cache entry for query shape "
-                   << redact(query.toStringShort());
+                   << redact(query.toStringShort()) << " with works value " << newWorks;
         }
     }
 
-    PlanCacheEntry* newEntry = new PlanCacheEntry(solns, why.release());
+    auto newEntry = stdx::make_unique<PlanCacheEntry>(solns, why.release());
     const QueryRequest& qr = query.getQueryRequest();
     newEntry->query = qr.getFilter().getOwned();
     newEntry->sort = qr.getSort().getOwned();
     newEntry->isActive = isNewEntryActive;
-    newEntry->works = nWorks;
+    newEntry->works = newWorks;
     if (query.getCollator()) {
         newEntry->collation = query.getCollator()->getSpec().toBSON();
     }
@@ -816,7 +818,7 @@ Status PlanCache::set(const CanonicalQuery& query,
     }
     newEntry->projection = projBuilder.obj();
 
-    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(key, newEntry);
+    std::unique_ptr<PlanCacheEntry> evictedEntry = _cache.add(key, newEntry.release());
 
     if (NULL != evictedEntry.get()) {
         LOG(1) << _ns << ": plan cache maximum size exceeded - "
@@ -838,12 +840,9 @@ PlanCache::GetResult PlanCache::get(const CanonicalQuery& query) const {
     }
     invariant(entry);
 
-    if (entry->isActive) {
-        return {CacheEntryState::kPresentActive,
-                std::unique_ptr<CachedSolution>(new CachedSolution(key, *entry))};
-    }
-
-    return {CacheEntryState::kPresentInactive, nullptr};
+    auto state = entry->isActive ? CacheEntryState::kPresentActive :
+        CacheEntryState::kPresentInactive;
+    return {state, stdx::make_unique<CachedSolution>(key, *entry)};
 }
 
 Status PlanCache::feedback(const CanonicalQuery& cq, PlanCacheEntryFeedback* feedback) {
