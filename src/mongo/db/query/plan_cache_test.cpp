@@ -598,8 +598,8 @@ TEST(PlanCacheTest, WorksValueIncreases) {
 }
 
 TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
-    // Set the works growth coefficient to be very low.
-    internalQueryCacheWorksThresholdCoefficient.store(1.10);
+    // Will use a very small growth coefficient.
+    const double kWorksCoeff = 1.10;
 
     PlanCache planCache;
     unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
@@ -619,7 +619,7 @@ TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
     // works on the original entry to be increased. In this case, since nWorks is 3,
     // multiplying by the value 1.10 will give a value of 3 (static_cast<size_t>(1.1 * 3) == 3).
     // We check that the works value is increased 1 instead.
-    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}));
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}, kWorksCoeff));
 
     // The entry should still be inactive. Its works should increase by 1.
     ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentInactive);
@@ -632,6 +632,71 @@ TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
     ASSERT_EQ(planCache.size(), 0U);
     ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
 }
+
+TEST(PlanCacheTest, SetIsNoopWhenNewEntryIsWorse) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    auto entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_EQ(entry->works, 50U);
+    ASSERT_FALSE(entry->isActive);
+
+    // Call set() again, with a solution that has a lower works value. This will result in an
+    // active entry being created.
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 20), Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->works, 20U);
+
+    // Now call set() again, but with a solution that has a higher works value. This should be
+    // a noop.
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 100), Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->works, 20U);
+}
+
+TEST(PlanCacheTest, SetOverwritesWhenNewEntryIsBetter) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    auto entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_EQ(entry->works, 50U);
+    ASSERT_FALSE(entry->isActive);
+
+    // Call set() again, with a solution that has a lower works value. This will result in an
+    // active entry being created.
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 20), Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->works, 20U);
+
+    // Now call set() again, with a solution that has a lower works value. The current active entry
+    // should be overwritten.
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 10), Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->works, 10U);
+}
+
 
 /**
  * Each test in the CachePlanSelectionTest suite goes through

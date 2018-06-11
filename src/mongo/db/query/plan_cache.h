@@ -352,12 +352,17 @@ public:
      * for passing the current time so that the time the plan cache entry was created is stored
      * in the plan cache.
      *
+     * 'worksGrowthCoefficient' specifies what multiplier to use when growing the 'works' value of
+     * an inactive cache entry.  If boost::none is provided, the function will use
+     * 'internalQueryCacheWorksGrowthCoefficient'.
+     *
      * If the mapping was set successfully, returns Status::OK(), even if it evicted another entry.
      */
     Status set(const CanonicalQuery& query,
                const std::vector<QuerySolution*>& solns,
                std::unique_ptr<PlanRankingDecision> why,
-               Date_t now);
+               Date_t now,
+               boost::optional<double> worksGrowthCoefficient = boost::none);
 
     /**
      * Look up the cached data access for the provided 'query'.  Used by the query planner

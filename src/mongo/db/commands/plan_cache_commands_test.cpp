@@ -112,13 +112,14 @@ SolutionCacheData* createSolutionCacheData() {
 /**
  * Utility function to create a PlanRankingDecision
  */
-std::unique_ptr<PlanRankingDecision> createDecision(size_t numPlans) {
+std::unique_ptr<PlanRankingDecision> createDecision(size_t numPlans, size_t works = 0) {
     unique_ptr<PlanRankingDecision> why(new PlanRankingDecision());
     for (size_t i = 0; i < numPlans; ++i) {
         CommonStats common("COLLSCAN");
         auto stats = stdx::make_unique<PlanStageStats>(common, STAGE_COLLSCAN);
         stats->specific.reset(new CollectionScanStats());
         why->stats.push_back(std::move(stats));
+        why->stats[i]->common.works = works;
         why->scores.push_back(0U);
         why->candidateOrder.push_back(i);
     }
@@ -553,11 +554,9 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionTrue) {
     qs.cacheData.reset(createSolutionCacheData());
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
-    auto decision = createDecision(1U);
-    decision->stats[0]->common.works = 123;
     ASSERT_OK(planCache.set(*cq,
                             solns,
-                            std::move(decision),
+                            createDecision(1U, 123),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
 
     BSONObj resultObj = getCmdResult(planCache,
@@ -590,11 +589,9 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionFalse) {
     std::vector<QuerySolution*> solns;
     solns.push_back(&qs);
     solns.push_back(&qs);
-    auto decision = createDecision(2U);
-    decision->stats[0]->common.works = 333;
     ASSERT_OK(planCache.set(*cq,
                             solns,
-                            std::move(decision),
+                            createDecision(2U, 333),
                             opCtx->getServiceContext()->getPreciseClockSource()->now()));
 
     BSONObj resultObj = getCmdResult(planCache,
