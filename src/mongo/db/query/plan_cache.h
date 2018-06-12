@@ -305,7 +305,9 @@ public:
     // present', we use a notion of 'inactive entries' as a way of remembering how performant our
     // original solution to the query was. This information is useful to prevent much slower
     // queries from putting their plans in the cache immediately, which could cause faster queries
-    // to run with a sub-optimal plan.
+    // to run with a sub-optimal plan. Since cache entries must go through the "vetting" process of
+    // being inactive, we protect ourselves from the possibility of simply adding a cache entry
+    // with a very high works value which will never be evicted.
     enum CacheEntryState {
         // There is no cache entry for the given canonical query.
         kNotPresent,
@@ -365,6 +367,13 @@ public:
                boost::optional<double> worksGrowthCoefficient = boost::none);
 
     /**
+     * Set a cache entry back to the 'inactive' state. Rather than completely evicting an entry
+     * when the associated plan starts to perform poorly, we deactivate it, so that plans which
+     * perform even worse than the one already in the cache may not easily take its place.
+     */
+    void deactivate(const CanonicalQuery& query);
+
+    /**
      * Look up the cached data access for the provided 'query'.  Used by the query planner
      * to shortcut planning.
      *
@@ -375,7 +384,8 @@ public:
 
     /**
      * Determine whether or not the cache should be used. If it shouldn't be used because the cache
-     * entry exists but is inactive, log a message.
+     * entry exists but is inactive, log a message. Returns nullptr if the cache should not be
+     * used, and a CachedSolution otherwise.
      */
     std::unique_ptr<CachedSolution> getCachedSolutionIfAvailable(const CanonicalQuery& cq) const;
 
@@ -419,9 +429,8 @@ public:
     /**
      * Returns a copy of a cache entry.
      * Used by planCacheListPlans to display plan details.
-      *
-     * If there is no entry in the cache for the 'query', returns an error Status.
      *
+     * If there is no entry in the cache for the 'query', returns an error Status.
      */
     StatusWith<std::unique_ptr<PlanCacheEntry>> getEntry(const CanonicalQuery& cq) const;
 

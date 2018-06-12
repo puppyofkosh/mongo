@@ -200,6 +200,12 @@ Status CachedPlanStage::replan(PlanYieldPolicy* yieldPolicy, bool shouldCache) {
 
     _specificStats.replanned = true;
 
+    if (shouldCache) {
+        // Deactivate the current cache entry.
+        PlanCache* cache = _collection->infoCache()->getPlanCache();
+        cache->deactivate(*_canonicalQuery);
+    }
+
     // Use the query planning module to plan the whole query.
     auto statusWithSolutions = QueryPlanner::plan(*_canonicalQuery, _plannerParams);
     if (!statusWithSolutions.isOK()) {

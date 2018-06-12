@@ -553,6 +553,7 @@ TEST(PlanCacheTest, WorksValueIncreases) {
     ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 10), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentInactive);
     auto entry = assertGet(planCache.getEntry(*cq));
     ASSERT_EQ(entry->works, 10U);
     ASSERT_FALSE(entry->isActive);
@@ -611,6 +612,7 @@ TEST(PlanCacheTest, WorksValueIncreasesByAtLeastOne) {
     ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 3), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentInactive);
     auto entry = assertGet(planCache.getEntry(*cq));
     ASSERT_EQ(entry->works, 3U);
     ASSERT_FALSE(entry->isActive);
@@ -644,6 +646,7 @@ TEST(PlanCacheTest, SetIsNoopWhenNewEntryIsWorse) {
     ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}));
 
     // After add, the planCache should have an inactive entry.
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentInactive);
     auto entry = assertGet(planCache.getEntry(*cq));
     ASSERT_EQ(entry->works, 50U);
     ASSERT_FALSE(entry->isActive);
@@ -695,6 +698,38 @@ TEST(PlanCacheTest, SetOverwritesWhenNewEntryIsBetter) {
     entry = assertGet(planCache.getEntry(*cq));
     ASSERT_TRUE(entry->isActive);
     ASSERT_EQ(entry->works, 10U);
+}
+
+TEST(PlanCacheTest, DeactivateCacheEntry) {
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 50), Date_t{}));
+
+    // After add, the planCache should have an inactive entry.
+    auto entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_EQ(entry->works, 50U);
+    ASSERT_FALSE(entry->isActive);
+
+    // Call set() again, with a solution that has a lower works value. This will result in an
+    // active entry being created.
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U, 20), Date_t{}));
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_TRUE(entry->isActive);
+    ASSERT_EQ(entry->works, 20U);
+
+    planCache.deactivate(*cq);
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentInactive);
+
+    // Be sure the entry has the same works value.
+    entry = assertGet(planCache.getEntry(*cq));
+    ASSERT_FALSE(entry->isActive);
+    ASSERT_EQ(entry->works, 20U);
 }
 
 
