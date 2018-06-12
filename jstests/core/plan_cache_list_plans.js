@@ -95,8 +95,7 @@
     checkTimeOfCreation({a: 3, b: 3}, {a: -1}, {_id: 0, a: 1}, now);
 
     entry = getPlansForCacheEntry({a: 3, b: 3}, {a: -1}, {_id: 0, a: 1});
-    assert(entry.hasOwnProperty('works'),
-           'works missing from planCacheListPlans() result');
+    assert(entry.hasOwnProperty('works'), 'works missing from planCacheListPlans() result');
     assert.eq(entry.isActive, true);
     plans = entry.plans;
 

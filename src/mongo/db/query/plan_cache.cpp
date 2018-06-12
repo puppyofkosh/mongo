@@ -578,6 +578,7 @@ std::unique_ptr<CachedSolution> PlanCache::getCachedSolutionIfEligible(
     if (res.state == PlanCache::CacheEntryState::kPresentInactive) {
         LOG(2) << "Not using cached entry for " << redact(cq.toStringShort())
                << " since it is inactive";
+        return nullptr;
     }
 
     return std::move(res.cachedSolution);
@@ -771,6 +772,10 @@ Status PlanCache::set(const CanonicalQuery& query,
                            << " with a plan with works " << newWorks;
                     isNewEntryActive = true;
                 } else {
+                    LOG(1) << "Attempt to write to the planCache for query "
+                           << redact(query.toStringShort()) << "with a plan with works " << newWorks
+                           << " is a noop, since there's already a plan with works value "
+                           << oldEntry->works;
                     // There is already an active cache entry with a higher works value.
                     // We do nothing.
                     return Status::OK();
@@ -786,8 +791,13 @@ Status PlanCache::set(const CanonicalQuery& query,
                 // value and 'internalQueryCacheWorksGrowthCoefficient' are low enough that
                 // the old works * new works cast to size_t is the same as the previous value of
                 // 'works'.
-                oldEntry->works = std::max(oldEntry->works + 1u,
-                                           static_cast<size_t>(oldEntry->works * coefficient));
+                const double increasedWorks = std::max(
+                    oldEntry->works + 1u, static_cast<size_t>(oldEntry->works * coefficient));
+
+                LOG(1) << "Increasing work value associated with cache entry for query "
+                       << redact(query.toStringShort()) << " from " << oldEntry->works << " to "
+                       << increasedWorks;
+                oldEntry->works = increasedWorks;
                 return Status::OK();
             } else {
                 // This plan performed just as well or better than we expected, based on the
