@@ -838,11 +838,24 @@ Status PlanCache::set(const CanonicalQuery& query,
     return Status::OK();
 }
 
+void PlanCache::deactivate(const CanonicalQuery& query) {
+    PlanCacheKey key = computeKey(query);
+    stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
+    PlanCacheEntry* entry = nullptr;
+    Status cacheStatus = _cache.get(key, &entry);
+    if (!cacheStatus.isOK()) {
+        invariant(cacheStatus == ErrorCodes::NoSuchKey);
+        return;
+    }
+    invariant(entry);
+    entry->isActive = false;
+}
+
 PlanCache::GetResult PlanCache::get(const CanonicalQuery& query) const {
     PlanCacheKey key = computeKey(query);
 
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
-    PlanCacheEntry* entry;
+    PlanCacheEntry* entry = nullptr;
     Status cacheStatus = _cache.get(key, &entry);
     if (!cacheStatus.isOK()) {
         invariant(cacheStatus == ErrorCodes::NoSuchKey);
