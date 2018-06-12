@@ -377,7 +377,7 @@ public:
      * Look up the cached data access for the provided 'query'.  Used by the query planner
      * to shortcut planning.
      *
-     * The return value will provide the "status" of the cache entry, as well as the CachedSolution
+     * The return value will provide the "state" of the cache entry, as well as the CachedSolution
      * for the query (if there is one).
      */
     GetResult get(const CanonicalQuery& query) const;
@@ -387,7 +387,7 @@ public:
      * entry exists but is inactive, log a message. Returns nullptr if the cache should not be
      * used, and a CachedSolution otherwise.
      */
-    std::unique_ptr<CachedSolution> getCachedSolutionIfAvailable(const CanonicalQuery& cq) const;
+    std::unique_ptr<CachedSolution> getCachedSolutionIfEligible(const CanonicalQuery& cq) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the

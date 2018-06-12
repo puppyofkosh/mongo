@@ -568,7 +568,7 @@ PlanCache::~PlanCache() {}
  * Determine whether or not the cache should be used. If it shouldn't be used because the cache
  * entry exists but is inactive, log a message.
  */
-std::unique_ptr<CachedSolution> PlanCache::getCachedSolutionIfAvailable(
+std::unique_ptr<CachedSolution> PlanCache::getCachedSolutionIfEligible(
     const CanonicalQuery& cq) const {
     if (!PlanCache::shouldCacheQuery(cq)) {
         return nullptr;
@@ -777,7 +777,7 @@ Status PlanCache::set(const CanonicalQuery& query,
                 }
             } else if (newWorks > oldEntry->works) {
                 // This plan performed worse than expected. Rather than immediately overwriting the
-                // cache, lower the bar to what is considered good performance, and keep the entry
+                // cache, lower the bar to what is considered good performance and keep the entry
                 // inactive.
                 const double coefficient =
                     worksGrowthCoefficient.get_value_or(internalQueryCacheWorksGrowthCoefficient);

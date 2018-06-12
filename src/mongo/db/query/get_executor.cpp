@@ -359,7 +359,8 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
     }
 
     // Try to look up a cached solution for the query.
-    if (auto cs = collection->infoCache()->getPlanCache()->getCachedSolutionIfAvailable(*canonicalQuery)) {
+    if (auto cs =
+            collection->infoCache()->getPlanCache()->getCachedSolutionIfEligible(*canonicalQuery)) {
         // We have a CachedSolution.  Have the planner turn it into a QuerySolution.
         auto statusWithQs = QueryPlanner::planFromCache(*canonicalQuery, plannerParams, *cs);
 
