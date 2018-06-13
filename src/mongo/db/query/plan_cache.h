@@ -387,7 +387,7 @@ public:
      * entry exists but is inactive, log a message. Returns nullptr if the cache should not be
      * used, and a CachedSolution otherwise.
      */
-    std::unique_ptr<CachedSolution> getCachedSolutionIfEligible(const CanonicalQuery& cq) const;
+    std::unique_ptr<CachedSolution> getCacheEntryIfCacheable(const CanonicalQuery& cq) const;
 
     /**
      * When the CachedPlanStage runs a plan out of the cache, we want to record data about the

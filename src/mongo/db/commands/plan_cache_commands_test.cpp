@@ -565,7 +565,7 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionTrue) {
                                      cq->getQueryRequest().getProj(),
                                      cq->getQueryRequest().getCollation());
 
-    ASSERT_EQ(resultObj.getObjectField("plans").nFields(), 1);
+    ASSERT_EQ(resultObj["plans"].Array().size(), 1u);
     ASSERT_EQ(resultObj.getBoolField("isActive"), false);
     ASSERT_EQ(resultObj.getIntField("works"), 123L);
 }
@@ -600,7 +600,7 @@ TEST(PlanCacheCommandsTest, planCacheListPlansOnlyOneSolutionFalse) {
                                      cq->getQueryRequest().getProj(),
                                      cq->getQueryRequest().getCollation());
 
-    ASSERT_EQ(resultObj.getObjectField("plans").nFields(), 2);
+    ASSERT_EQ(resultObj["plans"].Array().size(), 2u);
     ASSERT_EQ(resultObj.getBoolField("isActive"), false);
     ASSERT_EQ(resultObj.getIntField("works"), 333);
 }

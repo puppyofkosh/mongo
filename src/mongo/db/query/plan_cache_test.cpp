@@ -444,6 +444,36 @@ void addCacheEntryForShape(const CanonicalQuery& cq, PlanCache* planCache) {
     ASSERT_OK(planCache->set(cq, solns, createDecision(1U), Date_t{}));
 }
 
+TEST(PlanCacheTest, InactiveEntriesDisabled) {
+    // Set the global flag for disabling active entries.
+    internalQueryCacheDisableInactiveEntries.store(true);
+    ON_BLOCK_EXIT([] { internalQueryCacheDisableInactiveEntries.store(false); });
+
+    PlanCache planCache;
+    unique_ptr<CanonicalQuery> cq(canonicalize("{a: 1}"));
+    auto qs = getQuerySolutionForCaching();
+    std::vector<QuerySolution*> solns = {qs.get()};
+
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
+    QueryTestServiceContext serviceContext;
+    ASSERT_OK(planCache.set(*cq, solns, createDecision(1U), Date_t{}));
+
+    // After add, the planCache should have an _active_ entry.
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+
+    // Call deactivate(). It should be a noop.
+    planCache.deactivate(*cq);
+
+    // The entry should still be active.
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+
+    // remove() the entry.
+    ASSERT_OK(planCache.remove(*cq));
+    ASSERT_EQ(planCache.size(), 0U);
+    ASSERT_EQ(planCache.get(*cq).state, PlanCache::CacheEntryState::kNotPresent);
+}
+
+
 TEST(PlanCacheTest, PlanCacheLRUPolicyRemovesInactiveEntries) {
     // Use a tiny cache size.
     const size_t kCacheSize = 2;

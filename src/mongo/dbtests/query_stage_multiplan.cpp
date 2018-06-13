@@ -329,6 +329,36 @@ TEST_F(QueryStageMultiPlanTest, MPSDoesNotCreateActiveCacheEntryImmediately) {
     ASSERT_EQ(getBestPlanWorks(mps.get()), entry->works);
 }
 
+TEST_F(QueryStageMultiPlanTest, MPSDoesCreatesActiveEntryWhenInactiveEntriesDisabled) {
+    // Set the global flag for disabling active entries.
+    internalQueryCacheDisableInactiveEntries.store(true);
+    ON_BLOCK_EXIT([] { internalQueryCacheDisableInactiveEntries.store(false); });
+
+    const int N = 100;
+    for (int i = 0; i < N; ++i) {
+        insert(BSON("foo" << i));
+    }
+
+    addIndex(BSON("foo" << 1));
+
+    AutoGetCollectionForReadCommand ctx(_opCtx.get(), nss);
+    const Collection* coll = ctx.getCollection();
+
+    const auto cq = makeCanonicalQuery(_opCtx.get(), nss, BSON("foo" << 7));
+
+    // Run an index scan and collection scan, searching for {foo: 7}.
+    auto mps = runMultiPlanner(_opCtx.get(), nss, coll, 7);
+
+    // Be sure that an _active_ cache entry was added.
+    PlanCache* cache = coll->infoCache()->getPlanCache();
+    ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+
+    // Run the multi-planner again. The entry should still be active.
+    mps = runMultiPlanner(_opCtx.get(), nss, coll, 5);
+
+    ASSERT_EQ(cache->get(*cq).state, PlanCache::CacheEntryState::kPresentActive);
+}
+
 // Case in which we select a blocking plan as the winner, and a non-blocking plan
 // is available as a backup.
 TEST_F(QueryStageMultiPlanTest, MPSBackupPlan) {

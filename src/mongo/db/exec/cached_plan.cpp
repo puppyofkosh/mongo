@@ -226,13 +226,6 @@ Status CachedPlanStage::replan(PlanYieldPolicy* yieldPolicy, bool shouldCache) {
     }
 
     if (1 == solutions.size()) {
-        // If there's only one solution, it won't get cached. Make sure to evict the existing
-        // cache entry if requested by the caller.
-        if (shouldCache) {
-            PlanCache* cache = _collection->infoCache()->getPlanCache();
-            cache->remove(*_canonicalQuery).transitional_ignore();
-        }
-
         PlanStage* newRoot;
         // Only one possible plan. Build the stages from the solution.
         verify(StageBuilder::build(

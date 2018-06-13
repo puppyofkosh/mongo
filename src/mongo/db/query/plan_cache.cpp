@@ -568,7 +568,7 @@ PlanCache::~PlanCache() {}
  * Determine whether or not the cache should be used. If it shouldn't be used because the cache
  * entry exists but is inactive, log a message.
  */
-std::unique_ptr<CachedSolution> PlanCache::getCachedSolutionIfEligible(
+std::unique_ptr<CachedSolution> PlanCache::getCacheEntryIfCacheable(
     const CanonicalQuery& cq) const {
     if (!PlanCache::shouldCacheQuery(cq)) {
         return nullptr;
@@ -849,6 +849,11 @@ Status PlanCache::set(const CanonicalQuery& query,
 }
 
 void PlanCache::deactivate(const CanonicalQuery& query) {
+    if (internalQueryCacheDisableInactiveEntries.load()) {
+        // This is a noop if inactive entries are disabled.
+        return;
+    }
+
     PlanCacheKey key = computeKey(query);
     stdx::lock_guard<stdx::mutex> cacheLock(_cacheMutex);
     PlanCacheEntry* entry = nullptr;
