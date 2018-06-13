@@ -286,8 +286,9 @@ public:
     bool isActive = false;
 
     // The number of "works" required for a plan to run on this shape before it becomes
-    // active. Running a query of the same shape while this cache entry is inactive may cause this
-    // value to be increased.
+    // active. This value is also used to determine the number of works necessary in order to
+    // trigger a replan. Running a query of the same shape while this cache entry is inactive may
+    // cause this value to be increased.
     size_t works = 0;
 };
 
@@ -309,14 +310,14 @@ public:
     // being inactive, we protect ourselves from the possibility of simply adding a cache entry
     // with a very high works value which will never be evicted.
     enum CacheEntryState {
-        // There is no cache entry for the given canonical query.
+        // There is no cache entry for the given query shape.
         kNotPresent,
 
-        // There is a cache entry for the given canonical query, but it is inactive, meaning that
-        // is should not be used when planning.
+        // There is a cache entry for the given query shape, but it is inactive, meaning that it
+        // should not be used when planning.
         kPresentInactive,
 
-        // There is a cache entry for the given canonical query, and it is active.
+        // There is a cache entry for the given query shape, and it is active.
         kPresentActive,
     };
 
@@ -457,6 +458,16 @@ public:
     void notifyOfIndexEntries(const std::vector<IndexEntry>& indexEntries);
 
 private:
+    struct NewEntryState {
+        bool shouldBeCreated = false;
+        bool shouldBeActive = false;
+    };
+
+    NewEntryState getNewEntryState(const CanonicalQuery& query,
+                                   PlanCacheEntry* oldEntry,
+                                   size_t newWorks,
+                                   double growthCoefficient);
+
     void encodeKeyForMatch(const MatchExpression* tree, StringBuilder* keyBuilder) const;
     void encodeKeyForSort(const BSONObj& sortObj, StringBuilder* keyBuilder) const;
     void encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuilder) const;

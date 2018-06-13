@@ -727,6 +727,69 @@ void PlanCache::encodeKeyForProj(const BSONObj& projObj, StringBuilder* keyBuild
     }
 }
 
+PlanCache::NewEntryState PlanCache::getNewEntryState(const CanonicalQuery& query,
+                                                     PlanCacheEntry* oldEntry,
+                                                     size_t newWorks,
+                                                     double growthCoefficient) {
+    NewEntryState res;
+    if (!oldEntry) {
+        LOG(1) << "Creating inactive cache entry for query shape " << redact(query.toStringShort())
+               << " with works value " << newWorks;
+        res.shouldBeCreated = true;
+        res.shouldBeActive = false;
+        return res;
+    }
+
+    if (oldEntry->isActive && newWorks <= oldEntry->works) {
+        // The new plan did better than the currently stored active plan. This case may
+        // occur if many MultiPlanners are run simultaneously.
+
+        LOG(1) << "Replacing active cache entry for query " << redact(query.toStringShort())
+               << " with works " << oldEntry->works << " with a plan with works " << newWorks;
+        res.shouldBeCreated = true;
+        res.shouldBeActive = true;
+    } else if (oldEntry->isActive) {
+        LOG(1) << "Attempt to write to the planCache for query " << redact(query.toStringShort())
+               << "with a plan with works " << newWorks
+               << " is a noop, since there's already a plan with works value " << oldEntry->works;
+        // There is already an active cache entry with a higher works value.
+        // We do nothing.
+        res.shouldBeCreated = false;
+    } else if (newWorks > oldEntry->works) {
+        // This plan performed worse than expected. Rather than immediately overwriting the
+        // cache, lower the bar to what is considered good performance and keep the entry
+        // inactive.
+
+        // Be sure that 'works' always grows by at least 1, in case its current
+        // value and 'internalQueryCacheWorksGrowthCoefficient' are low enough that
+        // the old works * new works cast to size_t is the same as the previous value of
+        // 'works'.
+        const double increasedWorks = std::max(
+            oldEntry->works + 1u, static_cast<size_t>(oldEntry->works * growthCoefficient));
+
+        LOG(1) << "Increasing work value associated with cache entry for query "
+               << redact(query.toStringShort()) << " from " << oldEntry->works << " to "
+               << increasedWorks;
+        oldEntry->works = increasedWorks;
+
+        // Don't create a new entry.
+        res.shouldBeCreated = false;
+    } else {
+        // This plan performed just as well or better than we expected, based on the
+        // inactive entry's works. We use this as an indicator that it's safe to
+        // cache (as an active entry) the plan this query used for the future.
+        LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
+               << " with works " << oldEntry->works
+               << " is being promoted to active entry with works value " << newWorks;
+        // We'll replace the old inactive entry with an active entry.
+        res.shouldBeCreated = true;
+        res.shouldBeActive = true;
+    }
+
+    return res;
+}
+
+
 Status PlanCache::set(const CanonicalQuery& query,
                       const std::vector<QuerySolution*>& solns,
                       std::unique_ptr<PlanRankingDecision> why,
@@ -759,60 +822,19 @@ Status PlanCache::set(const CanonicalQuery& query,
         // All entries are always active.
         isNewEntryActive = true;
     } else {
-        PlanCacheEntry* oldEntry;
+        PlanCacheEntry* oldEntry = nullptr;
         Status cacheStatus = _cache.get(key, &oldEntry);
-        if (cacheStatus.isOK()) {
-            if (oldEntry->isActive) {
-                if (newWorks <= oldEntry->works) {
-                    // The new plan did better than the currently stored active plan. This case may
-                    // occur if many MultiPlanners are run simultaneously.
+        invariant(cacheStatus.isOK() || cacheStatus == ErrorCodes::NoSuchKey);
+        auto newState = getNewEntryState(
+            query,
+            oldEntry,
+            newWorks,
+            worksGrowthCoefficient.get_value_or(internalQueryCacheWorksGrowthCoefficient));
 
-                    LOG(1) << "Replacing active cache entry for query "
-                           << redact(query.toStringShort()) << " with works " << oldEntry->works
-                           << " with a plan with works " << newWorks;
-                    isNewEntryActive = true;
-                } else {
-                    LOG(1) << "Attempt to write to the planCache for query "
-                           << redact(query.toStringShort()) << "with a plan with works " << newWorks
-                           << " is a noop, since there's already a plan with works value "
-                           << oldEntry->works;
-                    // There is already an active cache entry with a higher works value.
-                    // We do nothing.
-                    return Status::OK();
-                }
-            } else if (newWorks > oldEntry->works) {
-                // This plan performed worse than expected. Rather than immediately overwriting the
-                // cache, lower the bar to what is considered good performance and keep the entry
-                // inactive.
-                const double coefficient =
-                    worksGrowthCoefficient.get_value_or(internalQueryCacheWorksGrowthCoefficient);
-
-                // Be sure that 'works' always grows by at least 1, in case its current
-                // value and 'internalQueryCacheWorksGrowthCoefficient' are low enough that
-                // the old works * new works cast to size_t is the same as the previous value of
-                // 'works'.
-                const double increasedWorks = std::max(
-                    oldEntry->works + 1u, static_cast<size_t>(oldEntry->works * coefficient));
-
-                LOG(1) << "Increasing work value associated with cache entry for query "
-                       << redact(query.toStringShort()) << " from " << oldEntry->works << " to "
-                       << increasedWorks;
-                oldEntry->works = increasedWorks;
-                return Status::OK();
-            } else {
-                // This plan performed just as well or better than we expected, based on the
-                // inactive entry's works. We use this as an indicator that it's safe to
-                // cache (as an active entry) the plan this query used for the future.
-                LOG(1) << "Inactive cache entry for query " << redact(query.toStringShort())
-                       << " with works " << oldEntry->works
-                       << " is being promoted to active entry with works value " << newWorks;
-                // We'll replace the old inactive entry with an active entry.
-                isNewEntryActive = true;
-            }
-        } else {
-            LOG(1) << "Creating inactive cache entry for query shape "
-                   << redact(query.toStringShort()) << " with works value " << newWorks;
+        if (!newState.shouldBeCreated) {
+            return Status::OK();
         }
+        isNewEntryActive = newState.shouldBeActive;
     }
 
     auto newEntry = stdx::make_unique<PlanCacheEntry>(solns, why.release());
