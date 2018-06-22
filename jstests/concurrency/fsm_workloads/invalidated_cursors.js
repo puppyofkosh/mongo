@@ -269,7 +269,7 @@ var $config = (function() {
     }
 
     return {
-        threadCount: 10,
+        threadCount: 40,
         iterations: 200,
         states: states,
         startState: 'init',

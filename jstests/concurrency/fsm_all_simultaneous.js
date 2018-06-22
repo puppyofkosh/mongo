@@ -21,5 +21,5 @@ var blacklist = [
 });
 
 runWorkloadsInParallel(ls(dir).filter(function(file) {
-    return !Array.contains(blacklist, file);
+    return !Array.contains(blacklist, file) && (file.indexOf("globally_managed") > 0 || file.indexOf("group_kill") > 0);
 }));

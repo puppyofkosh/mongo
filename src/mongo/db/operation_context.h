@@ -424,7 +424,6 @@ public:
      * value Microseconds::max() if the operation has no time limit.
      */
     Microseconds getRemainingMaxTimeMicros() const;
-
 private:
     /**
      * Returns true if this operation has a deadline and it has passed according to the fast clock
@@ -512,29 +511,52 @@ private:
     Timer _elapsedTime;
 
     bool _writesAreReplicated = true;
+    int _interruptsUnsafeRequests = 0;
+
+    friend class InterruptCheckUnsafeBlock;
+};
+
+/**
+ * RAII-style class for disallowing interrupt checks. When the object is in scope,
+ * an interrupt check will invariant().
+ */
+class InterruptCheckUnsafeBlock {
+    MONGO_DISALLOW_COPYING(InterruptCheckUnsafeBlock);
+public:
+    InterruptCheckUnsafeBlock(OperationContext* opCtx)
+        :_opCtx(opCtx) {
+        opCtx->_interruptsUnsafeRequests++;
+    }
+
+    ~InterruptCheckUnsafeBlock() {
+        _opCtx->_interruptsUnsafeRequests--;
+        invariant(_opCtx->_interruptsUnsafeRequests >= 0);
+    }
+private:
+    OperationContext* _opCtx;
 };
 
 namespace repl {
-/**
- * RAII-style class to turn off replicated writes. Writes do not create oplog entries while the
- * object is in scope.
- */
-class UnreplicatedWritesBlock {
-    MONGO_DISALLOW_COPYING(UnreplicatedWritesBlock);
+    /**
+     * RAII-style class to turn off replicated writes. Writes do not create oplog entries while the
+     * object is in scope.
+     */
+    class UnreplicatedWritesBlock {
+        MONGO_DISALLOW_COPYING(UnreplicatedWritesBlock);
 
-public:
-    UnreplicatedWritesBlock(OperationContext* opCtx)
-        : _opCtx(opCtx), _shouldReplicateWrites(opCtx->writesAreReplicated()) {
-        opCtx->setReplicatedWrites(false);
-    }
+    public:
+        UnreplicatedWritesBlock(OperationContext* opCtx)
+            : _opCtx(opCtx), _shouldReplicateWrites(opCtx->writesAreReplicated()) {
+            opCtx->setReplicatedWrites(false);
+        }
 
-    ~UnreplicatedWritesBlock() {
-        _opCtx->setReplicatedWrites(_shouldReplicateWrites);
-    }
+        ~UnreplicatedWritesBlock() {
+            _opCtx->setReplicatedWrites(_shouldReplicateWrites);
+        }
 
-private:
-    OperationContext* _opCtx;
-    const bool _shouldReplicateWrites;
-};
+    private:
+        OperationContext* _opCtx;
+        const bool _shouldReplicateWrites;
+    };
 }  // namespace repl
 }  // namespace mongo

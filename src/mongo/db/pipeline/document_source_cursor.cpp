@@ -26,6 +26,8 @@
  * it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/pipeline/document_source_cursor.h"
@@ -37,6 +39,7 @@
 #include "mongo/db/query/find_common.h"
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/util/scopeguard.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 

@@ -189,6 +189,7 @@ bool opShouldFail(Client* client, const BSONObj& failPointInfo) {
 Status OperationContext::checkForInterruptNoAssert() {
     // TODO: Remove the MONGO_likely(getClient()) once all operation contexts are constructed with
     // clients.
+    invariant(_interruptsUnsafeRequests == 0);
     if (MONGO_likely(getClient() && getServiceContext()) &&
         getServiceContext()->getKillAllOperations()) {
         return Status(ErrorCodes::InterruptedAtShutdown, "interrupted at shutdown");
@@ -208,6 +209,10 @@ Status OperationContext::checkForInterruptNoAssert() {
 
     const auto killStatus = getKillStatus();
     if (killStatus != ErrorCodes::OK) {
+        if (killStatus == ErrorCodes::InternalErrorNotSupported) {
+            log() << "killStatus InternalErrorNotSupported";
+            //invariant(false);
+        }
         return Status(killStatus, "operation was interrupted");
     }
 

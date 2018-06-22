@@ -26,6 +26,8 @@
  * it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/pipeline/pipeline.h"
@@ -51,6 +53,7 @@
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/util/mongoutils/str.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -300,6 +303,8 @@ void Pipeline::reattachToOperationContext(OperationContext* opCtx) {
 
 void Pipeline::dispose(OperationContext* opCtx) {
     try {
+        InterruptCheckUnsafeBlock disallowInterrupts(opCtx);
+
         pCtx->opCtx = opCtx;
 
         // Make sure all stages are connected, in case we are being disposed via an error path and
@@ -309,6 +314,7 @@ void Pipeline::dispose(OperationContext* opCtx) {
         if (!_sources.empty()) {
             _sources.back()->dispose();
         }
+
         _disposed = true;
     } catch (...) {
         std::terminate();
