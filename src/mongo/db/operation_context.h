@@ -512,7 +512,9 @@ private:
 
     bool _writesAreReplicated = true;
     int _interruptsUnsafeRequests = 0;
-
+public:
+    int canary = 12345;
+private:
     friend class InterruptCheckUnsafeBlock;
 };
 
@@ -523,17 +525,11 @@ private:
 class InterruptCheckUnsafeBlock {
     MONGO_DISALLOW_COPYING(InterruptCheckUnsafeBlock);
 public:
-    InterruptCheckUnsafeBlock(OperationContext* opCtx)
-        :_opCtx(opCtx) {
-        opCtx->_interruptsUnsafeRequests++;
-    }
 
-    ~InterruptCheckUnsafeBlock() {
-        _opCtx->_interruptsUnsafeRequests--;
-        invariant(_opCtx->_interruptsUnsafeRequests >= 0);
-    }
+    InterruptCheckUnsafeBlock(OperationContext* opCtx);
+    ~InterruptCheckUnsafeBlock();
 private:
-    OperationContext* _opCtx;
+    OperationContext* _opCtx = nullptr;
 };
 
 namespace repl {

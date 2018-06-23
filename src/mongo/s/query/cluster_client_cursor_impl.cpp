@@ -124,11 +124,18 @@ void ClusterClientCursorImpl::kill(OperationContext* opCtx) {
 void ClusterClientCursorImpl::reattachToOperationContext(OperationContext* opCtx) {
     _opCtx = opCtx;
     _root->reattachToOperationContext(opCtx);
+    if (_params.mergePipeline) {
+        _params.mergePipeline->reattachToOperationContext(opCtx);
+    }
 }
 
 void ClusterClientCursorImpl::detachFromOperationContext() {
     _opCtx = nullptr;
     _root->detachFromOperationContext();
+    if (_params.mergePipeline) {
+        _params.mergePipeline->detachFromOperationContext();
+    }
+    
 }
 
 OperationContext* ClusterClientCursorImpl::getCurrentOperationContext() const {

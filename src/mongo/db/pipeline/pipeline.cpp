@@ -302,16 +302,19 @@ void Pipeline::reattachToOperationContext(OperationContext* opCtx) {
 }
 
 void Pipeline::dispose(OperationContext* opCtx) {
+    invariant(opCtx);
     try {
-        InterruptCheckUnsafeBlock disallowInterrupts(opCtx);
+//        InterruptCheckUnsafeBlock disallowInterrupts(opCtx);
 
         pCtx->opCtx = opCtx;
 
         // Make sure all stages are connected, in case we are being disposed via an error path and
         // were not stitched at the time of the error.
         stitch();
-
+        
+        log() << "ian: ehhh not empty";
         if (!_sources.empty()) {
+            log() << "ian: nope not empty " << _sources.back()->getSourceName();
             _sources.back()->dispose();
         }
 

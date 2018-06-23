@@ -569,6 +569,9 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         return pinnedCursor.getStatus();
     }
     invariant(request.cursorid == pinnedCursor.getValue().getCursorId());
+    invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
+    log() << "checked out cursor";
+
 
     validateOperationSessionInfo(opCtx, request, &pinnedCursor.getValue());
 
@@ -580,6 +583,7 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         CurOp::get(opCtx)->setOriginatingCommand_inlock(
             pinnedCursor.getValue().getOriginatingCommand());
     }
+    invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
 
     // If the 'waitAfterPinningCursorBeforeGetMoreBatch' fail point is enabled, set the 'msg'
     // field of this operation's CurOp to signal that we've hit this point.
@@ -589,10 +593,12 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             opCtx,
             "waitAfterPinningCursorBeforeGetMoreBatch");
     }
-
+    invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
+    
     auto opCtxSetupStatus =
         setUpOperationContextStateForGetMore(opCtx, request, &pinnedCursor.getValue());
     if (!opCtxSetupStatus.isOK()) {
+        log() << "opctx setup failed";
         return opCtxSetupStatus;
     }
 
@@ -602,15 +608,20 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
     long long startingFrom = pinnedCursor.getValue().getNumReturnedSoFar();
     auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
 
+    log() << "building batch";
     while (!FindCommon::enoughForGetMore(batchSize, batch.size())) {
         auto context = batch.empty()
             ? RouterExecStage::ExecContext::kGetMoreNoResultsYet
             : RouterExecStage::ExecContext::kGetMoreWithAtLeastOneResultInBatch;
+        invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
+        invariant(opCtx->canary == 12345);
 
         StatusWith<ClusterQueryResult> next =
             Status{ErrorCodes::InternalError, "uninitialized cluster query result"};
         try {
+            invariant(opCtx->canary == 12345);
             next = pinnedCursor.getValue().next(context);
+            invariant(opCtx->canary == 12345);
         } catch (const ExceptionFor<ErrorCodes::CloseChangeStream>&) {
             // This exception is thrown when a $changeStream stage encounters an event
             // that invalidates the cursor. We should close the cursor and return without
@@ -618,12 +629,19 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             cursorState = ClusterCursorManager::CursorState::Exhausted;
             break;
         }
+        invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
+        invariant(opCtx->canary == 12345);
 
         if (!next.isOK()) {
+            log() << "early return with status " << next.getStatus();
+            invariant(opCtx->canary == 12345);
+            invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
             return next.getStatus();
         }
+        log() << "not early returning";
 
         if (next.getValue().isEOF()) {
+            invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
             // We reached end-of-stream. If the cursor is not tailable, then we mark it as
             // exhausted. If it is tailable, usually we keep it open (i.e. "NotExhausted") even when
             // we reach end-of-stream. However, if all the remote cursors are exhausted, there is no
@@ -637,6 +655,7 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
 
         if (!FindCommon::haveSpaceForNext(
                 *next.getValue().getResult(), batch.size(), bytesBuffered)) {
+            invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
             pinnedCursor.getValue().queueResult(*next.getValue().getResult());
             break;
         }
@@ -648,10 +667,14 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
         batch.push_back(std::move(*next.getValue().getResult()));
     }
 
+    invariant(pinnedCursor.getValue()._cursor->getCurrentOperationContext() == opCtx);
     pinnedCursor.getValue().setLeftoverMaxTimeMicros(opCtx->getRemainingMaxTimeMicros());
     // Upon successful completion, transfer ownership of the cursor back to the cursor manager. If
     // the cursor has been exhausted, the cursor manager will clean it up for us.
+    log() << "returning cursor to mgr";
     pinnedCursor.getValue().returnCursor(cursorState);
+    log() << "returned cursor to mgr";
+    invariant(pinnedCursor.getValue()._cursor == nullptr);
 
     CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
         ? CursorId(0)
@@ -667,6 +690,9 @@ StatusWith<CursorResponse> ClusterFind::runGetMore(OperationContext* opCtx,
             opCtx,
             "waitBeforeUnpinningOrDeletingCursorAfterGetMoreBatch");
     }
+
+    log() << "returning fn";
+    invariant(pinnedCursor.getValue()._cursor == nullptr);
 
     return CursorResponse(request.nss, idToReturn, std::move(batch), startingFrom);
 }

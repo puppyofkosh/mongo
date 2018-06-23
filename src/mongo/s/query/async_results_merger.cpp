@@ -674,6 +674,7 @@ bool AsyncResultsMerger::_haveOutstandingBatchRequests(WithLock) {
 }
 
 void AsyncResultsMerger::_scheduleKillCursors(WithLock, OperationContext* opCtx) {
+    invariant(opCtx->canary == 12345);
     invariant(_killCompleteEvent.isValid());
 
     for (const auto& remote : _remotes) {

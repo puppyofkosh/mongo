@@ -278,6 +278,7 @@ public:
         void returnAndKillCursor();
 
         ClusterCursorManager* _manager = nullptr;
+    public:
         std::unique_ptr<ClusterClientCursor> _cursor;
         NamespaceString _nss;
         CursorId _cursorId = 0;

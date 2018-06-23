@@ -211,7 +211,7 @@ Status OperationContext::checkForInterruptNoAssert() {
     if (killStatus != ErrorCodes::OK) {
         if (killStatus == ErrorCodes::InternalErrorNotSupported) {
             log() << "killStatus InternalErrorNotSupported";
-            //invariant(false);
+            // invariant(false);
         }
         return Status(killStatus, "operation was interrupted");
     }
@@ -407,6 +407,20 @@ std::unique_ptr<Locker> OperationContext::swapLockState(std::unique_ptr<Locker> 
 
 Date_t OperationContext::getExpirationDateForWaitForValue(Milliseconds waitFor) {
     return getServiceContext()->getPreciseClockSource()->now() + waitFor;
+}
+
+InterruptCheckUnsafeBlock::InterruptCheckUnsafeBlock(OperationContext* opCtx) : _opCtx(opCtx) {
+    opCtx->_interruptsUnsafeRequests++;
+    log() << "ian (ctor): requests is " << _opCtx->_interruptsUnsafeRequests;
+    invariant(_opCtx->canary == 12345);
+    invariant(_opCtx->_interruptsUnsafeRequests >= 0);
+}
+
+InterruptCheckUnsafeBlock::~InterruptCheckUnsafeBlock() {
+    _opCtx->_interruptsUnsafeRequests--;
+    log() << "ian (dtor): requests is " << _opCtx->_interruptsUnsafeRequests;
+    invariant(_opCtx->canary == 12345);
+    invariant(_opCtx->_interruptsUnsafeRequests >= 0);
 }
 
 }  // namespace mongo

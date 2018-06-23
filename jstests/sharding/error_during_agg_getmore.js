@@ -4,6 +4,7 @@
     "use strict";
 
     const st = new ShardingTest({shards: 2, useBridge: true});
+    //sleep(30 * 1000);
 
     const mongosDB = st.s0.getDB(jsTestName());
     const mongosColl = mongosDB[jsTestName()];

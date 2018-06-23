@@ -26,12 +26,15 @@
  * then also delete it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/pipeline/document_source_merge_cursors.h"
 #include "mongo/db/pipeline/document_source_sort.h"
 #include "mongo/executor/task_executor_pool.h"
 #include "mongo/s/grid.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -220,6 +223,7 @@ void DocumentSourceMergeCursors::reattachToOperationContext(OperationContext* op
 }
 
 void DocumentSourceMergeCursors::doDispose() {
+    log() << "ian: disposing of $mergeCursors";
     if (_arm) {
         _arm->blockingKill(pExpCtx->opCtx);
     }

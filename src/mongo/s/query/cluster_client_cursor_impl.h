@@ -161,6 +161,7 @@ private:
     // Stores the logical session id for this cursor.
     boost::optional<LogicalSessionId> _lsid;
 
+public:
     // The OperationContext that we're executing within. This can be updated if necessary by using
     // detachFromOperationContext() and reattachToOperationContext().
     OperationContext* _opCtx = nullptr;

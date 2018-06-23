@@ -255,6 +255,7 @@ void DocumentSourceCursor::doDispose() {
 void DocumentSourceCursor::cleanupExecutor() {
     invariant(_exec);
     auto* opCtx = pExpCtx->opCtx;
+
     // We need to be careful to not use AutoGetCollection here, since we only need the lock to
     // protect potential access to the Collection's CursorManager, and AutoGetCollection may throw
     // if this namespace has since turned into a view. Using Database::getCollection() will simply
