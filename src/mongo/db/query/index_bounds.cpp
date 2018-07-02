@@ -32,6 +32,7 @@
 #include <tuple>
 #include <utility>
 
+#include "mongo/base/simple_string_data_comparator.h"
 #include "mongo/bson/simple_bsonobj_comparator.h"
 
 namespace mongo {
@@ -184,6 +185,45 @@ bool OrderedIntervalList::operator==(const OrderedIntervalList& other) const {
 
 bool OrderedIntervalList::operator!=(const OrderedIntervalList& other) const {
     return !(*this == other);
+}
+
+void OrderedIntervalList::reverse() {
+    std::vector<Interval> newIntervals;
+    for (size_t i = 0; i < (intervals.size() + 1) / 2; i++) {
+        const size_t otherIdx = intervals.size() - i - 1;
+        intervals[i].reverse();
+        if (i != otherIdx) {
+            intervals[otherIdx].reverse();
+            std::swap(intervals[i], intervals[otherIdx]);
+        }
+    }
+}
+
+bool OrderedIntervalList::isAscending() const {
+    invariant(!intervals.empty());
+    auto firstIntervalRes = intervals.front().isAscending();
+
+    if (firstIntervalRes) {
+        return *firstIntervalRes;
+    }
+
+    for (size_t i = 1; i < intervals.size(); ++i) {
+        int res = intervals[i - 1].end.woCompare(intervals[i].start);
+
+        if (res > 0) {
+            return false;
+        } else if (res < 0) {
+            return true;
+        }
+
+        // Check within this interval
+        auto intervalRes = intervals[i].isAscending();
+        if (firstIntervalRes) {
+            return *firstIntervalRes;
+        }
+    }
+
+    return true;
 }
 
 // static

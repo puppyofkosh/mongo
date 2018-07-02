@@ -74,6 +74,10 @@ struct OrderedIntervalList {
 
     bool operator==(const OrderedIntervalList& other) const;
     bool operator!=(const OrderedIntervalList& other) const;
+
+    void reverse();
+
+    bool isAscending() const;
 };
 
 /**

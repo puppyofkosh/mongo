@@ -26,6 +26,8 @@
  *    it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/query/index_bounds_builder.h"
@@ -39,6 +41,7 @@
 #include "mongo/db/query/collation/collator_interface_mock.h"
 #include "mongo/db/query/expression_index.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/log.h"
 
 using namespace mongo;
 
@@ -2979,4 +2982,58 @@ TEST(IndexBoundsBuilderTest, CanUseCoveredMatchingForExistsTrueWithSparseIndex) 
     ASSERT_TRUE(IndexBoundsBuilder::canUseCoveredMatching(expr.get(), testIndex));
 }
 
+TEST(IndexBoundsBuilderTest, IntersectizeWithRegularOils) {
+    OrderedIntervalList oil1("xyz");
+    oil1.intervals = {Interval(BSON("" << 0 << "" << 5), false, false)};
+
+    OrderedIntervalList oil2("xyz");
+    oil2.intervals = {Interval(BSON("" << 1 << "" << 6), false, false)};
+
+    IndexBoundsBuilder::intersectize(oil1, &oil2);
+
+    OrderedIntervalList expectedIntersection("xyz");
+    expectedIntersection.intervals = {Interval(BSON("" << 1 << "" << 5), false, false)};
+
+    ASSERT_TRUE(oil2 == expectedIntersection);
+}
+
+
+TEST(IndexBoundsBuilderTest, IntersectizeWithForwardAndBackwardOil) {
+    OrderedIntervalList oil1("xyz");
+    oil1.intervals = {Interval(BSON("" << 0 << "" << 5), false, false)};
+    OrderedIntervalList oil2("xyz");
+    oil2.intervals = {Interval(BSON("" << 6 << "" << 1), false, false)};
+    IndexBoundsBuilder::intersectize(oil1, &oil2);
+
+    OrderedIntervalList expectedIntersection("xyz");
+    expectedIntersection.intervals = {Interval(BSON("" << 5 << "" << 1), false, false)};
+
+    ASSERT_TRUE(oil2 == expectedIntersection);
+}
+
+TEST(IndexBoundsBuilderTest, IntersectizeWithBackwardAndForwardOil) {
+    OrderedIntervalList oil1("xyz");
+    oil1.intervals = {Interval(BSON("" << 5 << "" << 0), false, false)};
+    OrderedIntervalList oil2("xyz");
+    oil2.intervals = {Interval(BSON("" << 1 << "" << 6), false, false)};
+    IndexBoundsBuilder::intersectize(oil1, &oil2);
+
+    OrderedIntervalList expectedIntersection("xyz");
+    expectedIntersection.intervals = {Interval(BSON("" << 1 << "" << 5), false, false)};
+
+    ASSERT_TRUE(oil2 == expectedIntersection);
+}
+
+TEST(IndexBoundsBuilderTest, IntersectizeWithBackwardOils) {
+    OrderedIntervalList oil1("xyz");
+    oil1.intervals = {Interval(BSON("" << 5 << "" << 0), false, false)};
+    OrderedIntervalList oil2("xyz");
+    oil2.intervals = {Interval(BSON("" << 6 << "" << 1), false, false)};
+    IndexBoundsBuilder::intersectize(oil1, &oil2);
+
+    OrderedIntervalList expectedIntersection("xyz");
+    expectedIntersection.intervals = {Interval(BSON("" << 5 << "" << 1), false, false)};
+
+    ASSERT_TRUE(oil2 == expectedIntersection);
+}
 }  // namespace

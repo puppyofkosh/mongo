@@ -293,4 +293,6 @@ TEST(Union, Succeds) {
     ASSERT_EQUALS(a.compare(Interval(itv, true, true)), Interval::INTERVAL_EQUALS);
 }
 
+// TODO: add tests for isAscending
+
 }  // unnamed namespace

@@ -840,6 +840,37 @@ TEST(IndexBoundsCheckerTest, CheckEndBackwards) {
     ASSERT(seekPoint.prefixExclusive);
 }
 
+TEST(IndexBoundsCheckerTest, CheckOILReverse) {
+    // Empty list.
+    OrderedIntervalList emptyList("someField");
+    emptyList.reverse();
+    OrderedIntervalList reverseEmptyList("someField");
+    ASSERT_TRUE(emptyList == reverseEmptyList);
+
+    // Single element.
+    OrderedIntervalList singleEltList("xyz");
+    singleEltList.intervals = {Interval(BSON("" << 5 << "" << 0), false, false)};
+    singleEltList.reverse();
+
+    OrderedIntervalList reversedSingleEltList("xyz");
+    reversedSingleEltList.intervals = {Interval(BSON("" << 0 << "" << 5), false, false)};
+    ASSERT_TRUE(singleEltList == reversedSingleEltList);
+
+    // List with a few elements
+    OrderedIntervalList fooList("foo");
+    fooList.intervals = {Interval(BSON("" << 40 << "" << 35), false, true),
+                         Interval(BSON("" << 30 << "" << 21), true, true),
+                         Interval(BSON("" << 20 << "" << 7), true, false)};
+    fooList.reverse();
+
+    OrderedIntervalList reverseFooList("foo");
+    reverseFooList.intervals = {Interval(BSON("" << 7 << "" << 20), false, true),
+                                Interval(BSON("" << 21 << "" << 30), true, true),
+                                Interval(BSON("" << 35 << "" << 40), true, false)};
+
+    ASSERT_TRUE(fooList == reverseFooList);
+}
+
 //
 // IndexBoundsChecker::findIntervalForField
 //

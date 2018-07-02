@@ -60,13 +60,7 @@ void QueryPlannerCommon::reverseScans(QuerySolutionNode* node) {
             }
         } else {
             for (size_t i = 0; i < isn->bounds.fields.size(); ++i) {
-                std::vector<Interval>& iv = isn->bounds.fields[i].intervals;
-                // Step 1: reverse the list.
-                std::reverse(iv.begin(), iv.end());
-                // Step 2: reverse each interval.
-                for (size_t j = 0; j < iv.size(); ++j) {
-                    iv[j].reverse();
-                }
+                isn->bounds.fields[i].reverse();
             }
         }
 

@@ -98,6 +98,12 @@ struct Interval {
      */
     bool isNull() const;
 
+    /**
+     * Returns whether the interval is ascending (whether start < end). Will return boost::none for
+     * point, empty or null interval.
+     */
+    boost::optional<bool> isAscending() const;
+
     //
     // Comparison with other intervals
     //
@@ -182,7 +188,7 @@ struct Interval {
 };
 
 inline bool operator==(const Interval& lhs, const Interval& rhs) {
-    return lhs.compare(rhs) == Interval::INTERVAL_EQUALS;
+    return lhs.equals(rhs);
 }
 
 inline bool operator!=(const Interval& lhs, const Interval& rhs) {

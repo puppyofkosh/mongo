@@ -66,6 +66,25 @@ bool Interval::isNull() const {
     return (!startInclusive || !endInclusive) && 0 == start.woCompare(end, false);
 }
 
+boost::optional<bool> Interval::isAscending() const {
+    if (isEmpty() || isPoint() || isNull()) {
+        return boost::none;
+    }
+
+    const int res = start.woCompare(end);
+
+    if (res == 0) {
+        invariant(startInclusive);
+        invariant(endInclusive);
+        return boost::none;
+    } else if (res > 0) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+
 //
 // Comparison
 //
@@ -93,6 +112,15 @@ bool Interval::equals(const Interval& other) const {
 }
 
 bool Interval::intersects(const Interval& other) const {
+    if (kDebugBuild) {
+        // This function assumes that both intervals are ascending (or are empty/point intervals).
+        // Determining this may be expensive, so we only do these checks when in a debug build.
+        auto ascendingOpt = isAscending();
+        invariant(!ascendingOpt || *ascendingOpt);  // Should either be none or true.
+        auto otherAscendingOpt = other.isAscending();
+        invariant(!otherAscendingOpt || *otherAscendingOpt);
+    }
+
     int res = this->start.woCompare(other.end, false);
     if (res > 0) {
         return false;

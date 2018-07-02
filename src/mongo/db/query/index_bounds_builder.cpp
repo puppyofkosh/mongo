@@ -712,20 +712,37 @@ Interval IndexBoundsBuilder::makeRangeInterval(const BSONObj& obj, BoundInclusio
 }
 
 // static
-void IndexBoundsBuilder::intersectize(const OrderedIntervalList& arg, OrderedIntervalList* oilOut) {
-    verify(arg.name == oilOut->name);
+void IndexBoundsBuilder::intersectize(const OrderedIntervalList& originalA,
+                                      OrderedIntervalList* originalB) {
+    invariant(originalB);
+    const OrderedIntervalList* oilA = &originalA;
+    OrderedIntervalList reverseOilA;
+    if (!originalA.isAscending()) {
+        reverseOilA = originalA;
+        reverseOilA.reverse();
+        oilA = &reverseOilA;
+    }
+
+    OrderedIntervalList reverseOilB;
+    OrderedIntervalList* oilB = originalB;
+    if (!originalB->isAscending()) {
+        reverseOilB = *originalB;
+        reverseOilB.reverse();
+        oilB = &reverseOilB;
+    }
+
+    verify(oilA->name == oilB->name);
 
     size_t argidx = 0;
-    const vector<Interval>& argiv = arg.intervals;
+    const vector<Interval>& argiv = oilA->intervals;
 
     size_t ividx = 0;
-    vector<Interval>& iv = oilOut->intervals;
+    vector<Interval>& iv = oilB->intervals;
 
     vector<Interval> result;
 
     while (argidx < argiv.size() && ividx < iv.size()) {
         Interval::IntervalComparison cmp = argiv[argidx].compare(iv[ividx]);
-
         verify(Interval::INTERVAL_UNKNOWN != cmp);
 
         if (cmp == Interval::INTERVAL_PRECEDES || cmp == Interval::INTERVAL_PRECEDES_COULD_UNION) {
@@ -757,7 +774,12 @@ void IndexBoundsBuilder::intersectize(const OrderedIntervalList& arg, OrderedInt
         }
     }
 
-    oilOut->intervals.swap(result);
+    originalB->intervals.swap(result);
+
+    // Undo the reversal we did at the beginning.
+    if (oilB == &reverseOilB) {
+        originalB->reverse();
+    }
 }
 
 // static
@@ -986,13 +1008,7 @@ void IndexBoundsBuilder::alignBounds(IndexBounds* bounds, const BSONObj& kp, int
         int direction = (elt.number() >= 0) ? 1 : -1;
         direction *= scanDir;
         if (-1 == direction) {
-            vector<Interval>& iv = bounds->fields[oilIdx].intervals;
-            // Step 1: reverse the list.
-            std::reverse(iv.begin(), iv.end());
-            // Step 2: reverse each interval.
-            for (size_t i = 0; i < iv.size(); ++i) {
-                iv[i].reverse();
-            }
+            bounds->fields[oilIdx].reverse();
         }
         ++oilIdx;
     }
