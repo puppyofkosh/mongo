@@ -712,29 +712,13 @@ Interval IndexBoundsBuilder::makeRangeInterval(const BSONObj& obj, BoundInclusio
 }
 
 // static
-void IndexBoundsBuilder::intersectize(const OrderedIntervalList& originalA,
-                                      OrderedIntervalList* originalB) {
-    invariant(originalB);
-    const OrderedIntervalList* oilA = &originalA;
-    OrderedIntervalList reverseOilA;
-    if (!originalA.isAscending()) {
-        reverseOilA = originalA;
-        reverseOilA.reverse();
-        oilA = &reverseOilA;
-    }
-
-    OrderedIntervalList reverseOilB;
-    OrderedIntervalList* oilB = originalB;
-    if (!originalB->isAscending()) {
-        reverseOilB = *originalB;
-        reverseOilB.reverse();
-        oilB = &reverseOilB;
-    }
-
-    verify(oilA->name == oilB->name);
+void IndexBoundsBuilder::intersectize(const OrderedIntervalList& oilA,
+                                      OrderedIntervalList* oilB) {
+    invariant(oilB);
+    invariant(oilA.name == oilB->name);
 
     size_t argidx = 0;
-    const vector<Interval>& argiv = oilA->intervals;
+    const vector<Interval>& argiv = oilA.intervals;
 
     size_t ividx = 0;
     vector<Interval>& iv = oilB->intervals;
@@ -774,12 +758,7 @@ void IndexBoundsBuilder::intersectize(const OrderedIntervalList& originalA,
         }
     }
 
-    originalB->intervals.swap(result);
-
-    // Undo the reversal we did at the beginning.
-    if (oilB == &reverseOilB) {
-        originalB->reverse();
-    }
+    oilB->intervals.swap(result);
 }
 
 // static

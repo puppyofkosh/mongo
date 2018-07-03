@@ -122,6 +122,58 @@ TEST(IndexBoundsTest, ValidOverlapOnlyWhenBothOpen) {
     ASSERT(bounds.isValidFor(BSON("foo" << 1), 1));
 }
 
+TEST(IndexBoundsCheckerTest, CheckOILReverse) {
+    // Empty list.
+    OrderedIntervalList emptyList("someField");
+    emptyList.reverse();
+    OrderedIntervalList reverseEmptyList("someField");
+    ASSERT_TRUE(emptyList == reverseEmptyList);
+
+    // Single element.
+    OrderedIntervalList singleEltList("xyz");
+    singleEltList.intervals = {Interval(BSON("" << 5 << "" << 0), false, false)};
+    singleEltList.reverse();
+
+    OrderedIntervalList reversedSingleEltList("xyz");
+    reversedSingleEltList.intervals = {Interval(BSON("" << 0 << "" << 5), false, false)};
+    ASSERT_TRUE(singleEltList == reversedSingleEltList);
+
+    // List with a few elements
+    OrderedIntervalList fooList("foo");
+    fooList.intervals = {Interval(BSON("" << 40 << "" << 35), false, true),
+                         Interval(BSON("" << 30 << "" << 21), true, true),
+                         Interval(BSON("" << 20 << "" << 7), true, false)};
+    fooList.reverse();
+
+    OrderedIntervalList reverseFooList("foo");
+    reverseFooList.intervals = {Interval(BSON("" << 7 << "" << 20), false, true),
+                                Interval(BSON("" << 21 << "" << 30), true, true),
+                                Interval(BSON("" << 35 << "" << 40), true, false)};
+
+    ASSERT_TRUE(fooList == reverseFooList);
+}
+
+TEST(IndexBoundsTest, OILReverseClone) {
+    OrderedIntervalList emptyA("foo");
+    OrderedIntervalList emptyB = emptyA.reverseClone();
+
+    ASSERT(emptyA == emptyB);
+    ASSERT(!emptyA.isReversed);
+    ASSERT(emptyB.isReversed);
+
+    OrderedIntervalList list("foo");
+
+    list.intervals.push_back(Interval(BSON("" << 7 << "" << 20), true, false));
+    list.intervals.push_back(Interval(BSON("" << 20 << "" << 25), false, true));
+
+    OrderedIntervalList listClone = list.reverseClone();
+    OrderedIntervalList reverseList("foo");
+    reverseList.intervals = {Interval(BSON("" << 25 << "" << 20), true, false),
+                             Interval(BSON("" << 20 << "" << 7), false, true)};
+    ASSERT(reverseList == listClone);
+    ASSERT(listClone.isReversed);
+}
+
 //
 // Tests for OrderedIntervalList::complement()
 //
@@ -838,37 +890,6 @@ TEST(IndexBoundsCheckerTest, CheckEndBackwards) {
     ASSERT_EQUALS(state, IndexBoundsChecker::MUST_ADVANCE);
     ASSERT_EQUALS(seekPoint.prefixLen, 1);
     ASSERT(seekPoint.prefixExclusive);
-}
-
-TEST(IndexBoundsCheckerTest, CheckOILReverse) {
-    // Empty list.
-    OrderedIntervalList emptyList("someField");
-    emptyList.reverse();
-    OrderedIntervalList reverseEmptyList("someField");
-    ASSERT_TRUE(emptyList == reverseEmptyList);
-
-    // Single element.
-    OrderedIntervalList singleEltList("xyz");
-    singleEltList.intervals = {Interval(BSON("" << 5 << "" << 0), false, false)};
-    singleEltList.reverse();
-
-    OrderedIntervalList reversedSingleEltList("xyz");
-    reversedSingleEltList.intervals = {Interval(BSON("" << 0 << "" << 5), false, false)};
-    ASSERT_TRUE(singleEltList == reversedSingleEltList);
-
-    // List with a few elements
-    OrderedIntervalList fooList("foo");
-    fooList.intervals = {Interval(BSON("" << 40 << "" << 35), false, true),
-                         Interval(BSON("" << 30 << "" << 21), true, true),
-                         Interval(BSON("" << 20 << "" << 7), true, false)};
-    fooList.reverse();
-
-    OrderedIntervalList reverseFooList("foo");
-    reverseFooList.intervals = {Interval(BSON("" << 7 << "" << 20), false, true),
-                                Interval(BSON("" << 21 << "" << 30), true, true),
-                                Interval(BSON("" << 35 << "" << 40), true, false)};
-
-    ASSERT_TRUE(fooList == reverseFooList);
 }
 
 //

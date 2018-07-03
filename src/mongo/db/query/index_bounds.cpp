@@ -164,6 +164,21 @@ BoundInclusion IndexBounds::makeBoundInclusionFromBoundBools(bool startKeyInclus
     }
 }
 
+BoundInclusion IndexBounds::reverseBoundInclusion(BoundInclusion b) {
+    switch (b) {
+        case BoundInclusion::kIncludeStartKeyOnly:
+            return BoundInclusion::kIncludeEndKeyOnly;
+        case BoundInclusion::kIncludeEndKeyOnly:
+            return BoundInclusion::kIncludeStartKeyOnly;
+        case BoundInclusion::kIncludeBothStartAndEndKeys:
+        case BoundInclusion::kExcludeBothStartAndEndKeys:
+            // These are both symmetric.
+            return b;
+        default:
+            MONGO_UNREACHABLE;
+    }
+}
+
 
 bool OrderedIntervalList::operator==(const OrderedIntervalList& other) const {
     if (this->name != other.name) {
@@ -196,6 +211,22 @@ void OrderedIntervalList::reverse() {
             std::swap(intervals[i], intervals[otherIdx]);
         }
     }
+
+    isReversed ^= true;
+}
+
+OrderedIntervalList OrderedIntervalList::reverseClone() const {
+    OrderedIntervalList ret(name);
+
+    for (auto it = intervals.rbegin(); it != intervals.rend(); ++it) {
+        // TODO: Use Interval::reverseClone.
+        Interval i = *it;
+        i.reverse();
+        ret.intervals.push_back(i);
+    }
+
+    ret.isReversed = !isReversed;
+    return ret;
 }
 
 bool OrderedIntervalList::isAscending() const {
@@ -341,6 +372,39 @@ BSONObj IndexBounds::toBSON() const {
     }
 
     return bob.obj();
+}
+
+// TODO: unit tests
+IndexBounds IndexBounds::forwardize() const {
+    IndexBounds newBounds;
+    newBounds.isSimpleRange = isSimpleRange;
+
+    if (isSimpleRange) {
+        const int cmpRes = startKey.woCompare(endKey);
+        if (cmpRes <= 0) {
+            newBounds.startKey = startKey;
+            newBounds.endKey = endKey;
+            newBounds.boundInclusion = boundInclusion;
+        } else {
+            // Swap start and end key.
+            newBounds.endKey = startKey;
+            newBounds.startKey = endKey;
+            newBounds.boundInclusion = IndexBounds::reverseBoundInclusion(boundInclusion);
+        }
+
+        return newBounds;
+    }
+
+    newBounds.fields.reserve(fields.size());
+    std::transform(fields.begin(), fields.end(), std::back_inserter(newBounds.fields),
+                   [](const OrderedIntervalList& oil) {
+                       if (oil.isReversed) {
+                           return oil.reverseClone();
+                       }
+                       return oil;
+                   });
+
+    return newBounds;
 }
 
 //

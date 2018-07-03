@@ -550,7 +550,14 @@ bool IndexScanNode::hasField(const string& field) const {
     // If the index has a non-simple collation and we have collation keys inside 'field', then this
     // index scan does not provide that field (and the query cannot be covered).
     if (index.collator) {
-        std::set<StringData> collatedFields = getFieldsWithStringBounds(bounds, index.keyPattern);
+
+        // Produce a copy of the bounds which are all ascending, as detecting which fields have
+        // string bounds will require that the bounds be ascending.
+        IndexBounds forwardizedBounds = bounds.forwardize();
+
+        // TODO: it's bad that we rebuild this entire set each time.
+        std::set<StringData> collatedFields = getFieldsWithStringBounds(forwardizedBounds,
+                                                                        index.keyPattern);
         if (collatedFields.find(field) != collatedFields.end()) {
             return false;
         }
@@ -733,7 +740,13 @@ void IndexScanNode::computeProperties() {
 
     if (!CollatorInterface::collatorsMatch(queryCollator, index.collator)) {
         // Prune sorts containing fields that don't match the collation.
-        std::set<StringData> collatedFields = getFieldsWithStringBounds(bounds, index.keyPattern);
+
+        // Make all the bounds ascending, as we can only compute the intersection of ascending
+        // OILs and Intervals
+        IndexBounds forwardizedBounds = bounds.forwardize();
+
+        std::set<StringData> collatedFields = getFieldsWithStringBounds(forwardizedBounds,
+                                                                        index.keyPattern);
         auto sortsIt = _sorts.begin();
         while (sortsIt != _sorts.end()) {
             bool matched = false;
