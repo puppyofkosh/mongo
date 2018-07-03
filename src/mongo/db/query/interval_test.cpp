@@ -293,6 +293,29 @@ TEST(Union, Succeds) {
     ASSERT_EQUALS(a.compare(Interval(itv, true, true)), Interval::INTERVAL_EQUALS);
 }
 
-// TODO: add tests for isAscending
+TEST(Introspection, isAscending) {
+    // Empty/uninitialized Interval.
+    boost::optional<Interval> i;
+    i.emplace();
+    ASSERT(i->isAscending() == boost::none);
+
+    // Empty Interval.
+    i.emplace(BSON("" << 10 << "" << 10), false, false);
+    ASSERT(i->isAscending() == boost::none);
+
+    // Point bound Interval.
+    i.emplace(BSON("" << 10 << "" << 10), true, true);
+    ASSERT(i->isAscending() == boost::none);
+
+    // Ascending interval.
+    i.emplace(BSON("" << 10 << "" << 20), true, true);
+    ASSERT(static_cast<bool>(i->isAscending()));
+    ASSERT_TRUE(*i->isAscending());
+
+    // Descending interval.
+    i.emplace(BSON("" << 11 << "" << 10), true, true);
+    ASSERT(static_cast<bool>(i->isAscending()));
+    ASSERT_FALSE(*i->isAscending());
+}
 
 }  // unnamed namespace

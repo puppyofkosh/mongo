@@ -73,15 +73,8 @@ boost::optional<bool> Interval::isAscending() const {
 
     const int res = start.woCompare(end);
 
-    if (res == 0) {
-        invariant(startInclusive);
-        invariant(endInclusive);
-        return boost::none;
-    } else if (res > 0) {
-        return false;
-    } else {
-        return true;
-    }
+    invariant(res != 0);
+    return res < 0;
 }
 
 

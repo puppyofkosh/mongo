@@ -188,7 +188,6 @@ bool OrderedIntervalList::operator!=(const OrderedIntervalList& other) const {
 }
 
 void OrderedIntervalList::reverse() {
-    std::vector<Interval> newIntervals;
     for (size_t i = 0; i < (intervals.size() + 1) / 2; i++) {
         const size_t otherIdx = intervals.size() - i - 1;
         intervals[i].reverse();
