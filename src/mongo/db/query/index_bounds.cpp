@@ -200,7 +200,6 @@ void OrderedIntervalList::reverse() {
 }
 
 bool OrderedIntervalList::isAscending() const {
-    invariant(!intervals.empty());
     auto firstIntervalRes = intervals.front().isAscending();
 
     if (firstIntervalRes) {
