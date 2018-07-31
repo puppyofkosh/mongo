@@ -109,7 +109,7 @@ void testAllowedIndices(std::vector<IndexEntry> indexes,
     filterAllowedIndexEntries(filter, &indexes);
     size_t matchedIndexes = 0;
     for (const auto& indexEntry : indexes) {
-        ASSERT_TRUE(expectedFilteredNames.find(indexEntry.name) != expectedFilteredNames.end());
+        ASSERT_TRUE(expectedFilteredNames.find(indexEntry.catalogName) != expectedFilteredNames.end());
         matchedIndexes++;
     }
     ASSERT_EQ(matchedIndexes, indexes.size());

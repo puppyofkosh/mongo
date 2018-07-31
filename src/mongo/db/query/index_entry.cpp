@@ -50,7 +50,7 @@ std::string IndexEntry::toString() const {
         sb << " unique";
     }
 
-    sb << " name: '" << name << "'";
+    sb << " name: '" << catalogName << "'";
 
     if (filterExpr) {
         sb << " filterExpr: " << filterExpr->toString();

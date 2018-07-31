@@ -290,7 +290,7 @@ bool QueryPlannerTestLib::solutionMatches(const BSONObj& testSoln,
             if (name.type() != BSONType::String) {
                 return false;
             }
-            if (name.valueStringData() != ixn->index.name) {
+            if (name.valueStringData() != ixn->index.catalogName) {
                 return false;
             }
         }

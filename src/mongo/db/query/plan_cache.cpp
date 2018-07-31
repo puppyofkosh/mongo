@@ -493,7 +493,7 @@ std::string PlanCacheIndexTree::toString(int indents) const {
     } else {
         result << std::string(3 * indents, '-') << "Leaf ";
         if (NULL != entry.get()) {
-            result << entry->name << ", pos: " << index_pos << ", can combine? "
+            result << entry->catalogName << ", pos: " << index_pos << ", can combine? "
                    << canCombineBounds;
         }
         for (const auto& orPushdown : orPushdowns) {
@@ -506,7 +506,7 @@ std::string PlanCacheIndexTree::toString(int indents) const {
                 firstPosition = false;
                 result << position;
             }
-            result << ": " << orPushdown.indexName << ", pos: " << orPushdown.position
+            result << ": " << mongoutils::str::pairToString(orPushdown.entryKey) << " pos: " << orPushdown.position
                    << ", can combine? " << orPushdown.canCombineBounds << ". ";
         }
         result << '\n';

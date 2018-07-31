@@ -54,41 +54,6 @@ namespace {
 std::size_t numPathComponents(StringData path) {
     return FieldRef{path}.numParts();
 }
-
-
-/**
- * Given a single allPaths index, and a set of fields which are being queried, create 'mock'
- * IndexEntry for each of the appropriate fields.
- */
-void expandIndex(const IndexEntry& allPathsIndex,
-                 const stdx::unordered_set<std::string>& fields,
-                 vector<IndexEntry>* out) {
-    invariant(out);
-
-    const auto projExec = AllPathsKeyGenerator::createProjectionExec(
-        allPathsIndex.keyPattern, allPathsIndex.infoObj.getObjectField("starPathsTempName"));
-
-    const auto projectedFields = projExec->applyProjectionToFields(fields);
-
-    out->reserve(out->size() + projectedFields.size());
-    for (auto&& fieldName : projectedFields) {
-        IndexEntry entry(BSON(fieldName << allPathsIndex.keyPattern.firstElement()),
-                         IndexNames::ALLPATHS,
-                         false,  // multikey (TODO SERVER-36109)
-                         {},     // multikey paths
-                         true,   // sparse
-                         false,  // unique
-                         // TODO: SERVER-35333: for plan caching to work, each IndexEntry must have
-                         // a unique name. We violate that requirement here by giving each
-                         // "expanded" index the same name. This must be fixed.
-                         allPathsIndex.name,
-                         allPathsIndex.filterExpr,
-                         allPathsIndex.infoObj,
-                         allPathsIndex.collator);
-
-        out->push_back(std::move(entry));
-    }
-}
 }  // namespace
 
 bool QueryPlannerIXSelect::notEqualsNullCanUseIndex(const IndexEntry& index,
@@ -270,13 +235,6 @@ void QueryPlannerIXSelect::findRelevantIndices(const stdx::unordered_set<std::st
                                                const std::vector<IndexEntry>& allIndices,
                                                std::vector<IndexEntry>* out) {
     for (auto&& entry : allIndices) {
-        if (entry.type == INDEX_ALLPATHS) {
-            // Should only have one field of the form {"$**" : 1}.
-            invariant(entry.keyPattern.nFields() == 1);
-            expandIndex(entry, fields, out);
-            continue;
-        }
-
         BSONObjIterator it(entry.keyPattern);
         BSONElement elt = it.next();
         if (fields.end() != fields.find(elt.fieldName())) {

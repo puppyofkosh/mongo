@@ -129,12 +129,12 @@ void PlanCacheIndexabilityState::updateDiscriminators(const std::vector<IndexEnt
 
     for (const IndexEntry& idx : indexEntries) {
         if (idx.sparse) {
-            processSparseIndex(idx.name, idx.keyPattern);
+            processSparseIndex(idx.catalogName, idx.keyPattern);
         }
         if (idx.filterExpr) {
-            processPartialIndex(idx.name, idx.filterExpr);
+            processPartialIndex(idx.catalogName, idx.filterExpr);
         }
-        processIndexCollation(idx.name, idx.keyPattern, idx.collator);
+        processIndexCollation(idx.catalogName, idx.keyPattern, idx.collator);
     }
 }
 

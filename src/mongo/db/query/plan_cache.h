@@ -77,7 +77,7 @@ struct PlanCacheIndexTree {
      * or satisfy the first field in the index.
      */
     struct OrPushdown {
-        std::string indexName;
+        IndexEntry::Key entryKey;
         size_t position;
         bool canCombineBounds;
         std::deque<size_t> route;

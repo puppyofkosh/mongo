@@ -1375,7 +1375,7 @@ TEST(QueryPlannerIXSelectTest, AllPathsIndicesExpandedEntryHasCorrectProperties)
 
         // TODO SERVER-35333: Check that the name of the generated IndexEntry is different from the
         // original IndexEntry.
-        ASSERT_EQ(ie.name, allPathsIndexEntry.name);
+        ASSERT_EQ(ie.catalogName, allPathsIndexEntry.catalogName);
     }
 }
 

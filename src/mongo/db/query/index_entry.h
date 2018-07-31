@@ -62,7 +62,7 @@ struct IndexEntry {
           multikeyPaths(mkp),
           sparse(sp),
           unique(unq),
-          name(n),
+          catalogName(n),
           filterExpr(fe),
           infoObj(io),
           collator(ci) {
@@ -83,7 +83,7 @@ struct IndexEntry {
           multikey(mk),
           sparse(sp),
           unique(unq),
-          name(n),
+          catalogName(n),
           filterExpr(fe),
           infoObj(io) {
         type = IndexNames::nameToType(IndexNames::findPluginName(keyPattern));
@@ -97,7 +97,7 @@ struct IndexEntry {
           multikey(false),
           sparse(false),
           unique(false),
-          name(indexName),
+          catalogName(indexName),
           filterExpr(nullptr),
           infoObj(BSONObj()) {
         type = IndexNames::nameToType(IndexNames::findPluginName(keyPattern));
@@ -116,10 +116,15 @@ struct IndexEntry {
 
     bool operator==(const IndexEntry& rhs) const {
         // Indexes are logically equal when names are equal.
-        return this->name == rhs.name;
+        return this->catalogName == rhs.catalogName;
     }
 
     std::string toString() const;
+
+    typedef std::pair<std::string, std::string> Key;
+    Key getKey() const {
+        return {catalogName, nameDisambiguator};
+    }
 
     BSONObj keyPattern;
 
@@ -135,7 +140,12 @@ struct IndexEntry {
 
     bool unique;
 
-    std::string name;
+    // The name of the index in the catalog.
+    std::string catalogName;
+
+    // A string used for disambiguating multiple IndexEntries with the same catalogName (such as in
+    // the case with an allPaths index).
+    std::string nameDisambiguator;
 
     const MatchExpression* filterExpr;
 

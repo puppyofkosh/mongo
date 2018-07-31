@@ -108,7 +108,9 @@ Status SubplanStage::planSubqueries() {
     _orExpression = _query->root()->shallowClone();
     for (size_t i = 0; i < _plannerParams.indices.size(); ++i) {
         const IndexEntry& ie = _plannerParams.indices[i];
-        _indexMap[ie.name] = i;
+        const auto key = ie.getKey();
+        invariant(_indexMap.count(key) == 0);
+        _indexMap[key] = i;
         LOG(5) << "Subplanner: index " << i << " is " << ie;
     }
 
@@ -185,7 +187,7 @@ namespace {
 Status tagOrChildAccordingToCache(PlanCacheIndexTree* compositeCacheData,
                                   SolutionCacheData* branchCacheData,
                                   MatchExpression* orChild,
-                                  const std::map<StringData, size_t>& indexMap) {
+                                  const std::map<IndexEntry::Key, size_t>& indexMap) {
     invariant(compositeCacheData);
 
     // We want a well-formed *indexed* solution.

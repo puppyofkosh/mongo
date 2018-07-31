@@ -92,17 +92,17 @@ PlanStage* buildStages(OperationContext* opCtx,
             }
 
             auto descriptor =
-                collection->getIndexCatalog()->findIndexByName(opCtx, ixn->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, ixn->index.catalogName);
             invariant(descriptor);
 
             // We use the node's internal name, keyPattern and multikey details here. For $**
             // indexes, these may differ from the information recorded in the index's descriptor.
             IndexScanParams params{*descriptor,
-                                   ixn->index.name,
+                                   // TODO: SERVER-35333: Make the IndexScanParams store a key.
+                                   mongoutils::str::pairToString(ixn->index.getKey()),
                                    ixn->index.keyPattern,
                                    ixn->index.multikeyPaths,
                                    ixn->index.multikey};
-
             params.bounds = ixn->bounds;
             params.direction = ixn->direction;
             params.addKeyMetadata = ixn->addKeyMetadata;
@@ -247,7 +247,7 @@ PlanStage* buildStages(OperationContext* opCtx,
             params.addDistMeta = node->addDistMeta;
 
             IndexDescriptor* twoDIndex =
-                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.catalogName);
             invariant(twoDIndex);
 
             GeoNear2DStage* nearStage =
@@ -266,7 +266,7 @@ PlanStage* buildStages(OperationContext* opCtx,
             params.addDistMeta = node->addDistMeta;
 
             IndexDescriptor* s2Index =
-                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.catalogName);
             invariant(s2Index);
 
             return new GeoNear2DSphereStage(params, opCtx, ws, collection, s2Index);
@@ -274,7 +274,7 @@ PlanStage* buildStages(OperationContext* opCtx,
         case STAGE_TEXT: {
             const TextNode* node = static_cast<const TextNode*>(root);
             IndexDescriptor* desc =
-                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, node->index.catalogName);
             invariant(desc);
             const FTSAccessMethod* fam =
                 static_cast<FTSAccessMethod*>(collection->getIndexCatalog()->getIndex(desc));
@@ -315,7 +315,7 @@ PlanStage* buildStages(OperationContext* opCtx,
             DistinctParams params;
 
             params.descriptor =
-                collection->getIndexCatalog()->findIndexByName(opCtx, dn->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, dn->index.catalogName);
             invariant(params.descriptor);
             params.direction = dn->direction;
             params.bounds = dn->bounds;
@@ -331,13 +331,14 @@ PlanStage* buildStages(OperationContext* opCtx,
             }
 
             auto descriptor =
-                collection->getIndexCatalog()->findIndexByName(opCtx, csn->index.name);
+                collection->getIndexCatalog()->findIndexByName(opCtx, csn->index.catalogName);
             invariant(descriptor);
 
             // We use the node's internal name, keyPattern and multikey details here. For $**
             // indexes, these may differ from the information recorded in the index's descriptor.
             CountScanParams params{*descriptor,
-                                   csn->index.name,
+                                   // TODO: SERVER-35333: Make the IndexScanParams store a key.
+                                   csn->index.catalogName,
                                    csn->index.keyPattern,
                                    csn->index.multikeyPaths,
                                    csn->index.multikey};
