@@ -506,8 +506,9 @@ std::string PlanCacheIndexTree::toString(int indents) const {
                 firstPosition = false;
                 result << position;
             }
-            result << ": " << mongoutils::str::pairToString(orPushdown.entryKey) << " pos: " << orPushdown.position
-                   << ", can combine? " << orPushdown.canCombineBounds << ". ";
+            result << ": " << mongoutils::str::pairToString(orPushdown.entryKey)
+                   << " pos: " << orPushdown.position << ", can combine? "
+                   << orPushdown.canCombineBounds << ". ";
         }
         result << '\n';
     }
@@ -602,15 +603,17 @@ void PlanCache::encodeKeyForMatch(const MatchExpression* tree, StringBuilder* ke
     }
 
     // Encode indexability.
-    const IndexToDiscriminatorMap& discriminators =
-        _indexabilityState.getDiscriminators(tree->path());
-    if (!discriminators.empty()) {
-        *keyBuilder << kEncodeDiscriminatorsBegin;
-        // For each discriminator on this path, append the character '0' or '1'.
-        for (auto&& indexAndDiscriminatorPair : discriminators) {
-            *keyBuilder << indexAndDiscriminatorPair.second.isMatchCompatibleWithIndex(tree);
+    if (!tree->path().empty()) {
+        const IndexToDiscriminatorMap& discriminators =
+            _indexabilityState.getDiscriminators(tree->path());
+        if (!discriminators.empty()) {
+            *keyBuilder << kEncodeDiscriminatorsBegin;
+            // For each discriminator on this path, append the character '0' or '1'.
+            for (auto&& indexAndDiscriminatorPair : discriminators) {
+                *keyBuilder << indexAndDiscriminatorPair.second.isMatchCompatibleWithIndex(tree);
+            }
+            *keyBuilder << kEncodeDiscriminatorsEnd;
         }
-        *keyBuilder << kEncodeDiscriminatorsEnd;
     }
 
     // Traverse child nodes.

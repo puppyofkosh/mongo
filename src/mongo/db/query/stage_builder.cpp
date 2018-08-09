@@ -99,7 +99,7 @@ PlanStage* buildStages(OperationContext* opCtx,
             // indexes, these may differ from the information recorded in the index's descriptor.
             IndexScanParams params{*descriptor,
                                    // TODO: SERVER-35333: Make the IndexScanParams store a key.
-                                   mongoutils::str::pairToString(ixn->index.getKey()),
+                                   ixn->index.catalogName,
                                    ixn->index.keyPattern,
                                    ixn->index.multikeyPaths,
                                    ixn->index.multikey};

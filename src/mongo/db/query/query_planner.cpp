@@ -77,6 +77,7 @@ void expandIndex(const IndexEntry& allPathsIndex,
 
     const auto projectedFields = projExec->applyProjectionToFields(fields);
 
+    // TODO: Fix unit tests.
     out->reserve(out->size() + projectedFields.size());
     for (auto&& fieldName : projectedFields) {
         IndexEntry entry(BSON(fieldName << allPathsIndex.keyPattern.firstElement()),
@@ -85,9 +86,6 @@ void expandIndex(const IndexEntry& allPathsIndex,
                          {},     // multikey paths
                          true,   // sparse
                          false,  // unique
-                         // TODO: SERVER-35333: for plan caching to work, each IndexEntry must have
-                         // a unique name. We violate that requirement here by giving each
-                         // "expanded" index the same name. This must be fixed.
                          allPathsIndex.catalogName,
                          allPathsIndex.filterExpr,
                          allPathsIndex.infoObj,

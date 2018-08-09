@@ -67,6 +67,8 @@ public:
     stdx::unordered_set<std::string> applyProjectionToFields(
         const stdx::unordered_set<std::string>& fields) const;
 
+    bool projectionIncludesField(StringData field) const;
+    
     /**
      * Returns the exhaustive set of all paths that will be preserved by this projection, or an
      * empty set if the exhaustive set cannot be determined. An inclusion will always produce an
@@ -80,6 +82,9 @@ public:
         return _projSpec;
     }
 
+    const BSONObj& getSpec() const {
+        return _projSpec;
+    }
 private:
     /**
      * ProjectionExecAgg::ProjectionExecutor wraps all agg-specific calls, and is forward-declared
