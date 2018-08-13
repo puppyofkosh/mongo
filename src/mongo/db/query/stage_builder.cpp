@@ -98,7 +98,6 @@ PlanStage* buildStages(OperationContext* opCtx,
             // We use the node's internal name, keyPattern and multikey details here. For $**
             // indexes, these may differ from the information recorded in the index's descriptor.
             IndexScanParams params{*descriptor,
-                                   // TODO: SERVER-35333: Make the IndexScanParams store a key.
                                    ixn->index.catalogName,
                                    ixn->index.keyPattern,
                                    ixn->index.multikeyPaths,
@@ -337,7 +336,6 @@ PlanStage* buildStages(OperationContext* opCtx,
             // We use the node's internal name, keyPattern and multikey details here. For $**
             // indexes, these may differ from the information recorded in the index's descriptor.
             CountScanParams params{*descriptor,
-                                   // TODO: SERVER-35333: Make the IndexScanParams store a key.
                                    csn->index.catalogName,
                                    csn->index.keyPattern,
                                    csn->index.multikeyPaths,

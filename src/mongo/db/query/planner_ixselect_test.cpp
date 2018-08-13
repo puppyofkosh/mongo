@@ -1335,9 +1335,8 @@ TEST(QueryPlannerIXSelectTest, AllPathsIndicesExpandedEntryHasCorrectProperties)
         // AllPaths indexes are never unique.
         ASSERT_FALSE(ie.unique);
 
-        // TODO SERVER-35333: Check that the name of the generated IndexEntry is different from the
-        // original IndexEntry.
         ASSERT_EQ(ie.catalogName, allPathsIndexEntry.catalogName);
+        ASSERT(ie.getIdentifier() != allPathsIndexEntry.getIdentifier());
     }
 }
 
