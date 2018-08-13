@@ -268,7 +268,6 @@ void QueryPlannerIXSelect::expandIndex(const IndexEntry& allPathsIndex,
 
     const auto projectedFields = projExec->applyProjectionToFields(fields);
 
-    // TODO: Fix unit tests.
     out->reserve(out->size() + projectedFields.size());
     for (auto&& fieldName : projectedFields) {
         IndexEntry entry(BSON(fieldName << allPathsIndex.keyPattern.firstElement()),

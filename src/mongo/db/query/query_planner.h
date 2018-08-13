@@ -97,7 +97,7 @@ public:
      */
     static Status tagAccordingToCache(MatchExpression* filter,
                                       const PlanCacheIndexTree* const indexTree,
-                                      const std::map<IndexEntry::Key, size_t>& indexMap);
+                                      const std::map<IndexEntry::Identifier, size_t>& indexMap);
 };
 
 }  // namespace mongo

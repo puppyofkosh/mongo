@@ -341,7 +341,7 @@ StatusWith<std::unique_ptr<PlanCacheIndexTree>> QueryPlanner::cacheDataFromTagge
             PlanCacheIndexTree::OrPushdown orPushdown;
             orPushdown.route = dest.route;
             IndexTag* indexTag = static_cast<IndexTag*>(dest.tagData.get());
-            orPushdown.entryKey = relevantIndices[indexTag->index].getKey();
+            orPushdown.entryKey = relevantIndices[indexTag->index].getIdentifier();
             orPushdown.position = indexTag->pos;
             orPushdown.canCombineBounds = indexTag->canCombineBounds;
             indexTree->orPushdowns.push_back(std::move(orPushdown));
@@ -363,7 +363,7 @@ StatusWith<std::unique_ptr<PlanCacheIndexTree>> QueryPlanner::cacheDataFromTagge
 // static
 Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
                                          const PlanCacheIndexTree* const indexTree,
-                                         const map<IndexEntry::Key, size_t>& indexMap) {
+                                         const map<IndexEntry::Identifier, size_t>& indexMap) {
     if (NULL == filter) {
         return Status(ErrorCodes::BadValue, "Cannot tag tree: filter is NULL.");
     }
@@ -410,8 +410,8 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
     }
 
     if (indexTree->entry.get()) {
-        map<IndexEntry::Key, size_t>::const_iterator got =
-            indexMap.find(indexTree->entry->getKey());
+        map<IndexEntry::Identifier, size_t>::const_iterator got =
+            indexMap.find(indexTree->entry->getIdentifier());
         if (got == indexMap.end()) {
             mongoutils::str::stream ss;
             ss << "Did not find index with name: " << indexTree->entry->catalogName;
@@ -483,13 +483,11 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
     // Map from index name to index number.
     // TODO: can we assume that the index numbering has the same lifetime
     // as the cache state?
-    map<IndexEntry::Key, size_t> indexMap;
-    // TODO: I think we can get rid of this silliness if we can synchronize flushing the plan cache
-    // every time there's a catalog change.
+    map<IndexEntry::Identifier, size_t> indexMap;
     for (size_t i = 0; i < expandedIndexes.size(); ++i) {
         const IndexEntry& ie = expandedIndexes[i];
         // Be sure that this key is unique and we haven't already added an entry to our map for it.
-        const auto key = ie.getKey();
+        const auto key = ie.getIdentifier();
         invariant(indexMap.count(key) == 0);
         indexMap[key] = i;
         LOG(5) << "Index " << i << ": " << ie.catalogName;

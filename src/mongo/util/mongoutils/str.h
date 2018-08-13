@@ -83,6 +83,7 @@ public:
 };
 
 
+    // TODO: operator<<
 template <typename A, typename B>
 inline std::string pairToString(const std::pair<A, B>& p) {
     return str::stream() << "(" << p.first << ", " << p.second << ")";

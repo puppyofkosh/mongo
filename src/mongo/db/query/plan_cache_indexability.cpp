@@ -143,6 +143,7 @@ namespace {
 const IndexToDiscriminatorMap emptyDiscriminators{};
 }  // namespace
 
+// TODO: unit tests
 IndexToDiscriminatorMap PlanCacheIndexabilityState::getDiscriminators(StringData path) const {
     PathDiscriminatorsMap::const_iterator it = _pathDiscriminatorsMap.find(path);
     if (it == _pathDiscriminatorsMap.end() && _allPathsIndexDiscriminators.empty()) {

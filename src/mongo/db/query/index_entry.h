@@ -121,8 +121,8 @@ struct IndexEntry {
 
     std::string toString() const;
 
-    typedef std::pair<std::string, std::string> Key;
-    Key getKey() const {
+    typedef std::pair<std::string, std::string> Identifier;
+    Identifier getIdentifier() const {
         return {catalogName, nameDisambiguator};
     }
 
