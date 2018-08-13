@@ -61,61 +61,6 @@ using std::numeric_limits;
 
 namespace dps = ::mongo::dotted_path_support;
 
-namespace {
-
-/**
- * Given a single allPaths index, and a set of fields which are being queried, create 'mock'
- * IndexEntry for each of the appropriate fields.
- */
-void expandIndex(const IndexEntry& allPathsIndex,
-                 const stdx::unordered_set<std::string>& fields,
-                 vector<IndexEntry>* out) {
-    invariant(out);
-
-    const auto projExec = AllPathsKeyGenerator::createProjectionExec(
-        allPathsIndex.keyPattern, allPathsIndex.infoObj.getObjectField("starPathsTempName"));
-
-    const auto projectedFields = projExec->applyProjectionToFields(fields);
-
-    // TODO: Fix unit tests.
-    out->reserve(out->size() + projectedFields.size());
-    for (auto&& fieldName : projectedFields) {
-        IndexEntry entry(BSON(fieldName << allPathsIndex.keyPattern.firstElement()),
-                         IndexNames::ALLPATHS,
-                         false,  // multikey (TODO SERVER-36109)
-                         {},     // multikey paths
-                         true,   // sparse
-                         false,  // unique
-                         allPathsIndex.catalogName,
-                         allPathsIndex.filterExpr,
-                         allPathsIndex.infoObj,
-                         allPathsIndex.collator);
-
-        // Since we're expanding an allPaths index, multiple IndexEntries may have the same
-        // catalogName. To be sure this IndexEntry has a unique identifier for planning, we set its
-        // 'nameDisambiguator' to be the name of the field indexed.
-        entry.nameDisambiguator = fieldName;
-        out->push_back(std::move(entry));
-    }
-}
-
-
-std::vector<IndexEntry> expandIndexes(const stdx::unordered_set<std::string>& fields,
-                                      const std::vector<IndexEntry>& allIndexes) {
-    std::vector<IndexEntry> out;
-    for (auto&& entry : allIndexes) {
-        if (entry.type == INDEX_ALLPATHS) {
-            // Should only have one field of the form {"$**" : 1}.
-            invariant(entry.keyPattern.nFields() == 1);
-            expandIndex(entry, fields, &out);
-        } else {
-            out.push_back(entry);
-        }
-    }
-    return out;
-}
-}
-
 // Copied verbatim from db/index.h
 static bool isIdIndex(const BSONObj& pattern) {
     BSONObjIterator i(pattern);
@@ -454,7 +399,7 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
             if (index == indexMap.end()) {
                 return Status(ErrorCodes::BadValue,
                               str::stream() << "Did not find index: "
-                              << mongoutils::str::pairToString(orPushdown.entryKey));
+                                            << mongoutils::str::pairToString(orPushdown.entryKey));
             }
             OrPushdownTag::Destination dest;
             dest.route = orPushdown.route;
@@ -465,7 +410,8 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
     }
 
     if (indexTree->entry.get()) {
-        map<IndexEntry::Key, size_t>::const_iterator got = indexMap.find(indexTree->entry->getKey());
+        map<IndexEntry::Key, size_t>::const_iterator got =
+            indexMap.find(indexTree->entry->getKey());
         if (got == indexMap.end()) {
             mongoutils::str::stream ss;
             ss << "Did not find index with name: " << indexTree->entry->catalogName;
@@ -531,7 +477,8 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
 
     stdx::unordered_set<string> fields;
     QueryPlannerIXSelect::getFields(query.root(), "", &fields);
-    std::vector<IndexEntry> expandedIndexes = expandIndexes(fields, params.indices);
+    std::vector<IndexEntry> expandedIndexes =
+        QueryPlannerIXSelect::expandIndexes(fields, params.indices);
 
     // Map from index name to index number.
     // TODO: can we assume that the index numbering has the same lifetime
@@ -645,7 +592,8 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
         LOG(5) << "Predicate over field '" << *it << "'";
     }
 
-    vector<IndexEntry> expandedIndexes = expandIndexes(fields, params.indices);
+    vector<IndexEntry> expandedIndexes =
+        QueryPlannerIXSelect::expandIndexes(fields, params.indices);
 
     // Filter our indices so we only look at indices that are over our predicates.
     vector<IndexEntry> relevantIndices;

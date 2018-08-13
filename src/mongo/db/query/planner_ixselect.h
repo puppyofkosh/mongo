@@ -133,6 +133,13 @@ public:
     static void stripUnneededAssignments(MatchExpression* node,
                                          const std::vector<IndexEntry>& indices);
 
+    /**
+     * Given a list of IndexEntries and fields used by a query's match expression, return a list
+     * "expanded" indexes (where the $** indexes in the given list have been expanded).
+     */
+    static std::vector<IndexEntry> expandIndexes(const stdx::unordered_set<std::string>& fields,
+                                                 const std::vector<IndexEntry>& allIndexes);
+
 private:
     /**
      * Used to keep track of if any $elemMatch predicates were encountered when walking a
@@ -160,6 +167,14 @@ private:
                              const std::vector<IndexEntry>& indices,
                              const CollatorInterface* collator,
                              const ElemMatchContext& elemMatchContext);
+
+    /**
+     * Expand an allPaths IndexEntry into a "mock" index entry for each of the fields it supports.
+     */
+    static void expandIndex(const IndexEntry& allPathsIndex,
+                            const stdx::unordered_set<std::string>& fields,
+                            std::vector<IndexEntry>* out);
+
     /**
      * Amend the RelevantTag lists for all predicates in the subtree rooted at 'node' to remove
      * invalid assignments to text indexes.

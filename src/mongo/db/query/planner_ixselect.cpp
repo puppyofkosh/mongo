@@ -243,6 +243,54 @@ void QueryPlannerIXSelect::findRelevantIndices(const stdx::unordered_set<std::st
     }
 }
 
+std::vector<IndexEntry> QueryPlannerIXSelect::expandIndexes(
+    const stdx::unordered_set<std::string>& fields, const std::vector<IndexEntry>& allIndexes) {
+    std::vector<IndexEntry> out;
+    for (auto&& entry : allIndexes) {
+        if (entry.type == INDEX_ALLPATHS) {
+            // Should only have one field of the form {"$**" : 1}.
+            invariant(entry.keyPattern.nFields() == 1);
+            expandIndex(entry, fields, &out);
+        } else {
+            out.push_back(entry);
+        }
+    }
+    return out;
+}
+
+void QueryPlannerIXSelect::expandIndex(const IndexEntry& allPathsIndex,
+                                       const stdx::unordered_set<std::string>& fields,
+                                       vector<IndexEntry>* out) {
+    invariant(out);
+
+    const auto projExec = AllPathsKeyGenerator::createProjectionExec(
+        allPathsIndex.keyPattern, allPathsIndex.infoObj.getObjectField("starPathsTempName"));
+
+    const auto projectedFields = projExec->applyProjectionToFields(fields);
+
+    // TODO: Fix unit tests.
+    out->reserve(out->size() + projectedFields.size());
+    for (auto&& fieldName : projectedFields) {
+        IndexEntry entry(BSON(fieldName << allPathsIndex.keyPattern.firstElement()),
+                         IndexNames::ALLPATHS,
+                         false,  // multikey (TODO SERVER-36109)
+                         {},     // multikey paths
+                         true,   // sparse
+                         false,  // unique
+                         allPathsIndex.catalogName,
+                         allPathsIndex.filterExpr,
+                         allPathsIndex.infoObj,
+                         allPathsIndex.collator);
+
+        // Since we're expanding an allPaths index, multiple IndexEntries may have the same
+        // catalogName. To be sure this IndexEntry has a unique identifier for planning, we set its
+        // 'nameDisambiguator' to be the name of the field indexed.
+        entry.nameDisambiguator = fieldName;
+        out->push_back(std::move(entry));
+    }
+}
+
+
 // static
 // This is the public method which does not accept an ElemMatchContext.
 bool QueryPlannerIXSelect::compatible(const BSONElement& keyPatternElt,
