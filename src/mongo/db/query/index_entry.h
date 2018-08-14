@@ -161,4 +161,6 @@ struct IndexEntry {
     const CollatorInterface* collator = nullptr;
 };
 
+std::ostream& operator<<(std::ostream& s, const IndexEntry::Identifier& p);
+StringBuilder& operator<<(StringBuilder& s, const IndexEntry::Identifier& p);
 }  // namespace mongo

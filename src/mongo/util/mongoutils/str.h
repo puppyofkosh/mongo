@@ -82,13 +82,6 @@ public:
     stream& operator<<(R (*val)(Args...)) = delete;
 };
 
-
-// TODO: operator<<
-template <typename A, typename B>
-inline std::string pairToString(const std::pair<A, B>& p) {
-    return str::stream() << "(" << p.first << ", " << p.second << ")";
-}
-
 inline bool startsWith(const char* str, const char* prefix) {
     const char* s = str;
     const char* p = prefix;

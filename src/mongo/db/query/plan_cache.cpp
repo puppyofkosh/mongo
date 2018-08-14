@@ -49,7 +49,6 @@
 #include "mongo/util/assert_util.h"
 #include "mongo/util/hex.h"
 #include "mongo/util/log.h"
-#include "mongo/util/mongoutils/str.h"
 #include "mongo/util/transitional_tools_do_not_use/vector_spooling.h"
 
 namespace mongo {
@@ -506,7 +505,7 @@ std::string PlanCacheIndexTree::toString(int indents) const {
                 firstPosition = false;
                 result << position;
             }
-            result << ": " << mongoutils::str::pairToString(orPushdown.entryKey)
+            result << ": " << orPushdown.entryKey
                    << " pos: " << orPushdown.position << ", can combine? "
                    << orPushdown.canCombineBounds << ". ";
         }

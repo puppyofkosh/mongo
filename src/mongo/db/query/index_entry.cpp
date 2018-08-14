@@ -80,4 +80,14 @@ bool IndexEntry::pathHasMultikeyComponent(StringData indexedField) const {
     MONGO_UNREACHABLE;
 }
 
+std::ostream& operator<<(std::ostream& s, const IndexEntry::Identifier& ident) {
+    s << "(" << ident.first << ", " << ident.second << ")";
+    return s;
+}
+
+StringBuilder& operator<<(StringBuilder& s, const IndexEntry::Identifier& ident) {
+    s << "(" << ident.first << ", " << ident.second << ")";
+    return s;
+}
+
 }  // namespace mongo

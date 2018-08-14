@@ -398,8 +398,7 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
             auto index = indexMap.find(orPushdown.entryKey);
             if (index == indexMap.end()) {
                 return Status(ErrorCodes::BadValue,
-                              str::stream() << "Did not find index: "
-                                            << mongoutils::str::pairToString(orPushdown.entryKey));
+                              str::stream() << "Did not find index: " << orPushdown.entryKey);
             }
             OrPushdownTag::Destination dest;
             dest.route = orPushdown.route;
@@ -527,7 +526,6 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
 // static
 StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
     const CanonicalQuery& query, const QueryPlannerParams& params) {
-
     LOG(5) << "Beginning planning..." << endl
            << "=============================" << endl
            << "Options = " << optionString(params.options) << endl
