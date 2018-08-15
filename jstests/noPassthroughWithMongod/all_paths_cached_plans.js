@@ -59,6 +59,32 @@
     // There should only have been one solution for the above query, so it would not get cached.
     assert.eq(getPlansForCacheEntry({a: 1, b: null}).length, 0);
 
-    // TODO SERVER-35326: Update this test to use a $** index with a collation.
+    // Check that indexability discriminators work with collations.
+    (function() {
+        // create allPaths index with a collation.
+        assert.eq(coll.drop(), true);
+        assert.commandWorked(
+            db.createCollection(coll.getName(), {collation: {locale: "en_US", strength: 1}}));
+        assert.commandWorked(coll.createIndex({"$**": 1}));
+
+        // Get the shape-hash for a query which uses a different collation, but does not use string
+        // bounds.
+        const hash1 = coll.explain()
+                          .find({a: 5, b: 5})
+                          .collation({locale: "fr"})
+                          .finish()
+                          .queryPlanner.queryHash;
+        // Get the shape-hash for a query which uses a different collation, and does have string
+        // bounds. This query should have a different shape since it will not be eligible to use
+        // the b.$** index (since the index has a different collation).
+        const hash2 = coll.explain()
+                          .find({a: 5, b: "a string"})
+                          .collation({locale: "fr"})
+                          .finish()
+                          .queryPlanner.queryHash;
+
+        assert.neq(hash1, hash2);
+    })();
+
     // TODO SERVER-35336: Update this test to use a partial $** index .
 })();
