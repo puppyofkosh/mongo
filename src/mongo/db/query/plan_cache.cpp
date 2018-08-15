@@ -505,9 +505,8 @@ std::string PlanCacheIndexTree::toString(int indents) const {
                 firstPosition = false;
                 result << position;
             }
-            result << ": " << orPushdown.entryKey
-                   << " pos: " << orPushdown.position << ", can combine? "
-                   << orPushdown.canCombineBounds << ". ";
+            result << ": " << orPushdown.entryKey << " pos: " << orPushdown.position
+                   << ", can combine? " << orPushdown.canCombineBounds << ". ";
         }
         result << '\n';
     }
