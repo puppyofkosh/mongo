@@ -159,7 +159,7 @@ IndexToDiscriminatorMap PlanCacheIndexabilityState::getDiscriminators(StringData
     }
 
     for (auto&& allPathsDiscriminator : _allPathsIndexDiscriminators) {
-        if (allPathsDiscriminator.projectionExec->projectionIncludesField(path)) {
+        if (allPathsDiscriminator.projectionExec->applyProjectionToOneField(path)) {
             CompositeIndexabilityDiscriminator& cid = (*ret)[allPathsDiscriminator.catalogName];
 
             cid.addDiscriminator(getSparsenessDiscriminator());

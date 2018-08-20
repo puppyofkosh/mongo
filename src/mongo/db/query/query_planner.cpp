@@ -485,10 +485,9 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
     map<IndexEntry::Identifier, size_t> indexMap;
     for (size_t i = 0; i < expandedIndexes.size(); ++i) {
         const IndexEntry& ie = expandedIndexes[i];
-        // Be sure that this key is unique and we haven't already added an entry to our map for it.
-        const auto key = ie.getIdentifier();
-        invariant(indexMap.count(key) == 0);
-        indexMap[key] = i;
+        const auto insertionRes = indexMap.insert(std::make_pair(ie.getIdentifier(), i));
+        // Be sure the key was not already in the map.
+        invariant(insertionRes.second);
         LOG(5) << "Index " << i << ": " << ie.catalogName;
     }
 
