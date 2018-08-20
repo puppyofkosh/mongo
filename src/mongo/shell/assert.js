@@ -97,8 +97,6 @@ assert = (function() {
     function _processMsg(msg) {
         if (typeof msg === "function") {
             return msg();
-        } else if (typeof msg === "object") {
-            return tojson(msg);
         }
 
         return msg;
@@ -110,8 +108,8 @@ assert = (function() {
                 if (msg.length !== 0) {
                     doassert("msg function cannot expect any parameters.");
                 }
-            } else if (typeof msg !== "string" && typeof msg !== "object") {
-                doassert("msg parameter must be a string, function or object.");
+            } else if (typeof msg !== "string") {
+                doassert("msg parameter must be a string or a function.");
             }
 
             if (msg && assert._debug) {
