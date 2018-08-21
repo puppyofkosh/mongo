@@ -409,5 +409,24 @@ TEST(PlanCacheIndexabilityTest, CompoundIndexCollationDiscriminator) {
     ASSERT(discriminatorsB.find("a_1_b_1") != discriminatorsB.end());
 }
 
+TEST(PlanCacheIndexabilityTest, AllPathsDiscriminator) {
+    PlanCacheIndexabilityState state;
+    state.updateDiscriminators({IndexEntry(BSON("$**" << 1),
+                                           false,      // multikey
+                                           false,      // sparse
+                                           false,      // unique
+                                           IndexEntry::Identifier{""},
+                                           nullptr,
+                                           BSONObj())});
+
+    auto discriminatorsA = state.getDiscriminators("a");
+    ASSERT_EQ(1U, discriminatorsA.size());
+    ASSERT(discriminatorsA.find("a_1_b_1") != discriminatorsA.end());
+
+    auto discriminatorsB = state.getDiscriminators("b");
+    ASSERT_EQ(1U, discriminatorsB.size());
+    ASSERT(discriminatorsB.find("a_1_b_1") != discriminatorsB.end());
+}
+
 }  // namespace
 }  // namespace mongo

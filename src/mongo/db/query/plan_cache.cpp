@@ -309,6 +309,37 @@ void encodeGeoNearMatchExpression(const GeoNearMatchExpression* tree, StringBuil
     }
 }
 
+void encodeIndexabilityForDiscriminators(const MatchExpression* tree,
+                                         const IndexToDiscriminatorMap& discriminators,
+                                         StringBuilder* keyBuilder) {
+    for (auto&& indexAndDiscriminatorPair : discriminators) {
+        *keyBuilder << indexAndDiscriminatorPair.second.isMatchCompatibleWithIndex(tree);
+    }
+}
+
+void encodeIndexability(const MatchExpression* tree,
+                        const PlanCacheIndexabilityState& indexabilityState,
+                        StringBuilder* keyBuilder) {
+    if (tree->path().empty()) {
+        return;
+    }
+
+    const IndexToDiscriminatorMap& discriminators =
+        indexabilityState.getDiscriminators(tree->path());
+    IndexToDiscriminatorMap allPathsDiscriminators =
+        indexabilityState.buildAllPathsDiscriminators(tree->path());
+    if (discriminators.empty() && allPathsDiscriminators.empty()) {
+        return;
+    }
+
+    *keyBuilder << kEncodeDiscriminatorsBegin;
+    // For each discriminator on this path, append the character '0' or '1'.
+    encodeIndexabilityForDiscriminators(tree, discriminators, keyBuilder);
+    encodeIndexabilityForDiscriminators(tree, allPathsDiscriminators, keyBuilder);
+
+    *keyBuilder << kEncodeDiscriminatorsEnd;
+}
+
 }  // namespace
 
 //
@@ -505,7 +536,7 @@ std::string PlanCacheIndexTree::toString(int indents) const {
                 firstPosition = false;
                 result << position;
             }
-            result << ": " << orPushdown.entryKey << " pos: " << orPushdown.position
+            result << ": " << orPushdown.indexEntryId << " pos: " << orPushdown.position
                    << ", can combine? " << orPushdown.canCombineBounds << ". ";
         }
         result << '\n';
@@ -600,19 +631,7 @@ void PlanCache::encodeKeyForMatch(const MatchExpression* tree, StringBuilder* ke
         encodeUserString(flags, keyBuilder);
     }
 
-    // Encode indexability.
-    if (!tree->path().empty()) {
-        const IndexToDiscriminatorMap& discriminators =
-            _indexabilityState.getDiscriminators(tree->path());
-        if (!discriminators.empty()) {
-            *keyBuilder << kEncodeDiscriminatorsBegin;
-            // For each discriminator on this path, append the character '0' or '1'.
-            for (auto&& indexAndDiscriminatorPair : discriminators) {
-                *keyBuilder << indexAndDiscriminatorPair.second.isMatchCompatibleWithIndex(tree);
-            }
-            *keyBuilder << kEncodeDiscriminatorsEnd;
-        }
-    }
+    encodeIndexability(tree, _indexabilityState, keyBuilder);
 
     // Traverse child nodes.
     // Enclose children in [].

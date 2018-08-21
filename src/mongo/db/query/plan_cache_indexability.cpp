@@ -47,6 +47,37 @@ namespace mongo {
 
 namespace {
 
+bool canUseAllPathsIndex(BSONElement elt, MatchExpression::MatchType matchType) {
+    if (elt.type() == BSONType::Object) {
+        return false;
+    }
+
+    if (elt.type() == BSONType::Array) {
+        // We only support equality to empty array.
+        return elt.embeddedObject().isEmpty() && matchType == MatchExpression::EQ;
+    }
+
+    return true;
+}
+
+IndexabilityDiscriminator kSupportedByAllPathsDiscriminator = [](const MatchExpression* queryExpr) {
+    if (ComparisonMatchExpression::isComparisonMatchExpression(queryExpr)) {
+        const ComparisonMatchExpression* cmpExpr =
+            static_cast<const ComparisonMatchExpression*>(queryExpr);
+
+        return canUseAllPathsIndex(cmpExpr->getData(), cmpExpr->matchType());
+    } else if (queryExpr->matchType() == MatchExpression::MATCH_IN) {
+        const auto* queryExprIn = static_cast<const InMatchExpression*>(queryExpr);
+
+        return std::all_of(
+            queryExprIn->getEqualities().begin(),
+            queryExprIn->getEqualities().end(),
+            [](const BSONElement& elt) { return canUseAllPathsIndex(elt, MatchExpression::EQ); });
+    }
+
+    return true;
+};
+
 IndexabilityDiscriminator kSparsenessDiscriminator = [](const MatchExpression* queryExpr) {
     if (queryExpr->matchType() == MatchExpression::EQ) {
         const auto* queryExprEquality = static_cast<const EqualityMatchExpression*>(queryExpr);
@@ -144,24 +175,24 @@ const IndexToDiscriminatorMap emptyDiscriminators{};
 }  // namespace
 
 // TODO: unit tests
-IndexToDiscriminatorMap PlanCacheIndexabilityState::getDiscriminators(StringData path) const {
+const IndexToDiscriminatorMap& PlanCacheIndexabilityState::getDiscriminators(
+    StringData path) const {
     PathDiscriminatorsMap::const_iterator it = _pathDiscriminatorsMap.find(path);
-    if (it == _pathDiscriminatorsMap.end() && _allPathsIndexDiscriminators.empty()) {
+    if (it == _pathDiscriminatorsMap.end()) {
         return emptyDiscriminators;
     }
+    return it->second;
+}
 
-    // It is a shame that we have to copy this even if there are no allPaths index discriminators.
-    boost::optional<IndexToDiscriminatorMap> ret;
-    if (it != _pathDiscriminatorsMap.end()) {
-        ret.emplace(it->second);
-    } else {
-        ret.emplace();
-    }
+IndexToDiscriminatorMap PlanCacheIndexabilityState::buildAllPathsDiscriminators(
+    StringData path) const {
 
+    IndexToDiscriminatorMap ret;
     for (auto&& allPathsDiscriminator : _allPathsIndexDiscriminators) {
         if (allPathsDiscriminator.projectionExec->applyProjectionToOneField(path)) {
-            CompositeIndexabilityDiscriminator& cid = (*ret)[allPathsDiscriminator.catalogName];
+            CompositeIndexabilityDiscriminator& cid = ret[allPathsDiscriminator.catalogName];
 
+            cid.addDiscriminator(kSupportedByAllPathsDiscriminator);
             cid.addDiscriminator(getSparsenessDiscriminator());
             cid.addDiscriminator(getCollatedIndexDiscriminator(allPathsDiscriminator.collator));
             if (allPathsDiscriminator.filterExpr) {
@@ -170,8 +201,9 @@ IndexToDiscriminatorMap PlanCacheIndexabilityState::getDiscriminators(StringData
             }
         }
     }
-    return *ret;
+    return ret;
 }
+
 
 void PlanCacheIndexabilityState::updateDiscriminators(const std::vector<IndexEntry>& indexEntries) {
     _pathDiscriminatorsMap = PathDiscriminatorsMap();

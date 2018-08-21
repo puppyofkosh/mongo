@@ -394,10 +394,10 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
         filter->setTag(new OrPushdownTag());
         OrPushdownTag* orPushdownTag = static_cast<OrPushdownTag*>(filter->getTag());
         for (const auto& orPushdown : indexTree->orPushdowns) {
-            auto index = indexMap.find(orPushdown.entryKey);
+            auto index = indexMap.find(orPushdown.indexEntryId);
             if (index == indexMap.end()) {
                 return Status(ErrorCodes::BadValue,
-                              str::stream() << "Did not find index: " << orPushdown.entryKey);
+                              str::stream() << "Did not find index: " << orPushdown.indexEntryId);
             }
             OrPushdownTag::Destination dest;
             dest.route = orPushdown.route;

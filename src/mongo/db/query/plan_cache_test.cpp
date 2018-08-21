@@ -1892,4 +1892,44 @@ TEST(PlanCacheTest, ComputeKeyCollationIndex) {
               planCache.computeKey(*inContainsStringHasCollation));
 }
 
+TEST(PlanCacheTest, ComputeKeyAllPathsIndex) {
+    PlanCache planCache;
+    IndexEntry entry(BSON("a.$**" << 1),
+                     false,                       // multikey
+                     false,                       // sparse
+                     false,                       // unique
+                     IndexEntry::Identifier{""},  // name
+                     nullptr,                     // filterExpr
+                     BSONObj());
+    planCache.notifyOfIndexEntries({entry});
+
+    // Compatible with index.
+    unique_ptr<CanonicalQuery> usesPathWithScalar(canonicalize("{a: 'abcdef'}"));
+    unique_ptr<CanonicalQuery> usesPathWithEmptyArray(canonicalize("{a: []}"));
+
+    // Not compatible with index.
+    unique_ptr<CanonicalQuery> usesPathWithObject(canonicalize("{a: {b: 'abc'}}"));
+    unique_ptr<CanonicalQuery> usesPathWithArray(canonicalize("{a: [1, 2]}"));
+    unique_ptr<CanonicalQuery> usesPathWithArrayContainingObject(canonicalize("{a: [1, {b: 1}]}"));
+    unique_ptr<CanonicalQuery> usesPathWithEmptyObject(canonicalize("{a: {}}"));
+    unique_ptr<CanonicalQuery> doesNotUsePath(canonicalize("{b: 1234}"));
+
+    // Check that the queries which are compatible with the index have the same key.
+    ASSERT_EQ(planCache.computeKey(*usesPathWithScalar),
+              planCache.computeKey(*usesPathWithEmptyArray));
+
+    // Check that the queries which have the same path as the index, but aren't supported, have
+    // different keys.
+    ASSERT_NE(planCache.computeKey(*usesPathWithScalar), planCache.computeKey(*usesPathWithObject));
+    ASSERT_EQ(planCache.computeKey(*usesPathWithObject), planCache.computeKey(*usesPathWithArray));
+    ASSERT_EQ(planCache.computeKey(*usesPathWithObject),
+              planCache.computeKey(*usesPathWithArrayContainingObject));
+    ASSERT_EQ(planCache.computeKey(*usesPathWithObject),
+              planCache.computeKey(*usesPathWithEmptyObject));
+
+    // The query on 'b' should have a completely different plan cache key.
+    ASSERT_NE(planCache.computeKey(*usesPathWithScalar), planCache.computeKey(*doesNotUsePath));
+    ASSERT_NE(planCache.computeKey(*usesPathWithObject), planCache.computeKey(*doesNotUsePath));
+}
+
 }  // namespace

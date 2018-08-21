@@ -31,10 +31,9 @@
 #include <vector>
 
 #include "mongo/base/disallow_copying.h"
+#include "mongo/db/exec/projection_exec_agg.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/util/string_map.h"
-
-#include "mongo/db/exec/projection_exec_agg.h"
 
 namespace mongo {
 
@@ -91,7 +90,13 @@ public:
      * Returns a map from index name to discriminator for each index associated with 'path'.
      * Returns an empty set if no discriminators are registered for 'path'.
      */
-    IndexToDiscriminatorMap getDiscriminators(StringData path) const;
+    const IndexToDiscriminatorMap& getDiscriminators(StringData path) const;
+
+    /**
+     * Construct an IndexToDiscriminator map for the given path, only for the allPaths indexes
+     * which have been included in the indexability state.
+     */
+    IndexToDiscriminatorMap buildAllPathsDiscriminators(StringData path) const;
 
     /**
      * Clears discriminators for all paths, and regenerate them from 'indexEntries'.
