@@ -1335,8 +1335,8 @@ TEST(QueryPlannerIXSelectTest, AllPathsIndicesExpandedEntryHasCorrectProperties)
         // AllPaths indexes are never unique.
         ASSERT_FALSE(ie.unique);
 
-        ASSERT_EQ(ie.catalogName, allPathsIndexEntry.catalogName);
-        ASSERT(ie.getIdentifier() != allPathsIndexEntry.getIdentifier());
+        ASSERT_EQ(ie.identifier.catalogName, allPathsIndexEntry.identifier.catalogName);
+        ASSERT(ie.identifier != allPathsIndexEntry.identifier);
     }
 }
 

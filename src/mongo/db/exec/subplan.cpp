@@ -108,7 +108,7 @@ Status SubplanStage::planSubqueries() {
     _orExpression = _query->root()->shallowClone();
     for (size_t i = 0; i < _plannerParams.indices.size(); ++i) {
         const IndexEntry& ie = _plannerParams.indices[i];
-        const auto insertionRes = _indexMap.insert(std::make_pair(ie.getIdentifier(), i));
+        const auto insertionRes = _indexMap.insert(std::make_pair(ie.identifier, i));
         // Be sure the key was not already in the map.
         invariant(insertionRes.second);
         LOG(5) << "Subplanner: index " << i << " is " << ie;

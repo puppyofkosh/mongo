@@ -44,6 +44,36 @@ class MatchExpression;
  * This name sucks, but every name involving 'index' is used somewhere.
  */
 struct IndexEntry {
+    struct Identifier {
+        // Should only be used for tests.
+        Identifier() {}
+
+        explicit Identifier(std::string aCatalogName) : catalogName(std::move(aCatalogName)) {}
+
+        Identifier(std::string aCatalogName, std::string nameDisambiguator)
+            : catalogName(std::move(aCatalogName)), disambiguator(std::move(nameDisambiguator)) {}
+
+        bool operator==(const Identifier& other) const {
+            return other.catalogName == catalogName && other.disambiguator == disambiguator;
+        }
+
+        bool operator!=(const Identifier& other) const {
+            return !(*this == other);
+        }
+
+        bool operator<(const Identifier& other) const {
+            const auto cmpRes = catalogName.compare(other.catalogName);
+            return (cmpRes < 0) || ((cmpRes == 0) && disambiguator < other.disambiguator);
+        }
+
+        // The name of the index in the catalog.
+        std::string catalogName;
+
+        // A string used for disambiguating multiple IndexEntries with the same catalogName (such
+        // as in the case with an allPaths index).
+        std::string disambiguator;
+    };
+
     /**
      * Use this constructor if you're making an IndexEntry from the catalog.
      */
@@ -53,7 +83,7 @@ struct IndexEntry {
                const MultikeyPaths& mkp,
                bool sp,
                bool unq,
-               const std::string& n,
+               Identifier ident,
                const MatchExpression* fe,
                const BSONObj& io,
                const CollatorInterface* ci)
@@ -62,7 +92,7 @@ struct IndexEntry {
           multikeyPaths(mkp),
           sparse(sp),
           unique(unq),
-          catalogName(n),
+          identifier(std::move(ident)),
           filterExpr(fe),
           infoObj(io),
           collator(ci) {
@@ -76,14 +106,14 @@ struct IndexEntry {
                bool mk,
                bool sp,
                bool unq,
-               const std::string& n,
+               Identifier ident,
                const MatchExpression* fe,
                const BSONObj& io)
         : keyPattern(kp),
           multikey(mk),
           sparse(sp),
           unique(unq),
-          catalogName(n),
+          identifier(std::move(ident)),
           filterExpr(fe),
           infoObj(io) {
         type = IndexNames::nameToType(IndexNames::findPluginName(keyPattern));
@@ -97,7 +127,7 @@ struct IndexEntry {
           multikey(false),
           sparse(false),
           unique(false),
-          catalogName(indexName),
+          identifier(indexName),
           filterExpr(nullptr),
           infoObj(BSONObj()) {
         type = IndexNames::nameToType(IndexNames::findPluginName(keyPattern));
@@ -116,15 +146,10 @@ struct IndexEntry {
 
     bool operator==(const IndexEntry& rhs) const {
         // Indexes are logically equal when names are equal.
-        return this->catalogName == rhs.catalogName;
+        return this->identifier == rhs.identifier;
     }
 
     std::string toString() const;
-
-    typedef std::pair<std::string, std::string> Identifier;
-    Identifier getIdentifier() const {
-        return {catalogName, nameDisambiguator};
-    }
 
     BSONObj keyPattern;
 
@@ -140,12 +165,7 @@ struct IndexEntry {
 
     bool unique;
 
-    // The name of the index in the catalog.
-    std::string catalogName;
-
-    // A string used for disambiguating multiple IndexEntries with the same catalogName (such as in
-    // the case with an allPaths index).
-    std::string nameDisambiguator;
+    Identifier identifier;
 
     const MatchExpression* filterExpr;
 
@@ -161,6 +181,6 @@ struct IndexEntry {
     const CollatorInterface* collator = nullptr;
 };
 
-std::ostream& operator<<(std::ostream& s, const IndexEntry::Identifier& p);
-StringBuilder& operator<<(StringBuilder& s, const IndexEntry::Identifier& p);
+std::ostream& operator<<(std::ostream& stream, const IndexEntry::Identifier& ident);
+StringBuilder& operator<<(StringBuilder& builder, const IndexEntry::Identifier& ident);
 }  // namespace mongo

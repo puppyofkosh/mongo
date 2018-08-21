@@ -58,7 +58,7 @@ TEST(PlanCacheIndexabilityTest, SparseIndexSimple) {
                                            false,    // multikey
                                            true,     // sparse
                                            false,    // unique
-                                           "a_1",    // name
+                                           IndexEntry::Identifier{"a_1"},    // name
                                            nullptr,  // filterExpr
                                            BSONObj())});
 
@@ -91,7 +91,7 @@ TEST(PlanCacheIndexabilityTest, SparseIndexCompound) {
                                            false,      // multikey
                                            true,       // sparse
                                            false,      // unique
-                                           "a_1_b_1",  // name
+                                           IndexEntry::Identifier{"a_1_b_1"},  // name
                                            nullptr,    // filterExpr
                                            BSONObj())});
 
@@ -131,7 +131,7 @@ TEST(PlanCacheIndexabilityTest, PartialIndexSimple) {
                                            false,  // multikey
                                            false,  // sparse
                                            false,  // unique
-                                           "a_1",  // name
+                                           IndexEntry::Identifier{"a_1"},  // name
                                            filterExpr.get(),
                                            BSONObj())});
 
@@ -173,7 +173,7 @@ TEST(PlanCacheIndexabilityTest, PartialIndexAnd) {
                                            false,  // multikey
                                            false,  // sparse
                                            false,  // unique
-                                           "a_1",  // name
+                                           IndexEntry::Identifier{"a_1"},  // name
                                            filterExpr.get(),
                                            BSONObj())});
 
@@ -227,14 +227,14 @@ TEST(PlanCacheIndexabilityTest, MultiplePartialIndexes) {
                                            false,  // multikey
                                            false,  // sparse
                                            false,  // unique
-                                           "a_1",  // name
+                                           IndexEntry::Identifier{"a_1"},  // name
                                            filterExpr1.get(),
                                            BSONObj()),
                                 IndexEntry(BSON("b" << 1),
                                            false,  // multikey
                                            false,  // sparse
                                            false,  // unique
-                                           "b_1",  // name
+                                           IndexEntry::Identifier{"b_1"},  // name
                                            filterExpr2.get(),
                                            BSONObj())});
 
@@ -300,7 +300,7 @@ TEST(PlanCacheIndexabilityTest, IndexNeitherSparseNorPartial) {
                                            false,  // multikey
                                            false,  // sparse
                                            false,  // unique
-                                           "a_1",  // name
+                                           IndexEntry::Identifier{"a_1"},  // name
                                            nullptr,
                                            BSONObj())});
     auto discriminators = state.getDiscriminators("a");
@@ -315,7 +315,7 @@ TEST(PlanCacheIndexabilityTest, DiscriminatorForCollationIndicatesWhenCollations
                      false,    // multikey
                      false,    // sparse
                      false,    // unique
-                     "a_1",    // name
+                     IndexEntry::Identifier{"a_1"},    // name
                      nullptr,  // filterExpr
                      BSONObj());
     CollatorInterfaceMock collator(CollatorInterfaceMock::MockType::kReverseString);
@@ -396,7 +396,7 @@ TEST(PlanCacheIndexabilityTest, CompoundIndexCollationDiscriminator) {
                                            false,      // multikey
                                            false,      // sparse
                                            false,      // unique
-                                           "a_1_b_1",  // name
+                                           IndexEntry::Identifier{"a_1_b_1"},  // name
                                            nullptr,
                                            BSONObj())});
 

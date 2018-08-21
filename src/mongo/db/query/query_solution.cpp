@@ -185,7 +185,7 @@ void TextNode::appendToString(mongoutils::str::stream* ss, int indent) const {
     addIndent(ss, indent);
     *ss << "TEXT\n";
     addIndent(ss, indent + 1);
-    *ss << "name = " << index.catalogName << '\n';
+    *ss << "name = " << index.identifier.catalogName << '\n';
     addIndent(ss, indent + 1);
     *ss << "keyPattern = " << index.keyPattern.toString() << '\n';
     addIndent(ss, indent + 1);
@@ -521,7 +521,7 @@ void IndexScanNode::appendToString(mongoutils::str::stream* ss, int indent) cons
     addIndent(ss, indent);
     *ss << "IXSCAN\n";
     addIndent(ss, indent + 1);
-    *ss << "indexName = " << index.catalogName << '\n';
+    *ss << "indexName = " << index.identifier.catalogName << '\n';
     *ss << "keyPattern = " << index.keyPattern << '\n';
     if (NULL != filter) {
         addIndent(ss, indent + 1);
@@ -981,7 +981,7 @@ void GeoNear2DNode::appendToString(mongoutils::str::stream* ss, int indent) cons
     addIndent(ss, indent);
     *ss << "GEO_NEAR_2D\n";
     addIndent(ss, indent + 1);
-    *ss << "name = " << index.catalogName << '\n';
+    *ss << "name = " << index.identifier.catalogName << '\n';
     addIndent(ss, indent + 1);
     *ss << "keyPattern = " << index.keyPattern.toString() << '\n';
     addCommon(ss, indent);
@@ -1013,7 +1013,7 @@ void GeoNear2DSphereNode::appendToString(mongoutils::str::stream* ss, int indent
     addIndent(ss, indent);
     *ss << "GEO_NEAR_2DSPHERE\n";
     addIndent(ss, indent + 1);
-    *ss << "name = " << index.catalogName << '\n';
+    *ss << "name = " << index.identifier.catalogName << '\n';
     addIndent(ss, indent + 1);
     *ss << "keyPattern = " << index.keyPattern.toString() << '\n';
     addCommon(ss, indent);
@@ -1073,7 +1073,7 @@ void DistinctNode::appendToString(mongoutils::str::stream* ss, int indent) const
     addIndent(ss, indent);
     *ss << "DISTINCT\n";
     addIndent(ss, indent + 1);
-    *ss << "name = " << index.catalogName << '\n';
+    *ss << "name = " << index.identifier.catalogName << '\n';
     addIndent(ss, indent + 1);
     *ss << "keyPattern = " << index.keyPattern << '\n';
     addIndent(ss, indent + 1);
@@ -1102,7 +1102,7 @@ void CountScanNode::appendToString(mongoutils::str::stream* ss, int indent) cons
     addIndent(ss, indent);
     *ss << "COUNT\n";
     addIndent(ss, indent + 1);
-    *ss << "name = " << index.catalogName << '\n';
+    *ss << "name = " << index.identifier.catalogName << '\n';
     addIndent(ss, indent + 1);
     *ss << "keyPattern = " << index.keyPattern << '\n';
     addIndent(ss, indent + 1);

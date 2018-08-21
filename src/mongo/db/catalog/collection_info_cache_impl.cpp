@@ -207,7 +207,7 @@ void CollectionInfoCacheImpl::updatePlanCacheIndexEntries(OperationContext* opCt
                                   ice->getMultikeyPaths(opCtx),
                                   desc->isSparse(),
                                   desc->unique(),
-                                  desc->indexName(),
+                                  IndexEntry::Identifier{desc->indexName()},
                                   ice->getFilterExpression(),
                                   desc->infoObj(),
                                   ice->getCollator());

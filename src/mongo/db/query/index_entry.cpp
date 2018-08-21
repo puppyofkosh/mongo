@@ -50,7 +50,7 @@ std::string IndexEntry::toString() const {
         sb << " unique";
     }
 
-    sb << " name: '" << catalogName << "'";
+    sb << " name: '" << identifier << "'";
 
     if (filterExpr) {
         sb << " filterExpr: " << filterExpr->toString();
@@ -80,14 +80,14 @@ bool IndexEntry::pathHasMultikeyComponent(StringData indexedField) const {
     MONGO_UNREACHABLE;
 }
 
-std::ostream& operator<<(std::ostream& s, const IndexEntry::Identifier& ident) {
-    s << "(" << ident.first << ", " << ident.second << ")";
-    return s;
+std::ostream& operator<<(std::ostream& stream, const IndexEntry::Identifier& ident) {
+    stream << "(" << ident.catalogName << ", " << ident.disambiguator << ")";
+    return stream;
 }
 
-StringBuilder& operator<<(StringBuilder& s, const IndexEntry::Identifier& ident) {
-    s << "(" << ident.first << ", " << ident.second << ")";
-    return s;
+StringBuilder& operator<<(StringBuilder& builder, const IndexEntry::Identifier& ident) {
+    builder << "(" << ident.catalogName << ", " << ident.disambiguator << ")";
+    return builder;
 }
 
 }  // namespace mongo

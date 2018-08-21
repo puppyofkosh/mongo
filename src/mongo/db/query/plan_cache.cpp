@@ -492,7 +492,7 @@ std::string PlanCacheIndexTree::toString(int indents) const {
     } else {
         result << std::string(3 * indents, '-') << "Leaf ";
         if (NULL != entry.get()) {
-            result << entry->catalogName << ", pos: " << index_pos << ", can combine? "
+            result << entry->identifier << ", pos: " << index_pos << ", can combine? "
                    << canCombineBounds;
         }
         for (const auto& orPushdown : orPushdowns) {

@@ -338,12 +338,11 @@ StatusWith<std::unique_ptr<PlanCacheIndexTree>> QueryPlanner::cacheDataFromTagge
         }
 
         for (const auto& dest : orPushdownTag->getDestinations()) {
-            PlanCacheIndexTree::OrPushdown orPushdown;
-            orPushdown.route = dest.route;
             IndexTag* indexTag = static_cast<IndexTag*>(dest.tagData.get());
-            orPushdown.entryKey = relevantIndices[indexTag->index].getIdentifier();
-            orPushdown.position = indexTag->pos;
-            orPushdown.canCombineBounds = indexTag->canCombineBounds;
+            PlanCacheIndexTree::OrPushdown orPushdown{relevantIndices[indexTag->index].identifier,
+                                                      indexTag->pos,
+                                                      indexTag->canCombineBounds,
+                                                      dest.route};
             indexTree->orPushdowns.push_back(std::move(orPushdown));
         }
     }
@@ -410,10 +409,10 @@ Status QueryPlanner::tagAccordingToCache(MatchExpression* filter,
 
     if (indexTree->entry.get()) {
         map<IndexEntry::Identifier, size_t>::const_iterator got =
-            indexMap.find(indexTree->entry->getIdentifier());
+            indexMap.find(indexTree->entry->identifier);
         if (got == indexMap.end()) {
             mongoutils::str::stream ss;
-            ss << "Did not find index with name: " << indexTree->entry->catalogName;
+            ss << "Did not find index with name: " << indexTree->entry->identifier.catalogName;
             return Status(ErrorCodes::BadValue, ss);
         }
         if (filter->getTag()) {
@@ -485,10 +484,10 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
     map<IndexEntry::Identifier, size_t> indexMap;
     for (size_t i = 0; i < expandedIndexes.size(); ++i) {
         const IndexEntry& ie = expandedIndexes[i];
-        const auto insertionRes = indexMap.insert(std::make_pair(ie.getIdentifier(), i));
+        const auto insertionRes = indexMap.insert(std::make_pair(ie.identifier, i));
         // Be sure the key was not already in the map.
         invariant(insertionRes.second);
-        LOG(5) << "Index " << i << ": " << ie.catalogName;
+        LOG(5) << "Index " << i << ": " << ie.identifier.catalogName;
     }
 
     Status s = tagAccordingToCache(clone.get(), winnerCacheData.tree.get(), indexMap);
@@ -612,7 +611,7 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
         if (str::equals("$hint", firstHintElt.fieldName()) && String == firstHintElt.type()) {
             string hintName = firstHintElt.String();
             for (size_t i = 0; i < params.indices.size(); ++i) {
-                if (params.indices[i].catalogName == hintName) {
+                if (params.indices[i].identifier.catalogName == hintName) {
                     LOG(5) << "Hint by name specified, restricting indices to "
                            << params.indices[i].keyPattern.toString();
                     relevantIndices.clear();

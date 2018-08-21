@@ -4311,7 +4311,7 @@ TEST_F(QueryPlannerTest, TagAccordingToCacheFailsOnBadInput) {
     ASSERT_NOT_OK(s);
 
     // Index found once added to the map.
-    indexMap[std::make_pair("a_1", "")] = 0;
+    indexMap[IndexEntry::Identifier{"a_1"}] = 0;
     s = QueryPlanner::tagAccordingToCache(scopedCq->root(), indexTree.get(), indexMap);
     ASSERT_OK(s);
 

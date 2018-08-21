@@ -125,7 +125,7 @@ void PlanCacheIndexabilityState::processAllPathsIndex(const IndexEntry& ie) {
     _allPathsIndexDiscriminators.push_back(AllPathsIndexDiscriminatorContext{
         AllPathsKeyGenerator::createProjectionExec(ie.keyPattern,
                                                    ie.infoObj.getObjectField("starPathsTempName")),
-        ie.catalogName,
+        ie.identifier.catalogName,
         ie.filterExpr,
         ie.collator});
 }
@@ -183,13 +183,13 @@ void PlanCacheIndexabilityState::updateDiscriminators(const std::vector<IndexEnt
         }
 
         if (idx.sparse) {
-            processSparseIndex(idx.catalogName, idx.keyPattern);
+            processSparseIndex(idx.identifier.catalogName, idx.keyPattern);
         }
         if (idx.filterExpr) {
-            processPartialIndex(idx.catalogName, idx.filterExpr);
+            processPartialIndex(idx.identifier.catalogName, idx.filterExpr);
         }
 
-        processIndexCollation(idx.catalogName, idx.keyPattern, idx.collator);
+        processIndexCollation(idx.identifier.catalogName, idx.keyPattern, idx.collator);
     }
 }
 
