@@ -24,8 +24,8 @@
     }
 
     // Helper for testing that pipeline returns correct set of results.
-    function testPipeline(pipeline, expectedResult, collection) {
-        assert.eq(collection.aggregate(pipeline).toArray().sort(compareId),
+    function testPipeline(pipeline, expectedResult, collection, aggOptions) {
+        assert.eq(collection.aggregate(pipeline, aggOptions).toArray().sort(compareId),
                   expectedResult.sort(compareId));
     }
 
@@ -295,6 +295,22 @@
             {_id: 3, a: {c: 1}, same: [{_id: 3, b: {c: 1}}]}
         ];
         testPipeline(pipeline, expectedResults, coll);
+
+        // $lookup run with allowDiskUse: true, meaning that the lookup stage may be run on a shard.
+        pipeline = [
+            {$lookup: {localField: "a", foreignField: "b", from: "from", as: "same"}},
+            {$unwind: {path: "$same", includeArrayIndex: "index"}},
+            {$sort: {index: 1, _id: 1}}
+        ];
+
+        expectedResults = [
+            {_id: 0, a: 1, same: {_id: 0, b: 1}, index: NumberLong(0)},
+            {_id: 1, a: null, same: {_id: 1, b: null}, index: NumberLong(0)},
+            {_id: 2, same: {_id: 1, b: null}, index: NumberLong(0)},
+            {_id: 1, a: null, same: {_id: 2}, index: NumberLong(1)},
+            {_id: 2, same: {_id: 2}, index: NumberLong(1)},
+        ];
+        testPipeline(pipeline, expectedResults, coll, {allowDiskUse: true});
 
         // With an $unwind stage.
         assert.commandWorked(coll.remove({}));

@@ -110,6 +110,11 @@ BSONObj createCommandForMergingShard(const AggregationRequest& request,
     MutableDocument mergeCmd(request.serializeToCommandObj());
 
     mergeCmd["pipeline"] = Value(pipelineForMerging->serialize());
+
+    auto serialized = pipelineForMerging->serialize();
+    for (auto&& p : serialized) {
+        log() << "ian: pipeline for merging is " << p;
+    }
     mergeCmd[AggregationRequest::kFromMongosName] = Value(true);
 
     // If the user didn't specify a collation already, make sure there's a collation attached to

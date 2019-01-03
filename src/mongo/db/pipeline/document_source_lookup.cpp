@@ -200,7 +200,7 @@ StageConstraints DocumentSourceLookUp::constraints(Pipeline::SplitState) const {
     // mongos.
     HostTypeRequirement hostRequirement =
         (pExpCtx->inMongos && pExpCtx->mongoProcessInterface->isSharded(pExpCtx->opCtx, _fromNs))
-        ? HostTypeRequirement::kMongoS
+        ? HostTypeRequirement::kNone
         : HostTypeRequirement::kPrimaryShard;
 
     StageConstraints constraints(StreamType::kStreaming,
