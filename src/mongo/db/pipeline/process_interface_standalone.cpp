@@ -329,38 +329,99 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
     return pipeline;
 }
 
+/**
+* For a sharded collection, establishes remote cursors on each shard that may have results, and
+* creates a DocumentSourceMergeCursors stage to merge the remove cursors. Returns a pipeline
+* beginning with that DocumentSourceMergeCursors stage. Note that one of the 'remote' cursors might
+* be this node itself.
+*/
+#if 0
+    StatusWith<std::unique_ptr<Pipeline, PipelineDeleter>> attachRemoteCursorSource(
+    const AutoGetCollectionForRead& readLock,
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const std::vector<BSONObj>& rawPipeline,
+    std::unique_ptr<Pipeline, PipelineDeleter> pipeline) {
+    // Generate the command object for the targeted shards.
+    auto serialization = pipeline->serialize();
+    std::vector<BSONObj> rawStages;
+    rawStages.reserve(serialization.size());
+    std::transform(serialization.begin(),
+                   serialization.end(),
+                   std::back_inserter(rawStages),
+                   [](const Value& stageObj) {
+                       invariant(stageObj.getType() == BSONType::Object);
+                       return stageObj.getDocument().toBson();
+                   });
+    log() << "ian: pipeline sent to remotes: [";
+    for (auto&& stageObj : rawStages) {
+        log() << stageObj.toString();
+    }
+    log() << "]";
+    AggregationRequest aggRequest(expCtx->ns, rawStages);
+    aggRequest.setBatchSize(0);
+    LiteParsedPipeline liteParsedPipeline(aggRequest);
+    auto targetingResults = uassertStatusOK(
+        sharded_agg_helpers::dispatchShardPipeline(expCtx,
+                                                   expCtx->ns,
+                                                   aggRequest.serializeToCommandObj().toBson(),
+                                                   aggRequest,
+                                                   liteParsedPipeline,
+                                                   std::move(pipeline)));
+
+    std::vector<DocumentSourceMergeCursors::CursorDescriptor> cursorDescriptors;
+    cursorDescriptors.reserve(targetingResults.remoteCursors.size());
+    std::transform(targetingResults.remoteCursors.begin(),
+                   targetingResults.remoteCursors.end(),
+                   std::back_inserter(cursorDescriptors),
+                   [](const auto& remoteCursor) {
+                       invariant(remoteCursor.cursorResponse.getBatch().empty());
+                       log() << "CHAZ: " << remoteCursor.hostAndPort.toString();
+                       return DocumentSourceMergeCursors::CursorDescriptor{
+                           ConnectionString(remoteCursor.hostAndPort),
+                           remoteCursor.cursorResponse.getNSS().ns(),
+                           remoteCursor.cursorResponse.getCursorId()};
+                   });
+    auto resultPipeline = cursorDescriptors.size() > 1
+        ? std::move(targetingResults.pipelineForMerging)
+        : uassertStatusOK(Pipeline::create({}, expCtx));
+    resultPipeline->addInitialSource(
+        DocumentSourceMergeCursors::create(std::move(cursorDescriptors), expCtx));
+
+    log() << "CHAZ: finished establishing merging cursor";
+    return std::move(resultPipeline);
+}
+#endif
+
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
+    log() << "ian: mongod attachCursorSourceToPipeline()";
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
                                                         PipelineDeleter(expCtx->opCtx));
 
+    log() << "ian: invariant";
     invariant(pipeline->getSources().empty() ||
               !dynamic_cast<DocumentSourceCursor*>(pipeline->getSources().front().get()));
 
-    boost::optional<AutoGetCollectionForReadCommand> autoColl;
+    boost::optional<AutoGetCollectionForRead> autoColl;
     if (expCtx->uuid) {
+        log() << "ian: acquiring lock via uuid";
         autoColl.emplace(expCtx->opCtx,
                          NamespaceStringOrUUID{expCtx->ns.db().toString(), *expCtx->uuid},
                          AutoGetCollection::ViewMode::kViewsForbidden,
-                         Date_t::max(),
-                         AutoStatsTracker::LogMode::kUpdateTop);
+                         Date_t::max());
     } else {
-        autoColl.emplace(expCtx->opCtx,
-                         expCtx->ns,
-                         AutoGetCollection::ViewMode::kViewsForbidden,
-                         Date_t::max(),
-                         AutoStatsTracker::LogMode::kUpdateTop);
+        log() << "ian: acquiring lock via ns";
+        autoColl.emplace(
+            expCtx->opCtx, expCtx->ns, AutoGetCollection::ViewMode::kViewsForbidden, Date_t::max());
     }
 
-    // makePipeline() is only called to perform secondary aggregation requests and expects the
-    // collection representing the document source to be not-sharded. We confirm sharding state
-    // here to avoid taking a collection lock elsewhere for this purpose alone.
-    // TODO SERVER-27616: This check is incorrect in that we don't acquire a collection cursor
-    // until after we release the lock, leaving room for a collection to be sharded in-between.
+    log() << "ian: getting sharding state";
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
-    uassert(4567,
-            str::stream() << "from collection (" << expCtx->ns.ns() << ") cannot be sharded",
-            !css->getMetadataForOperation(expCtx->opCtx)->isSharded());
+    if (css->getMetadataForOperation(expCtx->opCtx)->isSharded()) {
+        invariant(0);
+        // For a sharded collection we may have to establish cursors on a remote host.
+        //return attachRemoteCursorSource(*autoColl, expCtx, rawPipeline, std::move(pipeline));
+    };
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());
 

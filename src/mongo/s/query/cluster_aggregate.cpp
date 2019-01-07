@@ -113,7 +113,7 @@ BSONObj createCommandForMergingShard(const AggregationRequest& request,
 
     auto serialized = pipelineForMerging->serialize();
     for (auto&& p : serialized) {
-        log() << "ian: pipeline for merging is " << p;
+        log() << "ian: pipeline for merging shard " << p;
     }
     mergeCmd[AggregationRequest::kFromMongosName] = Value(true);
 
@@ -591,6 +591,13 @@ Status dispatchMergingPipeline(const boost::intrusive_ptr<ExpressionContext>& ex
     // We should never be in a situation where we call this function on a non-merge pipeline.
     invariant(shardDispatchResults.splitPipeline);
     auto* mergePipeline = shardDispatchResults.splitPipeline->mergePipeline.get();
+    {
+        auto serialized = mergePipeline->serialize();
+        for (auto&& p : serialized) {
+            log() << "ian: merging pipeline is " << p;
+        }
+    }
+
     invariant(mergePipeline);
     auto* opCtx = expCtx->opCtx;
 
@@ -613,6 +620,7 @@ Status dispatchMergingPipeline(const boost::intrusive_ptr<ExpressionContext>& ex
     // then ignore the internalQueryProhibitMergingOnMongoS parameter.
     if (mergePipeline->requiredToRunOnMongos() ||
         (!internalQueryProhibitMergingOnMongoS.load() && mergePipeline->canRunOnMongos())) {
+        log() << "ian: running merge pipeline on mongos";
         return runPipelineOnMongoS(expCtx,
                                    namespaces,
                                    request,
