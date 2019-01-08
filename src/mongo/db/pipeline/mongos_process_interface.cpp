@@ -50,7 +50,6 @@
 #include "mongo/s/grid.h"
 #include "mongo/s/query/cluster_cursor_manager.h"
 #include "mongo/s/query/cluster_query_knobs.h"
-#include "mongo/s/query/document_source_merge_cursors.h"
 #include "mongo/s/query/establish_cursors.h"
 #include "mongo/s/query/router_exec_stage.h"
 #include "mongo/s/transaction_router.h"
@@ -147,56 +146,7 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoSInterface::makePipeline(
 
 std::unique_ptr<Pipeline, PipelineDeleter> MongoSInterface::attachCursorSourceToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
-    std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
-                                                        PipelineDeleter(expCtx->opCtx));
-
-    invariant(pipeline->getSources().empty() ||
-              !dynamic_cast<DocumentSourceMergeCursors*>(pipeline->getSources().front().get()));
-
-    // Generate the command object for the targeted shards.
-    std::vector<BSONObj> rawStages = [&pipeline]() {
-        auto serialization = pipeline->serialize();
-        std::vector<BSONObj> stages;
-        stages.reserve(serialization.size());
-
-        for (const auto& stageObj : serialization) {
-            invariant(stageObj.getType() == BSONType::Object);
-            stages.push_back(stageObj.getDocument().toBson());
-        }
-
-        return stages;
-    }();
-
-    AggregationRequest aggRequest(expCtx->ns, rawStages);
-    LiteParsedPipeline liteParsedPipeline(aggRequest);
-    auto shardDispatchResults = sharded_agg_helpers::dispatchShardPipeline(
-        expCtx, expCtx->ns, aggRequest, liteParsedPipeline, std::move(pipeline), expCtx->collation);
-
-    std::vector<ShardId> targetedShards;
-    targetedShards.reserve(shardDispatchResults.remoteCursors.size());
-    for (auto&& remoteCursor : shardDispatchResults.remoteCursors) {
-        targetedShards.emplace_back(remoteCursor->getShardId().toString());
-    }
-
-    std::unique_ptr<Pipeline, PipelineDeleter> mergePipeline;
-    boost::optional<BSONObj> shardCursorsSortSpec = boost::none;
-    if (shardDispatchResults.splitPipeline) {
-        mergePipeline = std::move(shardDispatchResults.splitPipeline->mergePipeline);
-        shardCursorsSortSpec = shardDispatchResults.splitPipeline->shardCursorsSortSpec;
-    } else {
-        mergePipeline = std::move(shardDispatchResults.pipelineForSingleShard);
-    }
-
-    cluster_aggregation_planner::addMergeCursorsSource(
-        mergePipeline.get(),
-        liteParsedPipeline,
-        shardDispatchResults.commandForTargetedShards,
-        std::move(shardDispatchResults.remoteCursors),
-        targetedShards,
-        shardCursorsSortSpec,
-        Grid::get(expCtx->opCtx)->getExecutorPool()->getArbitraryExecutor());
-
-    return mergePipeline;
+    return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, ownedPipeline);
 }
 
 boost::optional<Document> MongoSInterface::lookupSingleDocument(

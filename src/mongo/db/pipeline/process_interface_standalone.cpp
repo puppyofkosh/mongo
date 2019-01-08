@@ -332,62 +332,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
     return pipeline;
 }
 
-/**
-* For a sharded collection, establishes remote cursors on each shard that may have results, and
-* creates a DocumentSourceMergeCursors stage to merge the remove cursors. Returns a pipeline
-* beginning with that DocumentSourceMergeCursors stage. Note that one of the 'remote' cursors might
-* be this node itself.
-*/
-std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSource(
-    // const AutoGetCollectionForRead& readLock,
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    std::unique_ptr<Pipeline, PipelineDeleter> pipeline) {
-    // Generate the command object for the targeted shards.
-    auto serialization = pipeline->serialize();
-    std::vector<BSONObj> rawStages;
-    rawStages.reserve(serialization.size());
-    std::transform(serialization.begin(),
-                   serialization.end(),
-                   std::back_inserter(rawStages),
-                   [](const Value& stageObj) {
-                       invariant(stageObj.getType() == BSONType::Object);
-                       return stageObj.getDocument().toBson();
-                   });
-    log() << "ian: pipeline sent to remotes: [";
-    for (auto&& stageObj : rawStages) {
-        log() << stageObj.toString();
-    }
-    log() << "]";
-    AggregationRequest aggRequest(expCtx->ns, rawStages);
-    aggRequest.setBatchSize(0);
-    LiteParsedPipeline liteParsedPipeline(aggRequest);
-
-    auto targetingResults = sharded_agg_helpers::dispatchShardPipeline(
-        expCtx, expCtx->ns, aggRequest, liteParsedPipeline, std::move(pipeline), expCtx->collation);
-
-    std::vector<ShardId> targetedShards;
-    targetedShards.reserve(targetingResults.remoteCursors.size());
-    for (auto&& remoteCursor : targetingResults.remoteCursors) {
-        targetedShards.emplace_back(remoteCursor->getShardId().toString());
-    }
-
-    auto mergePipeline = targetingResults.remoteCursors.size() > 1
-        ? std::move(targetingResults.splitPipeline->mergePipeline)
-        : uassertStatusOK(Pipeline::create({}, expCtx));
-    cluster_aggregation_planner::addMergeCursorsSource(
-        mergePipeline.get(),
-        liteParsedPipeline,
-        targetingResults.commandForTargetedShards,
-        std::move(targetingResults.remoteCursors),
-        targetedShards,
-        targetingResults.splitPipeline ? targetingResults.splitPipeline->shardCursorsSortSpec
-                                       : boost::none,
-        Grid::get(expCtx->opCtx)->getExecutorPool()->getArbitraryExecutor());
-
-    log() << "ian: finished establishing merging cursor";
-    return mergePipeline;
-}
-
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
     log() << "ian: mongod attachCursorSourceToPipeline()";
@@ -419,7 +363,7 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
         // Drop the lock, as this operation won't need it. If the query targets this node, the "sub
         // operation" run locally will take the lock.
         autoColl = boost::none;
-        return attachRemoteCursorSource(expCtx, std::move(pipeline));
+        return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, pipeline.release());
     }
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());
