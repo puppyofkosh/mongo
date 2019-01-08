@@ -44,7 +44,9 @@
 #include "mongo/db/db_raii.h"
 #include "mongo/db/index/index_descriptor.h"
 #include "mongo/db/pipeline/document_source_cursor.h"
+#include "mongo/db/pipeline/lite_parsed_pipeline.h"
 #include "mongo/db/pipeline/pipeline_d.h"
+#include "mongo/db/pipeline/sharded_agg_helpers.h"
 #include "mongo/db/s/collection_sharding_state.h"
 #include "mongo/db/s/sharding_state.h"
 #include "mongo/db/session_catalog.h"
@@ -53,6 +55,7 @@
 #include "mongo/db/stats/storage_stats.h"
 #include "mongo/db/storage/backup_cursor_hooks.h"
 #include "mongo/db/transaction_participant.h"
+#include "mongo/s/query/document_source_merge_cursors.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
@@ -335,11 +338,9 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
 * beginning with that DocumentSourceMergeCursors stage. Note that one of the 'remote' cursors might
 * be this node itself.
 */
-#if 0
-    StatusWith<std::unique_ptr<Pipeline, PipelineDeleter>> attachRemoteCursorSource(
+std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSource(
     const AutoGetCollectionForRead& readLock,
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const std::vector<BSONObj>& rawPipeline,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline) {
     // Generate the command object for the targeted shards.
     auto serialization = pipeline->serialize();
@@ -360,37 +361,32 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
     AggregationRequest aggRequest(expCtx->ns, rawStages);
     aggRequest.setBatchSize(0);
     LiteParsedPipeline liteParsedPipeline(aggRequest);
-    auto targetingResults = uassertStatusOK(
-        sharded_agg_helpers::dispatchShardPipeline(expCtx,
-                                                   expCtx->ns,
-                                                   aggRequest.serializeToCommandObj().toBson(),
-                                                   aggRequest,
-                                                   liteParsedPipeline,
-                                                   std::move(pipeline)));
 
-    std::vector<DocumentSourceMergeCursors::CursorDescriptor> cursorDescriptors;
-    cursorDescriptors.reserve(targetingResults.remoteCursors.size());
-    std::transform(targetingResults.remoteCursors.begin(),
-                   targetingResults.remoteCursors.end(),
-                   std::back_inserter(cursorDescriptors),
-                   [](const auto& remoteCursor) {
-                       invariant(remoteCursor.cursorResponse.getBatch().empty());
-                       log() << "CHAZ: " << remoteCursor.hostAndPort.toString();
-                       return DocumentSourceMergeCursors::CursorDescriptor{
-                           ConnectionString(remoteCursor.hostAndPort),
-                           remoteCursor.cursorResponse.getNSS().ns(),
-                           remoteCursor.cursorResponse.getCursorId()};
-                   });
-    auto resultPipeline = cursorDescriptors.size() > 1
-        ? std::move(targetingResults.pipelineForMerging)
+    auto targetingResults = sharded_agg_helpers::dispatchShardPipeline(
+        expCtx, expCtx->ns, aggRequest, liteParsedPipeline, std::move(pipeline), expCtx->collation);
+
+    std::vector<ShardId> targetedShards;
+    targetedShards.reserve(targetingResults.remoteCursors.size());
+    for (auto&& remoteCursor : targetingResults.remoteCursors) {
+        targetedShards.emplace_back(remoteCursor->getShardId().toString());
+    }
+
+    auto mergePipeline = targetingResults.remoteCursors.size() > 1
+        ? std::move(targetingResults.splitPipeline->mergePipeline)
         : uassertStatusOK(Pipeline::create({}, expCtx));
-    resultPipeline->addInitialSource(
-        DocumentSourceMergeCursors::create(std::move(cursorDescriptors), expCtx));
+    cluster_aggregation_planner::addMergeCursorsSource(
+        mergePipeline.get(),
+        liteParsedPipeline,
+        targetingResults.commandForTargetedShards,
+        std::move(targetingResults.remoteCursors),
+        targetedShards,
+        targetingResults.splitPipeline ? targetingResults.splitPipeline->shardCursorsSortSpec
+                                       : boost::none,
+        Grid::get(expCtx->opCtx)->getExecutorPool()->getArbitraryExecutor());
 
-    log() << "CHAZ: finished establishing merging cursor";
-    return std::move(resultPipeline);
+    log() << "ian: finished establishing merging cursor";
+    return std::move(mergePipeline);
 }
-#endif
 
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
@@ -418,9 +414,8 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     log() << "ian: getting sharding state";
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
     if (css->getMetadataForOperation(expCtx->opCtx)->isSharded()) {
-        invariant(0);
         // For a sharded collection we may have to establish cursors on a remote host.
-        //return attachRemoteCursorSource(*autoColl, expCtx, rawPipeline, std::move(pipeline));
+        return attachRemoteCursorSource(*autoColl, expCtx, std::move(pipeline));
     };
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());
