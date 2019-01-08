@@ -339,7 +339,7 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
 * be this node itself.
 */
 std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSource(
-    const AutoGetCollectionForRead& readLock,
+    // const AutoGetCollectionForRead& readLock,
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline) {
     // Generate the command object for the targeted shards.
@@ -385,7 +385,7 @@ std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSource(
         Grid::get(expCtx->opCtx)->getExecutorPool()->getArbitraryExecutor());
 
     log() << "ian: finished establishing merging cursor";
-    return std::move(mergePipeline);
+    return mergePipeline;
 }
 
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
@@ -415,8 +415,12 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
     if (css->getMetadataForOperation(expCtx->opCtx)->isSharded()) {
         // For a sharded collection we may have to establish cursors on a remote host.
-        return attachRemoteCursorSource(*autoColl, expCtx, std::move(pipeline));
-    };
+
+        // Drop the lock, as this operation won't need it. If the query targets this node, the "sub
+        // operation" run locally will take the lock.
+        autoColl = boost::none;
+        return attachRemoteCursorSource(expCtx, std::move(pipeline));
+    }
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());
 

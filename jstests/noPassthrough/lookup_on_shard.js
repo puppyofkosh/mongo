@@ -41,11 +41,12 @@
     ];
 
     const results = coll.aggregate(pipeline, {allowDiskUse: true}).toArray();
-    print("ian: " + tojson(results));
     assert.eq(results.length, 20);
 
-    const expl = coll.explain().aggregate(pipeline, {allowDiskUse: true});
-    print("ian: explain" + tojson(expl));
+    // TODO: Pipeline with $lookup inside $lookup.
+
+
+    // TODO: Force a stale config exception to happen 
 
     sharded.stop();
 })();
