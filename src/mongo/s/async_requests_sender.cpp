@@ -172,8 +172,6 @@ void AsyncRequestsSender::_scheduleRequests() {
     // Schedule remote work on hosts for which we have not sent a request or need to retry.
     for (size_t i = 0; i < _remotes.size(); ++i) {
         auto& remote = _remotes[i];
-        log() << "ian: scheduling request on " << remote.shardHostAndPort;
-
         // First check if the remote had a retriable error, and if so, clear its response field so
         // it will be retried.
         if (remote.swResponse && !remote.done) {

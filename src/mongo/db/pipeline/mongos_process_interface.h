@@ -45,7 +45,6 @@ namespace mongo {
  */
 class MongoSInterface final : public MongoProcessCommon {
 public:
-
     static BSONObj createPassthroughCommandForShard(OperationContext* opCtx,
                                                     const AggregationRequest& request,
                                                     const boost::optional<ShardId>& shardId,

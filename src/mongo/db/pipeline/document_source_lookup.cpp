@@ -43,9 +43,6 @@
 #include "mongo/db/query/query_knobs.h"
 #include "mongo/stdx/memory.h"
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-#include "mongo/util/log.h"
-
 namespace mongo {
 
 using boost::intrusive_ptr;
@@ -241,7 +238,6 @@ BSONObj buildEqualityOrQuery(const std::string& fieldName, const BSONArray& valu
 }  // namespace
 
 DocumentSource::GetNextResult DocumentSourceLookUp::getNext() {
-    log() << "ian: lookup::getNext()";
     pExpCtx->checkForInterrupt();
 
     if (_unwindSrc) {
@@ -302,7 +298,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> DocumentSourceLookUp::buildPipeline(
 
     // If we don't have a cache, build and return the pipeline immediately.
     if (!_cache || _cache->isAbandoned()) {
-        log() << "ian: no cache";
         return pExpCtx->mongoProcessInterface->makePipeline(_resolvedPipeline, _fromExpCtx);
     }
 
@@ -316,7 +311,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> DocumentSourceLookUp::buildPipeline(
     auto pipeline =
         pExpCtx->mongoProcessInterface->makePipeline(_resolvedPipeline, _fromExpCtx, pipelineOpts);
 
-    log() << "ian: adding cache";
     // Add the cache stage at the end and optimize. During the optimization process, the cache will
     // either move itself to the correct position in the pipeline, or will abandon itself if no
     // suitable cache position exists.
@@ -326,7 +320,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> DocumentSourceLookUp::buildPipeline(
     pipeline->optimizePipeline();
 
     if (!_cache->isServing()) {
-        log() << "ian: cache not serving";
         // The cache has either been abandoned or has not yet been built. Attach a cursor.
         pipeline = pExpCtx->mongoProcessInterface->attachCursorSourceToPipeline(_fromExpCtx,
                                                                                 pipeline.release());
@@ -334,7 +327,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> DocumentSourceLookUp::buildPipeline(
 
     // If the cache has been abandoned, release it.
     if (_cache->isAbandoned()) {
-        log() << "ian: cache abandoned";
         _cache.reset();
     }
 

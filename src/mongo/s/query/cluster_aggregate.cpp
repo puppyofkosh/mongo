@@ -111,11 +111,6 @@ BSONObj createCommandForMergingShard(const AggregationRequest& request,
     MutableDocument mergeCmd(request.serializeToCommandObj());
 
     mergeCmd["pipeline"] = Value(pipelineForMerging->serialize());
-
-    auto serialized = pipelineForMerging->serialize();
-    for (auto&& p : serialized) {
-        log() << "ian: pipeline for merging shard " << p;
-    }
     mergeCmd[AggregationRequest::kFromMongosName] = Value(true);
 
     // If the user didn't specify a collation already, make sure there's a collation attached to
@@ -593,12 +588,6 @@ Status dispatchMergingPipeline(
     // We should never be in a situation where we call this function on a non-merge pipeline.
     invariant(shardDispatchResults.splitPipeline);
     auto* mergePipeline = shardDispatchResults.splitPipeline->mergePipeline.get();
-    {
-        auto serialized = mergePipeline->serialize();
-        for (auto&& p : serialized) {
-            log() << "ian: merging pipeline is " << p;
-        }
-    }
 
     invariant(mergePipeline);
     auto* opCtx = expCtx->opCtx;
@@ -622,7 +611,6 @@ Status dispatchMergingPipeline(
     // then ignore the internalQueryProhibitMergingOnMongoS parameter.
     if (mergePipeline->requiredToRunOnMongos() ||
         (!internalQueryProhibitMergingOnMongoS.load() && mergePipeline->canRunOnMongos())) {
-        log() << "ian: running merge pipeline on mongos";
         return runPipelineOnMongoS(expCtx,
                                    namespaces,
                                    request,

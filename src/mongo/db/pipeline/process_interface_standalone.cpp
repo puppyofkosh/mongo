@@ -334,34 +334,29 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
 
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
-    log() << "ian: mongod attachCursorSourceToPipeline()";
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
                                                         PipelineDeleter(expCtx->opCtx));
 
-    log() << "ian: invariant";
     invariant(pipeline->getSources().empty() ||
               !dynamic_cast<DocumentSourceCursor*>(pipeline->getSources().front().get()));
 
     boost::optional<AutoGetCollectionForRead> autoColl;
     if (expCtx->uuid) {
-        log() << "ian: acquiring lock via uuid";
         autoColl.emplace(expCtx->opCtx,
                          NamespaceStringOrUUID{expCtx->ns.db().toString(), *expCtx->uuid},
                          AutoGetCollection::ViewMode::kViewsForbidden,
                          Date_t::max());
     } else {
-        log() << "ian: acquiring lock via ns";
         autoColl.emplace(
             expCtx->opCtx, expCtx->ns, AutoGetCollection::ViewMode::kViewsForbidden, Date_t::max());
     }
 
-    log() << "ian: getting sharding state";
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
     if (css->getMetadataForOperation(expCtx->opCtx)->isSharded()) {
         // For a sharded collection we may have to establish cursors on a remote host.
 
-        // Drop the lock, as this operation won't need it. If the query targets this node, the "sub
-        // operation" run locally will take the lock.
+        // Drop the lock, as this operation won't need it to do the merging of cursors. If the
+        // query targets this node, the "sub operation" run locally will take the appropriate lock.
         autoColl = boost::none;
         return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, pipeline.release());
     }

@@ -47,13 +47,13 @@ namespace sharded_agg_helpers {
 
 MONGO_FAIL_POINT_DEFINE(clusterAggregateHangBeforeEstablishingShardCursors);
 
-// Given a document representing an aggregation command such as
-//
-//   {aggregate: "myCollection", pipeline: [], ...},
-//
-// produces the corresponding explain command:
-//
-//   {explain: {aggregate: "myCollection", pipline: [], ...}, $queryOptions: {...}, verbosity: ...}
+/**
+ * Given a document representing an aggregation command such as
+ * {aggregate: "myCollection", pipeline: [], ...},
+ *
+ * produces the corresponding explain command:
+ * {explain: {aggregate: "myCollection", pipline: [], ...}, $queryOptions: {...}, verbosity: ...}
+*/
 Document wrapAggAsExplain(Document aggregateCommand, ExplainOptions::Verbosity verbosity) {
     MutableDocument explainCommandBuilder;
     explainCommandBuilder["explain"] = Value(aggregateCommand);
