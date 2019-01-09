@@ -352,17 +352,13 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     }
 
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
-    log() << "ian: Checking if " << expCtx->ns << " is sharded";
     if (css->getCurrentMetadata()->isSharded()) {
-        log() << "ian: The collection is sharded, so we will establish cursors on remote hosts";
         // For a sharded collection we may have to establish cursors on a remote host.
 
         // Drop the lock, as this operation won't need it to do the merging of cursors. If the
         // query targets this node, the "sub operation" run locally will take the appropriate lock.
         autoColl = boost::none;
         return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, pipeline.release());
-    } else {
-        log() << "ian: The collection isn't sharded";
     }
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());

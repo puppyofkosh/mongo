@@ -5,8 +5,6 @@
     assert.commandWorked(sharded.s.adminCommand({enableSharding: "test"}));
     sharded.ensurePrimaryShard('test', sharded.shard0.shardName);
 
-    // TODO: Rewrite test in a way such that it can run with the mainColl sharded and unsharded.
-
     const coll = sharded.s.getDB('test').mainColl;
     const foreignColl = sharded.s.getDB('test').foreignColl;
     const smallColl = sharded.s.getDB("test").smallColl;
@@ -24,13 +22,10 @@
     }
     assert.commandWorked(smallColl.insert({_id: 0, collName: "smallColl"}));
 
-    print("ian: main coll shard distribution: " + tojson(coll.getShardDistribution()));
-    print("ian: foreign coll shard distribution: " + tojson(foreignColl.getShardDistribution()));
-
     const runTest = function() {
         (function() {
-            // Run a pipeline which must be merged on a shard. This should force the $lookup (on the
-            // sharded collection) to be run on a mongod.
+            // Run a pipeline which must be merged on a shard. This should force the $lookup (on
+            // the sharded collection) to be run on a mongod.
             pipeline = [
                 {
                   $lookup: {
@@ -65,15 +60,13 @@
                 {$_internalSplitPipeline: {mergeType: "anyShard"}}
             ];
             const results = coll.aggregate(pipeline).toArray();
-            print("ian: res is " + tojson(results));
 
             assert.eq(results.length, nDocsMainColl);
             for (let i = 0; i < results.length; i++) {
                 assert.eq(results[i].foreignDoc.length, nDocsForeignColl);
                 for (let j = 0; j < nDocsForeignColl; j++) {
                     // Each document pulled from the foreign collection should have one document
-                    // from
-                    // "smallColl":
+                    // from "smallColl."
                     assert.eq(results[i].foreignDoc[j].collName, "foreignColl");
                     assert.eq(results[i].foreignDoc[j].doc.length, 1);
                     assert.eq(results[i].foreignDoc[j].doc[0].collName, "smallColl");
@@ -81,8 +74,6 @@
             }
         })();
     };
-
-    // Run test with neither collection sharded.
 
     jsTestLog("Running test with neither collection sharded");
     runTest();

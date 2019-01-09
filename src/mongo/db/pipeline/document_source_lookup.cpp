@@ -43,9 +43,6 @@
 #include "mongo/db/query/query_knobs.h"
 #include "mongo/stdx/memory.h"
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-#include "mongo/util/log.h"
-
 namespace mongo {
 
 using boost::intrusive_ptr;
@@ -242,7 +239,6 @@ BSONObj buildEqualityOrQuery(const std::string& fieldName, const BSONArray& valu
 
 DocumentSource::GetNextResult DocumentSourceLookUp::getNext() {
     pExpCtx->checkForInterrupt();
-    log() << "ian: DocumentSourceLookup::getNext()";
 
     if (_unwindSrc) {
         return unwindResult();

@@ -507,7 +507,6 @@ ShardId pickMergingShard(OperationContext* opCtx,
                          const std::vector<ShardId>& targetedShards,
                          ShardId primaryShard) {
     auto& prng = opCtx->getClient()->getPrng();
-
     // If we cannot merge on mongoS, establish the merge cursor on a shard. Perform the merging
     // command on random shard, unless the pipeline dictates that it needs to be run on the primary
     // shard for the database.
@@ -589,13 +588,6 @@ Status dispatchMergingPipeline(
     // We should never be in a situation where we call this function on a non-merge pipeline.
     invariant(shardDispatchResults.splitPipeline);
     auto* mergePipeline = shardDispatchResults.splitPipeline->mergePipeline.get();
-    {
-        auto ser = mergePipeline->serialize();
-        for (auto&& s : ser) {
-            log() << "ian: merge pipeline: " << s;
-        }
-    }
-
     invariant(mergePipeline);
     auto* opCtx = expCtx->opCtx;
 
@@ -634,9 +626,6 @@ Status dispatchMergingPipeline(
                                                     shardDispatchResults.needsPrimaryShardMerge,
                                                     targetedShards,
                                                     routingInfo->db().primaryId());
-    log() << "ian: needs primary shard merge? " << shardDispatchResults.needsPrimaryShardMerge;
-    log() << "ian: Merging shard is " << mergingShardId;
-    
     const bool mergingShardContributesData =
         std::find(targetedShards.begin(), targetedShards.end(), mergingShardId) !=
         targetedShards.end();

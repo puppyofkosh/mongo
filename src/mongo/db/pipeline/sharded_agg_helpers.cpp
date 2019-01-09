@@ -424,7 +424,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSourceToPipeline(
     invariant(pipeline->getSources().empty() ||
               !dynamic_cast<DocumentSourceMergeCursors*>(pipeline->getSources().front().get()));
 
-    log() << "ian: Generating command for targeted shards";
     // Generate the command object for the targeted shards.
     std::vector<BSONObj> rawStages = [&pipeline]() {
         auto serialization = pipeline->serialize();
@@ -441,7 +440,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSourceToPipeline(
 
     AggregationRequest aggRequest(expCtx->ns, rawStages);
     LiteParsedPipeline liteParsedPipeline(aggRequest);
-    log() << "ian: Dispatching shard pipeline";
     auto shardDispatchResults = sharded_agg_helpers::dispatchShardPipeline(
         expCtx, expCtx->ns, aggRequest, liteParsedPipeline, std::move(pipeline), expCtx->collation);
 
@@ -449,8 +447,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> attachRemoteCursorSourceToPipeline(
     targetedShards.reserve(shardDispatchResults.remoteCursors.size());
     for (auto&& remoteCursor : shardDispatchResults.remoteCursors) {
         targetedShards.emplace_back(remoteCursor->getShardId().toString());
-
-        log() << "ian: Targeting shard shard " << targetedShards.back();
     }
 
     std::unique_ptr<Pipeline, PipelineDeleter> mergePipeline;
