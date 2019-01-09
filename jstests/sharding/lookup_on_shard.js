@@ -1,9 +1,19 @@
+// Test that a pipeline with a $lookup stage on a sharded foreign collection may be run on a mongod.
 (function() {
     const sharded = new ShardingTest({mongos: 1, shards: 2});
 
     assert.commandWorked(sharded.s.adminCommand({enableSharding: "test"}));
 
-    assert.commandWorked(sharded.s.adminCommand({shardCollection: "test.mainColl", key: {_id: 1}}));
+    // TODO: Rewrite test in a way such that it can run with the mainColl sharded and unsharded.
+
+    // Shard the main collection.
+    sharded.shardColl("mainColl",
+                      {_id: 1},  // shard key
+                      {_id: 5},  // split
+                      {_id: 5},  // move
+                      "test",    // dbName
+                      true       // waitForDelete
+                      );
 
     // Shard the foreign collection.
     sharded.shardColl("foreignColl",
@@ -45,14 +55,26 @@
             },
             {$unwind: {path: "$foreignDoc", includeArrayIndex: "index"}},
             {$sort: {"foreignDoc.data": 1, _id: 1}},
-            {$_internalSplitPipeline: {mergeType: "primaryShard"}}
+            {$_internalSplitPipeline: {mergeType: "anyShard"}}
         ];
 
+        print("ian: explain with disk use " +
+              tojson(coll.explain().aggregate(pipeline, {allowDiskUse: true})));
+        print("ian: explain without disk use " + tojson(coll.explain().aggregate(pipeline)));
+
+        print("ian: Running with disk use allowed");
         const results = coll.aggregate(pipeline, {allowDiskUse: true}).toArray();
         assert.eq(results.length, nDocsForeignColl);
+
+        print("ian: Running without disk use allowed");
+        const results2 = coll.aggregate(pipeline).toArray();
+        assert.eq(results2.length, nDocsForeignColl);
     })();
 
     (function() {
+        // TODO
+        return;
+        
         // Pipeline with $lookup inside $lookup.
         pipeline = [
             {
@@ -64,10 +86,13 @@
                   ],
               }
             },
-            {$_internalSplitPipeline: {mergeType: "primaryShard"}}
+            {$_internalSplitPipeline: {mergeType: "anyShard"}}
         ];
         const results = coll.aggregate(pipeline).toArray();
         print("ian: res is " + tojson(results));
+
+        const expl = coll.explain().aggregate(pipeline);
+        print("ian: explain is " + tojson(expl));
 
         assert.eq(results.length, nDocsMainColl);
         for (let i = 0; i < results.length; i++) {
