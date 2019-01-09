@@ -153,16 +153,21 @@ void CollectionShardingState::report(OperationContext* opCtx, BSONObjBuilder* bu
 
 ScopedCollectionMetadata CollectionShardingState::getMetadataForOperation(OperationContext* opCtx) {
     const auto receivedShardVersion = getOperationReceivedVersion(opCtx, _nss);
-
+    log() << "ian: received shard version " << receivedShardVersion;
+    
     if (ChunkVersion::isIgnoredVersion(receivedShardVersion)) {
+        log() << "ian: is ignored version";
         return {kUnshardedCollection};
     }
 
     const auto atClusterTime = repl::ReadConcernArgs::get(opCtx).getArgsAtClusterTime();
+    log() << "ian: atClusterTime " << atClusterTime;
     auto optMetadata = _getMetadata(atClusterTime);
 
-    if (!optMetadata)
+    if (!optMetadata) {
+        log() << "ian: No metadata avail";
         return {kUnshardedCollection};
+    }
 
     return {std::move(*optMetadata)};
 }

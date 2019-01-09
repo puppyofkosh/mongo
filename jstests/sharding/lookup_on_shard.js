@@ -3,6 +3,7 @@
     const sharded = new ShardingTest({mongos: 1, shards: 2});
 
     assert.commandWorked(sharded.s.adminCommand({enableSharding: "test"}));
+    sharded.ensurePrimaryShard('test', sharded.shard0.shardName);
 
     // TODO: Rewrite test in a way such that it can run with the mainColl sharded and unsharded.
 
@@ -35,15 +36,18 @@
         assert.commandWorked(coll.insert({_id: i, collName: "mainColl", foreignId: i}));
 
         assert.commandWorked(
-            foreignColl.insert({key: i, collName: "foreignColl", data: "hello-0"}));
+            foreignColl.insert({_id: 2 * i, key: i, collName: "foreignColl", data: "hello-0"}));
         assert.commandWorked(
-            foreignColl.insert({key: i, collName: "foreignColl", data: "hello-1"}));
+            foreignColl.insert({_id: 2 * i + 1, key: i, collName: "foreignColl", data: "hello-1"}));
     }
     assert.commandWorked(smallColl.insert({_id: 0, collName: "smallColl"}));
 
+    print("ian: main coll shard distribution: " + tojson(coll.getShardDistribution()));
+    print("ian: foreign coll shard distribution: " + tojson(foreignColl.getShardDistribution()));
+
     (function() {
         // Run a pipeline which must be merged on a shard. This should force the $lookup (on the
-        // sharded collection) to run on the primary shard.
+        // sharded collection) to be run on a mongod.
         pipeline = [
             {
               $lookup: {
@@ -53,28 +57,22 @@
                   as: "foreignDoc"
               }
             },
-            {$unwind: {path: "$foreignDoc", includeArrayIndex: "index"}},
-            {$sort: {"foreignDoc.data": 1, _id: 1}},
             {$_internalSplitPipeline: {mergeType: "anyShard"}}
         ];
 
-        print("ian: explain with disk use " +
-              tojson(coll.explain().aggregate(pipeline, {allowDiskUse: true})));
-        print("ian: explain without disk use " + tojson(coll.explain().aggregate(pipeline)));
-
-        print("ian: Running with disk use allowed");
+        print("ian: Running aggregation");
         const results = coll.aggregate(pipeline, {allowDiskUse: true}).toArray();
-        assert.eq(results.length, nDocsForeignColl);
-
-        print("ian: Running without disk use allowed");
-        const results2 = coll.aggregate(pipeline).toArray();
-        assert.eq(results2.length, nDocsForeignColl);
+        print("ian: " + tojson(results));
+        assert.eq(results.length, nDocsMainColl);
+        for (let i = 0; i < results.length; i++) {
+            assert.eq(results[i].foreignDoc.length, 2, results[i]);
+        }
     })();
 
     (function() {
         // TODO
         return;
-        
+
         // Pipeline with $lookup inside $lookup.
         pipeline = [
             {
