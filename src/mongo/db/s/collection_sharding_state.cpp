@@ -117,8 +117,10 @@ ChunkVersion getOperationReceivedVersion(OperationContext* opCtx, const Namespac
     // If there is a version attached to the OperationContext, use it as the received version,
     // otherwise get the received version from the ShardedConnectionInfo
     if (oss.hasShardVersion()) {
+        log() << "ian: returning oss version";
         return oss.getShardVersion(nss);
     } else if (auto const info = ShardedConnectionInfo::get(opCtx->getClient(), false)) {
+        log() << "ian: info from connection";
         auto connectionShardVersion = info->getVersion(nss.ns());
 
         // For backwards compatibility with map/reduce, which can access up to 2 sharded collections
@@ -126,6 +128,7 @@ ChunkVersion getOperationReceivedVersion(OperationContext* opCtx, const Namespac
         // as UNSHARDED
         return connectionShardVersion.value_or(ChunkVersion::UNSHARDED());
     } else {
+        log() << "ian: ignored";
         // There is no shard version information on either 'opCtx' or 'client'. This means that the
         // operation represented by 'opCtx' is unversioned, and the shard version is always OK for
         // unversioned operations.
@@ -152,9 +155,11 @@ void CollectionShardingState::report(OperationContext* opCtx, BSONObjBuilder* bu
 }
 
 ScopedCollectionMetadata CollectionShardingState::getMetadataForOperation(OperationContext* opCtx) {
+    log() << "getting operation received version";
     const auto receivedShardVersion = getOperationReceivedVersion(opCtx, _nss);
 
     if (ChunkVersion::isIgnoredVersion(receivedShardVersion)) {
+        log() << "ian: it's an ignored version";
         return {kUnshardedCollection};
     }
 
