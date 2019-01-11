@@ -352,8 +352,7 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     }
 
     auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
-    log() << "ian: Checking isSharded";
-    if (css->getMetadataForOperation(expCtx->opCtx)->isSharded()) {
+    if (css->getCurrentMetadata()->isSharded()) {
         // For a sharded collection we may have to establish cursors on a remote host.
 
         // Drop the lock, as this operation won't need it to do the merging of cursors. If the
