@@ -55,6 +55,7 @@
 #include "mongo/db/stats/storage_stats.h"
 #include "mongo/db/storage/backup_cursor_hooks.h"
 #include "mongo/db/transaction_participant.h"
+#include "mongo/s/cluster_commands_helpers.h"
 #include "mongo/s/query/document_source_merge_cursors.h"
 #include "mongo/util/log.h"
 
@@ -340,6 +341,16 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     invariant(pipeline->getSources().empty() ||
               !dynamic_cast<DocumentSourceCursor*>(pipeline->getSources().front().get()));
 
+    auto routingInfo =
+        uassertStatusOK(getCollectionRoutingInfoForTxnCmd(expCtx->opCtx, expCtx->ns));
+    if (routingInfo.cm()) {
+        // For a sharded collection we may have to establish cursors on a remote host.
+
+        // Drop the lock, as this operation won't need it to do the merging of cursors. If the
+        // query targets this node, the "sub operation" run locally will take the appropriate lock.
+        return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, pipeline.release());
+    }
+
     boost::optional<AutoGetCollectionForRead> autoColl;
     if (expCtx->uuid) {
         autoColl.emplace(expCtx->opCtx,
@@ -349,16 +360,6 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSour
     } else {
         autoColl.emplace(
             expCtx->opCtx, expCtx->ns, AutoGetCollection::ViewMode::kViewsForbidden, Date_t::max());
-    }
-
-    auto css = CollectionShardingState::get(expCtx->opCtx, expCtx->ns);
-    if (css->getCurrentMetadata()->isSharded()) {
-        // For a sharded collection we may have to establish cursors on a remote host.
-
-        // Drop the lock, as this operation won't need it to do the merging of cursors. If the
-        // query targets this node, the "sub operation" run locally will take the appropriate lock.
-        autoColl = boost::none;
-        return sharded_agg_helpers::attachRemoteCursorSourceToPipeline(expCtx, pipeline.release());
     }
 
     PipelineD::prepareCursorSource(autoColl->getCollection(), expCtx->ns, nullptr, pipeline.get());
