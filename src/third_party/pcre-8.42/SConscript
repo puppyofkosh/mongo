@@ -64,3 +64,11 @@ env.Library( "pcrecpp", [
         "pcre_scanner.cc",
         "pcre_stringpiece.cc",
         ] )
+
+env.Program(
+    target='pcrecpp_unittest',
+    source=['$BUILD_DIR/third_party/pcre-8.42/pcrecpp_unittest.cc'],
+    LIBDEPS=[
+        '$BUILD_DIR/third_party/pcre-8.42/pcrecpp'
+    ],
+)
