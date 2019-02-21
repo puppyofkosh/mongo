@@ -415,7 +415,7 @@ int RE::GlobalReplace(const StringPiece& rewrite,
           matchend++;
         }
         // We also need to advance more than one char if we're in utf8 mode.
-#ifdef SUPPORT_UTF8
+#ifdef SUPPORT_UTF
         if (options_.utf8()) {
           while (matchend < static_cast<int>(str->length()) &&
                  ((*str)[matchend] & 0xc0) == 0x80)
