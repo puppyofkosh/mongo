@@ -167,6 +167,9 @@ pcre* RE::Compile(Anchor anchor) {
 
     string wrapped = "";
 
+    if (pattern_.size() == 0) {
+        abort();
+    }
     if (pattern_.c_str()[0] == '(' && pattern_.c_str()[1] == '*') {
       int kk, klen, kmat;
       for (;;) {   // Loop for any number of leading items

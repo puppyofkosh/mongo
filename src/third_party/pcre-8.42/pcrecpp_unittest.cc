@@ -1220,6 +1220,8 @@ int main(int argc, char** argv) {
     RE re_testZ5("(*UCP)(*LIMIT_MATCH=1000)(*ANY)(*UTF)...");
     CHECK(re_testZ5.FullMatch(utf8_string));
 
+    RE re_testZ6("");
+    CHECK(!re_testZ6.FullMatch(utf8_string));
 
     // Check that '.' matches one byte or UTF-8 character
     // according to the mode.
