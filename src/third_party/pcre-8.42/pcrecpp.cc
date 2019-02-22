@@ -41,7 +41,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <string>
+#include <vector>
 #include <algorithm>
+#include <iostream> // TODO ian: remove
 
 #include "pcrecpp_internal.h"
 #include "pcre.h"
@@ -82,7 +84,8 @@ static RE_Options default_options;
 
 // Specials for the start of patterns. See comments where start_options is used
 // below. (PH June 2018)
-static const char *start_options[] = {
+// NOTE that this array MUST be in descending order.
+static const std::vector<std::string> start_options = {
   "(*UTF8)",
   "(*UTF)",
   "(*UCP)",
@@ -95,8 +98,7 @@ static const char *start_options[] = {
   "(*BSR_UNICODE)",
   "(*BSR_ANYCRLF)",
   "(*ANYCRLF)",
-  "(*ANY)",
-  "" };
+  "(*ANY)"};
 
 void RE::Init(const string& pat, const RE_Options* options) {
   pattern_ = pat;
@@ -167,37 +169,53 @@ pcre* RE::Compile(Anchor anchor) {
 
     string wrapped = "";
 
-    if (pattern_.size() == 0) {
-        abort();
-    }
-    if (pattern_.c_str()[0] == '(' && pattern_.c_str()[1] == '*') {
-      int kk, klen, kmat;
-      for (;;) {   // Loop for any number of leading items
-
-        for (kk = 0; start_options[kk][0] != 0; kk++) {
-          klen = strlen(start_options[kk]);
-          kmat = strncmp(pattern_.c_str(), start_options[kk], klen);
-          if (kmat >= 0) break;
-        }
-        if (kmat != 0) break;  // Not found
-
-        // If the item ended in "=" we must copy digits up to ")".
-
-        if (start_options[kk][klen-1] == '=') {
-          while (isdigit(pattern_.c_str()[klen])) klen++;
-          if (pattern_.c_str()[klen] != ')') break;  // Syntax error
-          klen++;
+    if (pattern_.size() > 2 && pattern_[0] == '(' && pattern_[1] == '*') {
+      while (1) {
+        std::cout << "remaining pattern is " << pattern_ << std::endl;
+        const std::string* found_option = nullptr;
+        for (auto && option : start_options) {
+            int cmp = pattern_.compare(0, option.size(), option);
+            if (cmp == 0) {
+                found_option = &option;
+                break;
+            }
+            if (cmp > 0) {
+                // Since start_options is in reverse order, knowing that 'option' compares less
+                // than 'pattern_' implies that the next 'option' also compares less than
+                // 'pattern_'. Thus, pattern_ is prefixed with none of the options, and we're done.
+                break;
+            }
         }
 
-        // Move the item from the pattern to the start of the wrapped string.
+        if (!found_option) {
+            // The remainder of the string doesn't start with an option.
+            break;
+        }
 
-        wrapped += pattern_.substr(0, klen);
-        pattern_.erase(0, klen);
+        std::cout << "found option " << *found_option << std::endl;
+
+        // If the item ended with "=" we copy all of the digits up to ")".
+        size_t option_length = found_option->size();
+        if (found_option->back() == '=') {
+            while (option_length < pattern_.size() && isdigit(pattern_[option_length])) {
+                option_length++;
+            }
+
+            if (option_length < pattern_.size() && pattern_[option_length] != ')') {
+                // TODO: test this. It's an error in the regex.
+                break;
+            }
+            // Include the ')'.
+            option_length++;
+        }
+
+        // TODO: Use string_view instead.
+        wrapped += pattern_.substr(0, option_length);
+        pattern_.erase(0, option_length);
       }
     }
 
     // Wrap the rest of the pattern.
-
     wrapped += "(?:";  // A non-counting grouping operator
     wrapped += pattern_;
     wrapped += ")\\z";
