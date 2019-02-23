@@ -41,9 +41,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <algorithm>
-#include <iostream> // TODO ian: remove
 
 #include "pcrecpp_internal.h"
 #include "pcre.h"
@@ -168,21 +168,23 @@ pcre* RE::Compile(Anchor anchor) {
     PH June 2018. */
 
     string wrapped = "";
+    std::string_view remaining_pattern(pattern_);
 
-    if (pattern_.size() > 2 && pattern_[0] == '(' && pattern_[1] == '*') {
+    if (remaining_pattern.size() > 2 && remaining_pattern[0] == '(' &&
+        remaining_pattern[1] == '*') {
       while (1) {
-        std::cout << "remaining pattern is " << pattern_ << std::endl;
         const std::string* found_option = nullptr;
         for (auto && option : start_options) {
-            int cmp = pattern_.compare(0, option.size(), option);
+            int cmp = remaining_pattern.compare(0, option.size(), option);
             if (cmp == 0) {
                 found_option = &option;
                 break;
             }
             if (cmp > 0) {
                 // Since start_options is in reverse order, knowing that 'option' compares less
-                // than 'pattern_' implies that the next 'option' also compares less than
-                // 'pattern_'. Thus, pattern_ is prefixed with none of the options, and we're done.
+                // than 'remaining_pattern' implies that the next 'option' also compares less than
+                // 'remaining_pattern'. Thus, remaining_pattern is prefixed with none of the
+                // options, and we're done.
                 break;
             }
         }
@@ -192,16 +194,16 @@ pcre* RE::Compile(Anchor anchor) {
             break;
         }
 
-        std::cout << "found option " << *found_option << std::endl;
-
         // If the item ended with "=" we copy all of the digits up to ")".
         size_t option_length = found_option->size();
         if (found_option->back() == '=') {
-            while (option_length < pattern_.size() && isdigit(pattern_[option_length])) {
+            while (option_length < remaining_pattern.size() &&
+                   isdigit(remaining_pattern[option_length])) {
                 option_length++;
             }
 
-            if (option_length < pattern_.size() && pattern_[option_length] != ')') {
+            if (option_length < remaining_pattern.size() &&
+                remaining_pattern[option_length] != ')') {
                 // TODO: test this. It's an error in the regex.
                 break;
             }
@@ -210,14 +212,14 @@ pcre* RE::Compile(Anchor anchor) {
         }
 
         // TODO: Use string_view instead.
-        wrapped += pattern_.substr(0, option_length);
-        pattern_.erase(0, option_length);
+        wrapped += remaining_pattern.substr(0, option_length);
+        remaining_pattern.remove_prefix(option_length);
       }
     }
 
     // Wrap the rest of the pattern.
     wrapped += "(?:";  // A non-counting grouping operator
-    wrapped += pattern_;
+    wrapped += remaining_pattern;
     wrapped += ")\\z";
     re = pcre_compile(wrapped.c_str(), pcre_options,
                       &compile_error, &eoffset, NULL);
