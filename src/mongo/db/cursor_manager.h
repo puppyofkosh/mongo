@@ -173,7 +173,7 @@ public:
                                                            const SessionKiller::Matcher& matcher);
 
 private:
-    static constexpr int kNumPartitions = 16;
+    static constexpr int kNumPartitions = 128;
     friend class ClientCursorPin;
 
     CursorId allocateCursorId_inlock();
