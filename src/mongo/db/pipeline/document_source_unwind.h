@@ -77,7 +77,7 @@ public:
         const std::string& path,
         bool includeNullIfEmptyOrMissing,
         const boost::optional<std::string>& includeArrayIndex,
-        bool recursive);
+        bool recursive = false);
 
     std::string getUnwindPath() const {
         return _unwindPath.fullPath();
