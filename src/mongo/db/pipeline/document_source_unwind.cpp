@@ -83,7 +83,7 @@ private:
     const boost::optional<FieldPath> _indexPath;
 
     Value _inputArray;
-    const Document* _currentDoc;
+    Document _currentDoc;
 
     MutableDocument _output;
 
@@ -99,8 +99,7 @@ DocumentSourceUnwind::Unwinder::Unwinder(const FieldPath& unwindPath,
                                          const boost::optional<FieldPath>& indexPath)
     : _unwindPath(unwindPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
-      _indexPath(indexPath),
-      _currentDoc(nullptr) {}
+      _indexPath(indexPath) {}
 
 void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     // Reset document specific attributes.
@@ -108,9 +107,68 @@ void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     _unwindPathFieldIndexes.clear();
     _index = 0;
     _inputArray = document.getNestedField(_unwindPath, &_unwindPathFieldIndexes);
-    _currentDoc = &document;
-    log() << "ian: Resetting document to " << document << "_inputArray is now " << _inputArray;
+    _currentDoc = document;
+    log() << "ian: Resetting document to " << document << std::endl
+          << "_inputArray is now " << _inputArray;
     _haveNext = true;
+}
+
+// TODO: put in namespace
+struct Pointer {
+    Document parentDoc;
+    size_t unwindPathIndex;
+    boost::optional<size_t> arrayIndex;
+};
+
+Value findFirstChild(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
+    invariant(dfsState);
+
+    Document currentSubDoc = dfsState->top().parentDoc;
+    for (size_t i = dfsState->top().unwindPathIndex; i < unwindPath.getPathLength(); ++i) {
+        StringData part = unwindPath.getFieldName(i);
+        Value value = currentSubDoc.getField(part);
+        log() << "Looking at part " << i << " " << part << " value: " << value;
+        if (value.missing()) {
+            return value;
+        } else if (value.getType() == BSONType::Array) {
+            const auto& arr = value.getArray();
+            if (arr.size() == 0) {
+                dfsState->push(Pointer{currentSubDoc, i, boost::none});
+                return Value();
+            }
+
+            dfsState->push(Pointer{currentSubDoc, i, 0});
+            invariant(!arr[0].missing());
+
+            if (arr[0].getType() != BSONType::Object) {
+                // We are treating this as a single value (even if it's a nested array!).
+                // Return it.
+                return arr[0];
+            }
+
+            currentSubDoc = arr[0].getDocument();
+        } else if (value.getType() == BSONType::Object) {
+            dfsState->push(Pointer{currentSubDoc, i, boost::none});
+            currentSubDoc = value.getDocument();
+        } else {
+            // We reached a leaf node. If we're at the last path component,
+            // return this value. Otherwise return missing.
+            if (i + 1 == unwindPath.getPathLength()) {
+                return value;
+            }
+            return Value();
+        }
+    }
+
+    MONGO_UNREACHABLE;
+}
+
+Value advance(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
+    invariant(dfsState);
+
+    while (!dfs->empty()) {
+        // Inspect the top element.
+    }
 }
 
 DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecursive() {
@@ -121,65 +179,67 @@ DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecur
         return GetNextResult::makeEOF();
     }
 
-    invariant(_currentDoc);
-
-    struct Pointer {
-        Value array;
-        size_t unwindPathIndex;
-        size_t arrayIndex;
-    };
     std::stack<Pointer> context;
+    context.push({_currentDoc, 0, boost::none});
+    log() << "ian: first node is " << findFirstChild(&context, _unwindPath);
 
-    Document currentSubDoc = *_currentDoc;
-    for (size_t i = 0; i < _unwindPath.getPathLength(); ++i) {
-        StringData part = _unwindPath.getFieldName(i);
-        Value value = currentSubDoc.getField(part);
-        if (value.missing()) {
-            _haveNext = false;
-            // TODO: return EOF or original document.
-            if (!_preserveNullAndEmptyArrays) {
-                return GetNextResult::makeEOF();
-            }
+    // struct Pointer {
+    //     Value array;
+    //     size_t unwindPathIndex;
+    //     size_t arrayIndex;
+    // };
+    // std::stack<Pointer> context;
 
-            // TODO: This will be different if we're not at the top level.
-            return _output.freeze();
-        } else if (value.getType() == BSONType::Array) {
-            const auto& arr = value.getArray();
-            for (size_t j = 0; j < arr.size(); ++j) {
-                if (arr[j].missing()) {
-                    if (!_preserveNullAndEmptyArrays) {
-                        continue;
+    // Document currentSubDoc = *_currentDoc;
+    // for (size_t i = 0; i < _unwindPath.getPathLength(); ++i) {
+    //     StringData part = _unwindPath.getFieldName(i);
+    //     Value value = currentSubDoc.getField(part);
+    //     if (value.missing()) {
+    //         _haveNext = false;
+    //         // TODO: return EOF or original document.
+    //         if (!_preserveNullAndEmptyArrays) {
+    //             return GetNextResult::makeEOF();
+    //         }
 
-                        // Do nothing.
-                    } else {
-                        // Add this to our stack.
-                        context.push({value, i, j});
+    //         // TODO: This will be different if we're not at the top level.
+    //         return _output.freeze();
+    //     } else if (value.getType() == BSONType::Array) {
+    //         const auto& arr = value.getArray();
+    //         for (size_t j = 0; j < arr.size(); ++j) {
+    //             if (arr[j].missing()) {
+    //                 if (!_preserveNullAndEmptyArrays) {
+    //                     continue;
 
-                        // Return something. Update the top of the stack.
-                    }
+    //                     // Do nothing.
+    //                 } else {
+    //                     // Add this to our stack.
+    //                     context.push({value, i, j});
 
-                } else if (arr[j].getType() != BSONType::Object) {
-                    MONGO_UNREACHABLE;
-                } else {
-                    // Save our place in the stack.
-                    context.push({value, i, j});
+    //                     // Return something. Update the top of the stack.
+    //                 }
 
-                    log() << "Found value to return " << arr[j];
-                    currentSubDoc = arr[j].getDocument();
-                    break;
-                }
-            }
-        } else if (value.getType() == BSONType::Object) {
-            // Proceed to the next field.
-            continue;
-        } else {
-            // The path doesn't lead to an array, so bail out.
-            _haveNext = false;
-            return _output.freeze();
-        }
-    }
-    log() << "Reached end of path and have value " << currentSubDoc;
-    log() << "ian: context is now size " << context.size();
+    //             } else if (arr[j].getType() != BSONType::Object) {
+    //                 MONGO_UNREACHABLE;
+    //             } else {
+    //                 // Save our place in the stack.
+    //                 context.push({value, i, j});
+
+    //                 log() << "Found value to return " << arr[j];
+    //                 currentSubDoc = arr[j].getDocument();
+    //                 break;
+    //             }
+    //         }
+    //     } else if (value.getType() == BSONType::Object) {
+    //         // Proceed to the next field.
+    //         continue;
+    //     } else {
+    //         // The path doesn't lead to an array, so bail out.
+    //         _haveNext = false;
+    //         return _output.freeze();
+    //     }
+    // }
+    // log() << "Reached end of path and have value " << currentSubDoc;
+    // log() << "ian: context is now size " << context.size();
 
     // Find the first array along the unwind path.
 
