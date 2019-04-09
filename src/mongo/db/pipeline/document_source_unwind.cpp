@@ -37,6 +37,9 @@
 #include "mongo/db/pipeline/lite_parsed_document_source.h"
 #include "mongo/db/pipeline/value.h"
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
+#include "mongo/util/log.h"
+
 namespace mongo {
 
 using boost::intrusive_ptr;
@@ -60,6 +63,9 @@ public:
      */
     DocumentSource::GetNextResult getNext();
 
+    // TODO: tmp
+    DocumentSource::GetNextResult getNextRecursive();
+
 private:
     // Tracks whether or not we can possibly return any more documents. Note we may return
     // boost::none even if this is true.
@@ -77,6 +83,7 @@ private:
     const boost::optional<FieldPath> _indexPath;
 
     Value _inputArray;
+    Document* _currentDoc;
 
     MutableDocument _output;
 
@@ -92,7 +99,8 @@ DocumentSourceUnwind::Unwinder::Unwinder(const FieldPath& unwindPath,
                                          const boost::optional<FieldPath>& indexPath)
     : _unwindPath(unwindPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
-      _indexPath(indexPath) {}
+      _indexPath(indexPath),
+      _currentDoc(nullptr) {}
 
 void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     // Reset document specific attributes.
@@ -100,7 +108,84 @@ void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     _unwindPathFieldIndexes.clear();
     _index = 0;
     _inputArray = document.getNestedField(_unwindPath, &_unwindPathFieldIndexes);
+    _currentDoc = &document;
+    log() << "ian: Resetting document to " << document << "_inputArray is now " << _inputArray;
     _haveNext = true;
+}
+
+DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecursive() {
+    log() << "ian: getNext recursive";
+    // WARNING: Any functional changes to this method must also be implemented in the unwinding
+    // implementation of the $lookup stage.
+    if (!_haveNext) {
+        return GetNextResult::makeEOF();
+    }
+
+    invariant(_currentDoc);
+
+    for (size_t i = 0; i < _unwindPath.numParts(); ++i) {
+        StringData part = _unwindPath.getPart(i);
+        Value field = _currentDoc.getField(part);
+        if (field.missing()) {
+            // TODO: return EOF or original document.
+            if (!_preserveNullAndEmptyArrays) {
+                return GetNextResult::makeEOF();
+            }
+
+            // TODO: This will be different if we're not at the top level.
+            return _output.freeze();
+        } else if (value.getType() == BSONType::Array) {
+        } else if (value.getType() == BSONType::Object) {
+        } else {
+        }
+    }
+
+    // Find the first array along the unwind path.
+
+    // Track which index this value came from. If 'includeArrayIndex' was specified, we will use
+    // this index in the output document, or null if the value didn't come from an array.
+    boost::optional<long long> indexForOutput;
+
+    if (_inputArray.getType() == Array) {
+        const size_t length = _inputArray.getArrayLength();
+        invariant(_index == 0 || _index < length);
+
+        if (length == 0) {
+            // Preserve documents with empty arrays if asked to, otherwise skip them.
+            _haveNext = false;
+            if (!_preserveNullAndEmptyArrays) {
+                return GetNextResult::makeEOF();
+            }
+            _output.removeNestedField(_unwindPathFieldIndexes);
+        } else {
+            // Set field to be the next element in the array. If needed, this will automatically
+            // clone all the documents along the field path so that the end values are not shared
+            // across documents that have come out of this pipeline operator. This is a partial deep
+            // clone. Because the value at the end will be replaced, everything along the path
+            // leading to that will be replaced in order not to share that change with any other
+            // clones (or the original).
+            _output.setNestedField(_unwindPathFieldIndexes, _inputArray[_index]);
+            indexForOutput = _index;
+            _index++;
+            _haveNext = _index < length;
+        }
+    } else if (_inputArray.nullish()) {
+        // Preserve a nullish value if asked to, otherwise skip it.
+        _haveNext = false;
+        if (!_preserveNullAndEmptyArrays) {
+            return GetNextResult::makeEOF();
+        }
+    } else {
+        // Any non-nullish, non-array type should pass through.
+        _haveNext = false;
+    }
+
+    if (_indexPath) {
+        _output.getNestedField(*_indexPath) =
+            indexForOutput ? Value(*indexForOutput) : Value(BSONNULL);
+    }
+
+    return _haveNext ? _output.peek() : _output.freeze();
 }
 
 DocumentSource::GetNextResult DocumentSourceUnwind::Unwinder::getNext() {
@@ -159,11 +244,13 @@ DocumentSource::GetNextResult DocumentSourceUnwind::Unwinder::getNext() {
 DocumentSourceUnwind::DocumentSourceUnwind(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                            const FieldPath& fieldPath,
                                            bool preserveNullAndEmptyArrays,
-                                           const boost::optional<FieldPath>& indexPath)
+                                           const boost::optional<FieldPath>& indexPath,
+                                           bool recursive)
     : DocumentSource(pExpCtx),
       _unwindPath(fieldPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
       _indexPath(indexPath),
+      _recursive(recursive),
       _unwinder(new Unwinder(fieldPath, preserveNullAndEmptyArrays, indexPath)) {}
 
 REGISTER_DOCUMENT_SOURCE(unwind,
@@ -178,19 +265,22 @@ intrusive_ptr<DocumentSourceUnwind> DocumentSourceUnwind::create(
     const intrusive_ptr<ExpressionContext>& expCtx,
     const string& unwindPath,
     bool preserveNullAndEmptyArrays,
-    const boost::optional<string>& indexPath) {
+    const boost::optional<string>& indexPath,
+    bool recursive) {
     intrusive_ptr<DocumentSourceUnwind> source(
         new DocumentSourceUnwind(expCtx,
                                  FieldPath(unwindPath),
                                  preserveNullAndEmptyArrays,
-                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>()));
+                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>(),
+                                 recursive));
     return source;
 }
 
 DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
     pExpCtx->checkForInterrupt();
 
-    auto nextOut = _unwinder->getNext();
+    // TODO: hook up to the '_recursive' option.
+    auto nextOut = _unwinder->getNextRecursive();
     while (nextOut.isEOF()) {
         // No more elements in array currently being unwound. This will loop if the input
         // document is missing the unwind field or has an empty array.
@@ -201,7 +291,7 @@ DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
 
         // Try to extract an output document from the new input document.
         _unwinder->resetDocument(nextInput.releaseDocument());
-        nextOut = _unwinder->getNext();
+        nextOut = _unwinder->getNextRecursive();
     }
 
     return nextOut;
@@ -234,6 +324,7 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
     // extra options.
     string prefixedPathString;
     bool preserveNullAndEmptyArrays = false;
+    bool recursive;
     boost::optional<string> indexPath;
     if (elem.type() == Object) {
         for (auto&& subElem : elem.Obj()) {
@@ -262,6 +353,13 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                                          "prefixed with a '$': "
                                       << (*indexPath),
                         (*indexPath)[0] != '$');
+            } else if (subElem.fieldNameStringData() == "recursive") {
+                uassert(51172,
+                        str::stream() << "expected a boolean for the recursive option to $unwind "
+                                         "stage, got "
+                                      << typeName(subElem.type()),
+                        subElem.type() == Bool);
+                recursive = subElem.Bool();
             } else {
                 uasserted(28811,
                           str::stream() << "unrecognized option to $unwind stage: "
@@ -284,6 +382,7 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                           << prefixedPathString,
             prefixedPathString[0] == '$');
     string pathString(Expression::removeFieldPrefix(prefixedPathString));
-    return DocumentSourceUnwind::create(pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath);
+    return DocumentSourceUnwind::create(
+        pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath, recursive);
 }
 }

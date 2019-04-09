@@ -76,7 +76,8 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
         const std::string& path,
         bool includeNullIfEmptyOrMissing,
-        const boost::optional<std::string>& includeArrayIndex);
+        const boost::optional<std::string>& includeArrayIndex,
+        bool recursive);
 
     std::string getUnwindPath() const {
         return _unwindPath.fullPath();
@@ -94,7 +95,8 @@ private:
     DocumentSourceUnwind(const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
                          const FieldPath& fieldPath,
                          bool includeNullIfEmptyOrMissing,
-                         const boost::optional<FieldPath>& includeArrayIndex);
+                         const boost::optional<FieldPath>& includeArrayIndex,
+                         bool recursive);
 
     // Configuration state.
     const FieldPath _unwindPath;
@@ -104,6 +106,9 @@ private:
     // If set, the $unwind stage will include the array index in the specified path, overwriting any
     // existing value, setting to null when the value was a non-array or empty array.
     const boost::optional<FieldPath> _indexPath;
+
+    // Whether we're recursively unwinding.
+    const bool _recursive;
 
     // Iteration state.
     class Unwinder;
