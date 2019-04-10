@@ -115,15 +115,24 @@ void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
 
 // TODO: put in namespace
 struct Pointer {
-    Document parentDoc;
-    size_t unwindPathIndex;
+    Value value;
+
+    // Only meaningful when 'value' is a Document.
+    boost::optional<size_t> unwindPathIndex;
+
+    // Only meaningful when 'value' is an array.
     boost::optional<size_t> arrayIndex;
 };
 
 Value findFirstChild(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
     invariant(dfsState);
 
-    Document currentSubDoc = dfsState->top().parentDoc;
+    Value currentVal = dfsState->top().value;
+    size_t pathIter = dfsState->top().unwindPathIndex;
+    while (i <  unwindPath.getPathLength()) {
+        // ...
+    }
+    
     for (size_t i = dfsState->top().unwindPathIndex; i < unwindPath.getPathLength(); ++i) {
         StringData part = unwindPath.getFieldName(i);
         Value value = currentSubDoc.getField(part);
@@ -163,13 +172,19 @@ Value findFirstChild(std::stack<Pointer>* dfsState, const FieldPath& unwindPath)
     MONGO_UNREACHABLE;
 }
 
-Value advance(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
-    invariant(dfsState);
+// Value advance(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
+//     invariant(dfsState);
 
-    while (!dfs->empty()) {
-        // Inspect the top element.
-    }
-}
+//     while (!dfs->empty()) {
+//         // Inspect the top element.
+//         const Pointer& top = dfsState->top();
+//         StringData part = unwindPath.getField(top.unwindPathIndex);
+//         Value val = currentSubDoc
+
+//         if (top.parentDoc
+        
+//     }
+// }
 
 DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecursive() {
     log() << "ian: getNext recursive";
