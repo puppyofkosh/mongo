@@ -56,7 +56,7 @@ public:
 
     /**
      * @return the next document exploded from the document provided to resetDocument(), using
-     * the current value in the array located at the provided unwindPath.
+     * the current value in the array located at the provided path.
      */
     DocumentSource::GetNextResult getNext();
 
@@ -114,8 +114,7 @@ DocumentSource::GetNextResult DocumentSourceExplodeAtPath::getNext() {
 
     auto nextOut = _exploder->getNext();
     while (nextOut.isEOF()) {
-        // No more elements in array currently being unwound. This will loop if the input
-        // document is missing the unwind field or has an empty array.
+        // No more elements in array currently being unwound.
         auto nextInput = pSource->getNext();
         if (!nextInput.isAdvanced()) {
             return nextInput;
@@ -146,8 +145,6 @@ DepsTracker::State DocumentSourceExplodeAtPath::getDependencies(DepsTracker* dep
 
 intrusive_ptr<DocumentSource> DocumentSourceExplodeAtPath::createFromBson(
     BSONElement elem, const intrusive_ptr<ExpressionContext>& pExpCtx) {
-    // $unwind accepts either the legacy "{$unwind: '$path'}" syntax, or a nested document with
-    // extra options.
     string prefixedPathString;
     boost::optional<string> indexPath;
     if (elem.type() == String) {

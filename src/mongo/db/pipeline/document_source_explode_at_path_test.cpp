@@ -59,10 +59,6 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 
-/**
- * New-style fixture for testing the $unwind stage. Provides access to an ExpressionContext which
- * can be used to construct DocumentSourceUnwind.
- */
 class ExplodeAtPathStageTest : public AggregationContextFixture {
 public:
     intrusive_ptr<DocumentSource> createDocumentSource(BSONObj spec) {
