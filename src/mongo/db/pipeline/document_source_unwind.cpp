@@ -124,67 +124,82 @@ struct Pointer {
     boost::optional<size_t> arrayIndex;
 };
 
+// TODO: Think about name. 'recurse' isn't really accurate since we won't recurse any more once
+// we've reached the end of the path.
+
 Value findFirstChild(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
     invariant(dfsState);
 
-    Value currentVal = dfsState->top().value;
-    size_t pathIter = dfsState->top().unwindPathIndex;
-    while (i <  unwindPath.getPathLength()) {
-        // ...
-    }
-    
-    for (size_t i = dfsState->top().unwindPathIndex; i < unwindPath.getPathLength(); ++i) {
-        StringData part = unwindPath.getFieldName(i);
-        Value value = currentSubDoc.getField(part);
-        log() << "Looking at part " << i << " " << part << " value: " << value;
-        if (value.missing()) {
-            return value;
-        } else if (value.getType() == BSONType::Array) {
-            const auto& arr = value.getArray();
-            if (arr.size() == 0) {
-                dfsState->push(Pointer{currentSubDoc, i, boost::none});
+    invariant(dfsState->top().unwindPathIndex);
+    size_t pathIter = *dfsState->top().unwindPathIndex;
+    while (pathIter < unwindPath.getPathLength()) {
+        Value currentVal = dfsState->top().value;
+
+        log() << "ian: pathIter is " << pathIter << "\ncurrentVal: " << currentVal;
+        if (currentVal.getType() == BSONType::Object) {
+            invariant(pathIter == *dfsState->top().unwindPathIndex);
+            // We can get the next value using unwindPath.
+            Document d = currentVal.getDocument();
+            Value nextVal = d.getField(unwindPath.getFieldName(pathIter));
+            dfsState->push(Pointer{nextVal, boost::none, boost::none});
+            pathIter++;
+        } else if (currentVal.getType() == BSONType::Array) {
+            const auto& arr = currentVal.getArray();
+            if (arr.empty()) {
+                // TODO: Test case.
+                // We ran into an empty array before reaching the end of the path.
+                // The value is missing.
                 return Value();
             }
 
-            dfsState->push(Pointer{currentSubDoc, i, 0});
-            invariant(!arr[0].missing());
-
-            if (arr[0].getType() != BSONType::Object) {
-                // We are treating this as a single value (even if it's a nested array!).
-                // Return it.
-                return arr[0];
-            }
-
-            currentSubDoc = arr[0].getDocument();
-        } else if (value.getType() == BSONType::Object) {
-            dfsState->push(Pointer{currentSubDoc, i, boost::none});
-            currentSubDoc = value.getDocument();
+            Value nextVal = arr[0];
+            dfsState->push(Pointer{nextVal, boost::none, 0});
         } else {
-            // We reached a leaf node. If we're at the last path component,
-            // return this value. Otherwise return missing.
-            if (i + 1 == unwindPath.getPathLength()) {
-                return value;
-            }
-            return Value();
+            MONGO_UNREACHABLE;
         }
+        // ...
     }
+
+    return dfsState->top().value;
+
+    // for (size_t i = dfsState->top().unwindPathIndex; i < unwindPath.getPathLength(); ++i) {
+    //     StringData part = unwindPath.getFieldName(i);
+    //     Value value = currentSubDoc.getField(part);
+    //     log() << "Looking at part " << i << " " << part << " value: " << value;
+    //     if (value.missing()) {
+    //         return value;
+    //     } else if (value.getType() == BSONType::Array) {
+    //         const auto& arr = value.getArray();
+    //         if (arr.size() == 0) {
+    //             dfsState->push(Pointer{currentSubDoc, i, boost::none});
+    //             return Value();
+    //         }
+
+    //         dfsState->push(Pointer{currentSubDoc, i, 0});
+    //         invariant(!arr[0].missing());
+
+    //         if (arr[0].getType() != BSONType::Object) {
+    //             // We are treating this as a single value (even if it's a nested array!).
+    //             // Return it.
+    //             return arr[0];
+    //         }
+
+    //         currentSubDoc = arr[0].getDocument();
+    //     } else if (value.getType() == BSONType::Object) {
+    //         dfsState->push(Pointer{currentSubDoc, i, boost::none});
+    //         currentSubDoc = value.getDocument();
+    //     } else {
+    //         // We reached a leaf node. If we're at the last path component,
+    //         // return this value. Otherwise return missing.
+    //         if (i + 1 == unwindPath.getPathLength()) {
+    //             return value;
+    //         }
+    //         return Value();
+    //     }
+    // }
 
     MONGO_UNREACHABLE;
 }
-
-// Value advance(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
-//     invariant(dfsState);
-
-//     while (!dfs->empty()) {
-//         // Inspect the top element.
-//         const Pointer& top = dfsState->top();
-//         StringData part = unwindPath.getField(top.unwindPathIndex);
-//         Value val = currentSubDoc
-
-//         if (top.parentDoc
-        
-//     }
-// }
 
 DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecursive() {
     log() << "ian: getNext recursive";
@@ -195,7 +210,7 @@ DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecur
     }
 
     std::stack<Pointer> context;
-    context.push({_currentDoc, 0, boost::none});
+    context.push(Pointer{Value(_currentDoc), 0, boost::none});
     log() << "ian: first node is " << findFirstChild(&context, _unwindPath);
 
     // struct Pointer {
