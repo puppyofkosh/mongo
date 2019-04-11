@@ -31,15 +31,11 @@
 
 #include "mongo/db/pipeline/document_source_unwind.h"
 
-#include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/lite_parsed_document_source.h"
 #include "mongo/db/pipeline/value.h"
-
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -64,9 +60,6 @@ public:
      */
     DocumentSource::GetNextResult getNext();
 
-    // TODO: tmp
-    DocumentSource::GetNextResult getNextRecursive();
-
 private:
     // Tracks whether or not we can possibly return any more documents. Note we may return
     // boost::none even if this is true.
@@ -84,7 +77,6 @@ private:
     const boost::optional<FieldPath> _indexPath;
 
     Value _inputArray;
-    Document _currentDoc;
 
     MutableDocument _output;
 
@@ -108,162 +100,7 @@ void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     _unwindPathFieldIndexes.clear();
     _index = 0;
     _inputArray = document.getNestedField(_unwindPath, &_unwindPathFieldIndexes);
-    _currentDoc = document;
-    log() << "ian: Resetting document to " << document << std::endl
-          << "_inputArray is now " << _inputArray;
     _haveNext = true;
-}
-
-// TODO: put in namespace
-struct Pointer {
-    Value value;
-
-    // Only meaningful when 'value' is a Document.
-    boost::optional<size_t> unwindPathIndex;
-
-    // Only meaningful when 'value' is an array.
-    boost::optional<size_t> arrayIndex;
-};
-
-// TODO: Think about name. 'recurse' isn't really accurate since we won't recurse any more once
-// we've reached the end of the path.
-
-Value findFirstChild(std::stack<Pointer>* dfsState, const FieldPath& unwindPath) {
-    invariant(dfsState);
-
-    invariant(dfsState->top().unwindPathIndex);
-    size_t pathIter = *dfsState->top().unwindPathIndex;
-    while (pathIter < unwindPath.getPathLength()) {
-        Value currentVal = dfsState->top().value;
-
-        log() << "ian: pathIter is " << pathIter << "\ncurrentVal: " << currentVal;
-        if (currentVal.getType() == BSONType::Object) {
-            invariant(pathIter == *dfsState->top().unwindPathIndex);
-            // We can get the next value using unwindPath.
-            Document d = currentVal.getDocument();
-            Value nextVal = d.getField(unwindPath.getFieldName(pathIter));
-            dfsState->push(Pointer{nextVal, boost::none, boost::none});
-            pathIter++;
-        } else if (currentVal.getType() == BSONType::Array) {
-            const auto& arr = currentVal.getArray();
-            if (arr.empty()) {
-                // TODO: Test case.
-                // We ran into an empty array before reaching the end of the path.
-                // The value is missing.
-                return Value();
-            }
-
-            Value nextVal = arr[0];
-            dfsState->push(Pointer{nextVal, boost::none, 0});
-        } else {
-            MONGO_UNREACHABLE;
-        }
-        // ...
-    }
-
-    return dfsState->top().value;
-
-    // for (size_t i = dfsState->top().unwindPathIndex; i < unwindPath.getPathLength(); ++i) {
-    //     StringData part = unwindPath.getFieldName(i);
-    //     Value value = currentSubDoc.getField(part);
-    //     log() << "Looking at part " << i << " " << part << " value: " << value;
-    //     if (value.missing()) {
-    //         return value;
-    //     } else if (value.getType() == BSONType::Array) {
-    //         const auto& arr = value.getArray();
-    //         if (arr.size() == 0) {
-    //             dfsState->push(Pointer{currentSubDoc, i, boost::none});
-    //             return Value();
-    //         }
-
-    //         dfsState->push(Pointer{currentSubDoc, i, 0});
-    //         invariant(!arr[0].missing());
-
-    //         if (arr[0].getType() != BSONType::Object) {
-    //             // We are treating this as a single value (even if it's a nested array!).
-    //             // Return it.
-    //             return arr[0];
-    //         }
-
-    //         currentSubDoc = arr[0].getDocument();
-    //     } else if (value.getType() == BSONType::Object) {
-    //         dfsState->push(Pointer{currentSubDoc, i, boost::none});
-    //         currentSubDoc = value.getDocument();
-    //     } else {
-    //         // We reached a leaf node. If we're at the last path component,
-    //         // return this value. Otherwise return missing.
-    //         if (i + 1 == unwindPath.getPathLength()) {
-    //             return value;
-    //         }
-    //         return Value();
-    //     }
-    // }
-
-    MONGO_UNREACHABLE;
-}
-
-DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecursive() {
-    log() << "ian: getNext recursive";
-    // WARNING: Any functional changes to this method must also be implemented in the unwinding
-    // implementation of the $lookup stage.
-    if (!_haveNext) {
-        return GetNextResult::makeEOF();
-    }
-
-    BSONObj obj = _currentDoc.toBson();
-    std::vector<BSONElement> elts;
-    dotted_path_support::extractAllElementsAlongPath(obj, _unwindPath.fullPath(), elts);
-
-    for (auto && r : elts) {
-        log() << "ian: found element " << r;
-    }
-
-    // Find the first array along the unwind path.
-
-    // Track which index this value came from. If 'includeArrayIndex' was specified, we will use
-    // this index in the output document, or null if the value didn't come from an array.
-    boost::optional<long long> indexForOutput;
-
-    if (_inputArray.getType() == Array) {
-        const size_t length = _inputArray.getArrayLength();
-        invariant(_index == 0 || _index < length);
-
-        if (length == 0) {
-            // Preserve documents with empty arrays if asked to, otherwise skip them.
-            _haveNext = false;
-            if (!_preserveNullAndEmptyArrays) {
-                return GetNextResult::makeEOF();
-            }
-            _output.removeNestedField(_unwindPathFieldIndexes);
-        } else {
-            // Set field to be the next element in the array. If needed, this will automatically
-            // clone all the documents along the field path so that the end values are not shared
-            // across documents that have come out of this pipeline operator. This is a partial deep
-            // clone. Because the value at the end will be replaced, everything along the path
-            // leading to that will be replaced in order not to share that change with any other
-            // clones (or the original).
-            _output.setNestedField(_unwindPathFieldIndexes, _inputArray[_index]);
-            indexForOutput = _index;
-            _index++;
-            _haveNext = _index < length;
-        }
-    } else if (_inputArray.nullish()) {
-        // Preserve a nullish value if asked to, otherwise skip it.
-        _haveNext = false;
-        if (!_preserveNullAndEmptyArrays) {
-            return GetNextResult::makeEOF();
-        }
-    } else {
-        // Any non-nullish, non-array type should pass through.
-        _haveNext = false;
-    }
-
-    if (_indexPath) {
-        _output.getNestedField(*_indexPath) =
-            indexForOutput ? Value(*indexForOutput) : Value(BSONNULL);
-    }
-
-    return _haveNext ? _output.peek() : _output.freeze();
 }
 
 DocumentSource::GetNextResult DocumentSourceUnwind::Unwinder::getNext() {
@@ -322,13 +159,11 @@ DocumentSource::GetNextResult DocumentSourceUnwind::Unwinder::getNext() {
 DocumentSourceUnwind::DocumentSourceUnwind(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                            const FieldPath& fieldPath,
                                            bool preserveNullAndEmptyArrays,
-                                           const boost::optional<FieldPath>& indexPath,
-                                           bool recursive)
+                                           const boost::optional<FieldPath>& indexPath)
     : DocumentSource(pExpCtx),
       _unwindPath(fieldPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
       _indexPath(indexPath),
-      _recursive(recursive),
       _unwinder(new Unwinder(fieldPath, preserveNullAndEmptyArrays, indexPath)) {}
 
 REGISTER_DOCUMENT_SOURCE(unwind,
@@ -343,22 +178,19 @@ intrusive_ptr<DocumentSourceUnwind> DocumentSourceUnwind::create(
     const intrusive_ptr<ExpressionContext>& expCtx,
     const string& unwindPath,
     bool preserveNullAndEmptyArrays,
-    const boost::optional<string>& indexPath,
-    bool recursive) {
+    const boost::optional<string>& indexPath) {
     intrusive_ptr<DocumentSourceUnwind> source(
         new DocumentSourceUnwind(expCtx,
                                  FieldPath(unwindPath),
                                  preserveNullAndEmptyArrays,
-                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>(),
-                                 recursive));
+                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>()));
     return source;
 }
 
 DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
     pExpCtx->checkForInterrupt();
 
-    // TODO: hook up to the '_recursive' option.
-    auto nextOut = _unwinder->getNextRecursive();
+    auto nextOut = _unwinder->getNext();
     while (nextOut.isEOF()) {
         // No more elements in array currently being unwound. This will loop if the input
         // document is missing the unwind field or has an empty array.
@@ -369,7 +201,7 @@ DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
 
         // Try to extract an output document from the new input document.
         _unwinder->resetDocument(nextInput.releaseDocument());
-        nextOut = _unwinder->getNextRecursive();
+        nextOut = _unwinder->getNext();
     }
 
     return nextOut;
@@ -402,7 +234,6 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
     // extra options.
     string prefixedPathString;
     bool preserveNullAndEmptyArrays = false;
-    bool recursive;
     boost::optional<string> indexPath;
     if (elem.type() == Object) {
         for (auto&& subElem : elem.Obj()) {
@@ -431,13 +262,6 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                                          "prefixed with a '$': "
                                       << (*indexPath),
                         (*indexPath)[0] != '$');
-            } else if (subElem.fieldNameStringData() == "recursive") {
-                uassert(51175,
-                        str::stream() << "expected a boolean for the recursive option to $unwind "
-                                         "stage, got "
-                                      << typeName(subElem.type()),
-                        subElem.type() == Bool);
-                recursive = subElem.Bool();
             } else {
                 uasserted(28811,
                           str::stream() << "unrecognized option to $unwind stage: "
@@ -460,7 +284,6 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                           << prefixedPathString,
             prefixedPathString[0] == '$');
     string pathString(Expression::removeFieldPrefix(prefixedPathString));
-    return DocumentSourceUnwind::create(
-        pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath, recursive);
+    return DocumentSourceUnwind::create(pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath);
 }
 }

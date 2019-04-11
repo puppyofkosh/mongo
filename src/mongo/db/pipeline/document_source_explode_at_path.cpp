@@ -48,10 +48,8 @@ using std::string;
 using std::vector;
 
 class DocumentSourceExplodeAtPath::Exploder {
-    const FieldPath _fieldPath;
-
 public:
-    Exploder(const FieldPath& fp) : _fieldPath(fp) {}
+    Exploder(const FieldPath& fp) : _fieldPath(fp), _extractedElementsIndex(0) {}
 
     /** Reset the exploder to explode a new document. */
     void resetDocument(const Document& document);
@@ -61,16 +59,35 @@ public:
      * the current value in the array located at the provided unwindPath.
      */
     DocumentSource::GetNextResult getNext();
+
+private:
+    const FieldPath _fieldPath;
+
+    std::vector<BSONElement> _extractedElements;
+    size_t _extractedElementsIndex;
+    BSONObj _currentDoc;
+
+    MutableDocument _output;
 };
 
 void DocumentSourceExplodeAtPath::Exploder::resetDocument(const Document& d) {
-    // TODO
-    //MONGO_UNREACHABLE;
+    _output.reset(d);
+    _extractedElements.clear();
+    _currentDoc = d.toBson();
+    dotted_path_support::extractAllElementsAlongPath(
+        _currentDoc, _fieldPath.fullPath(), _extractedElements);
+    _extractedElementsIndex = 0;
 }
 
 DocumentSource::GetNextResult DocumentSourceExplodeAtPath::Exploder::getNext() {
-    return DocumentSource::GetNextResult::makeEOF();
-    //MONGO_UNREACHABLE;
+    if (_extractedElementsIndex == _extractedElements.size()) {
+        return DocumentSource::GetNextResult::makeEOF();
+    }
+
+    const auto elt = _extractedElements[_extractedElementsIndex++];
+    _output.setNestedField(_fieldPath, Value(elt));
+
+    return _output.peek();
 }
 
 DocumentSourceExplodeAtPath::DocumentSourceExplodeAtPath(

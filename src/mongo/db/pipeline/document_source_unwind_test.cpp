@@ -733,28 +733,6 @@ TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
     ASSERT_EQUALS(1U, modifiedPaths.paths.count("arrIndex"));
 }
 
-TEST_F(UnwindStageTest, UnwindRecursive) {
-    const bool includeNullIfEmptyOrMissing = false;
-    const bool recursive = true;
-    auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, boost::none, recursive);
-
-    // auto source = DocumentSourceMock::create(
-    //     {Document(fromjson("{a: {b: {c: 1}}}"))});
-
-    // TODO: Think about nested arrays e.g. [[1, 2]] (behavior should match what distinct() needs).
-    auto source = DocumentSourceMock::create(
-        {Document(fromjson("{a: [{b: [{c: 1}, {c: 2}, 45]}, {b: [{c: 3}, {c: [4, 5]}]}]}"))});
-    // auto source =
-    //     DocumentSourceMock::create({Document{{"a",
-    //                                           vector<Value>{Value(Document{{"b", Value(1)}}),
-    //                                                         Value(Document{{"b",
-    //                                                         Value(2)}})}}}});
-
-    unwind->setSource(source.get());
-    ASSERT_TRUE(unwind->getNext().isAdvanced());
-}
-
 //
 // Error cases.
 //
