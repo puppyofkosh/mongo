@@ -128,7 +128,7 @@ StatusWith<BSONObj> ParsedDistinct::asAggregationCommand() const {
     //
     //      [
     //          { $match: { ... } },
-    //          { $unwind: { path: "$<key>", preserveNullAndEmptyArrays: true } },
+    //          { $unwind: { path: "$<key>", preserveNullAndEmptyArrays: true } }, // TODO ian: fix this
     //          { $group: { _id: null, distinct: { $addToSet: "$<key>" } } }
     //      ]
     BSONArrayBuilder pipelineBuilder(aggregationBuilder.subarrayStart("pipeline"));
@@ -138,13 +138,9 @@ StatusWith<BSONObj> ParsedDistinct::asAggregationCommand() const {
         matchStageBuilder.doneFast();
     }
     BSONObjBuilder unwindStageBuilder(pipelineBuilder.subobjStart());
-    {
-        BSONObjBuilder unwindBuilder(unwindStageBuilder.subobjStart("$unwind"));
-        unwindBuilder.append("path", str::stream() << "$" << _key);
-        unwindBuilder.append("preserveNullAndEmptyArrays", true);
-        unwindBuilder.doneFast();
-    }
+    unwindStageBuilder.append("$explodeAtPath", str::stream() << "$" << _key);
     unwindStageBuilder.doneFast();
+
     BSONObjBuilder groupStageBuilder(pipelineBuilder.subobjStart());
     {
         BSONObjBuilder groupBuilder(groupStageBuilder.subobjStart("$group"));
