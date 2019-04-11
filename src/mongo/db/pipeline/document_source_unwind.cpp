@@ -432,7 +432,7 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                                       << (*indexPath),
                         (*indexPath)[0] != '$');
             } else if (subElem.fieldNameStringData() == "recursive") {
-                uassert(51172,
+                uassert(51175,
                         str::stream() << "expected a boolean for the recursive option to $unwind "
                                          "stage, got "
                                       << typeName(subElem.type()),
