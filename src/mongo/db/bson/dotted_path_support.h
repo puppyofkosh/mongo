@@ -110,6 +110,12 @@ void extractAllElementsAlongPath(const BSONObj& obj,
                                  bool expandArrayOnTrailingField = true,
                                  std::set<std::size_t>* arrayComponents = nullptr);
 
+void extractAllElementsAlongPath(const BSONObj& obj,
+                                 StringData path,
+                                 std::vector<BSONElement>& elements,
+                                 bool expandArrayOnTrailingField = true,
+                                 std::set<size_t>* arrayComponents = nullptr);
+
 /**
  * Returns an owned BSONObj with elements in the same order as they appear in the 'pattern' object
  * and values extracted from 'obj'.

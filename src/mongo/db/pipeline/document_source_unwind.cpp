@@ -31,6 +31,7 @@
 
 #include "mongo/db/pipeline/document_source_unwind.h"
 
+#include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/expression.h"
@@ -209,67 +210,13 @@ DocumentSourceUnwind::GetNextResult DocumentSourceUnwind::Unwinder::getNextRecur
         return GetNextResult::makeEOF();
     }
 
-    std::stack<Pointer> context;
-    context.push(Pointer{Value(_currentDoc), 0, boost::none});
-    log() << "ian: first node is " << findFirstChild(&context, _unwindPath);
+    BSONObj obj = _currentDoc.toBson();
+    std::vector<BSONElement> elts;
+    dotted_path_support::extractAllElementsAlongPath(obj, _unwindPath.fullPath(), elts);
 
-    // struct Pointer {
-    //     Value array;
-    //     size_t unwindPathIndex;
-    //     size_t arrayIndex;
-    // };
-    // std::stack<Pointer> context;
-
-    // Document currentSubDoc = *_currentDoc;
-    // for (size_t i = 0; i < _unwindPath.getPathLength(); ++i) {
-    //     StringData part = _unwindPath.getFieldName(i);
-    //     Value value = currentSubDoc.getField(part);
-    //     if (value.missing()) {
-    //         _haveNext = false;
-    //         // TODO: return EOF or original document.
-    //         if (!_preserveNullAndEmptyArrays) {
-    //             return GetNextResult::makeEOF();
-    //         }
-
-    //         // TODO: This will be different if we're not at the top level.
-    //         return _output.freeze();
-    //     } else if (value.getType() == BSONType::Array) {
-    //         const auto& arr = value.getArray();
-    //         for (size_t j = 0; j < arr.size(); ++j) {
-    //             if (arr[j].missing()) {
-    //                 if (!_preserveNullAndEmptyArrays) {
-    //                     continue;
-
-    //                     // Do nothing.
-    //                 } else {
-    //                     // Add this to our stack.
-    //                     context.push({value, i, j});
-
-    //                     // Return something. Update the top of the stack.
-    //                 }
-
-    //             } else if (arr[j].getType() != BSONType::Object) {
-    //                 MONGO_UNREACHABLE;
-    //             } else {
-    //                 // Save our place in the stack.
-    //                 context.push({value, i, j});
-
-    //                 log() << "Found value to return " << arr[j];
-    //                 currentSubDoc = arr[j].getDocument();
-    //                 break;
-    //             }
-    //         }
-    //     } else if (value.getType() == BSONType::Object) {
-    //         // Proceed to the next field.
-    //         continue;
-    //     } else {
-    //         // The path doesn't lead to an array, so bail out.
-    //         _haveNext = false;
-    //         return _output.freeze();
-    //     }
-    // }
-    // log() << "Reached end of path and have value " << currentSubDoc;
-    // log() << "ian: context is now size " << context.size();
+    for (auto && r : elts) {
+        log() << "ian: found element " << r;
+    }
 
     // Find the first array along the unwind path.
 

@@ -742,10 +742,9 @@ TEST_F(UnwindStageTest, UnwindRecursive) {
     // auto source = DocumentSourceMock::create(
     //     {Document(fromjson("{a: {b: {c: 1}}}"))});
 
-    // auto source = DocumentSourceMock::create(
-    //     {Document(fromjson("{a: [{b: [{c: 1}, {c: 2}]}, {b: [{c: 3}, {c: 4}]}]}"))});
+    // TODO: Think about nested arrays e.g. [[1, 2]] (behavior should match what distinct() needs).
     auto source = DocumentSourceMock::create(
-        {Document(fromjson("{a: [{b: {c: 1}}]}"))});
+        {Document(fromjson("{a: [{b: [{c: 1}, {c: 2}]}, {b: [{c: 3}, {c: [4, 5]}]}]}"))});
     // auto source =
     //     DocumentSourceMock::create({Document{{"a",
     //                                           vector<Value>{Value(Document{{"b", Value(1)}}),

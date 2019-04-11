@@ -110,13 +110,13 @@ void _extractAllElementsAlongPath(const BSONObj& obj,
         if (e.type() == Array && expandArrayOnTrailingField) {
             BSONObjIterator i(e.embeddedObject());
             while (i.more()) {
-                elements.insert(i.next());
+                elements.insert(elements.end(), i.next());
             }
             if (arrayComponents) {
                 arrayComponents->insert(depth);
             }
         } else {
-            elements.insert(e);
+            elements.insert(elements.end(), e);
         }
     }
 }
@@ -174,6 +174,16 @@ void extractAllElementsAlongPath(const BSONObj& obj,
 void extractAllElementsAlongPath(const BSONObj& obj,
                                  StringData path,
                                  BSONElementMultiSet& elements,
+                                 bool expandArrayOnTrailingField,
+                                 std::set<size_t>* arrayComponents) {
+    const size_t initialDepth = 0;
+    _extractAllElementsAlongPath(
+        obj, path, elements, expandArrayOnTrailingField, initialDepth, arrayComponents);
+}
+
+void extractAllElementsAlongPath(const BSONObj& obj,
+                                 StringData path,
+                                 std::vector<BSONElement>& elements,
                                  bool expandArrayOnTrailingField,
                                  std::set<size_t>* arrayComponents) {
     const size_t initialDepth = 0;
