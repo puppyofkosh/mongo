@@ -612,9 +612,10 @@ TEST_F(DocumentSourceLookUpTest, ShouldPropagatePausesWhileUnwinding) {
     auto lookup = static_cast<DocumentSourceLookUp*>(parsed.get());
 
     const bool preserveNullAndEmptyArrays = false;
+    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     lookup->setUnwindStage(DocumentSourceUnwind::create(
-        expCtx, "foreignDoc", preserveNullAndEmptyArrays, includeArrayIndex));
+        expCtx, "foreignDoc", preserveNullAndEmptyArrays, includeArrayIndex, nested));
 
     // Mock its input, pausing every other result.
     auto mockLocalSource =
@@ -689,9 +690,10 @@ TEST_F(DocumentSourceLookUpTest, LookupReportsFieldsModifiedByAbsorbedUnwind) {
     auto lookup = static_cast<DocumentSourceLookUp*>(parsed.get());
 
     const bool preserveNullAndEmptyArrays = false;
+    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = std::string("arrIndex");
     lookup->setUnwindStage(DocumentSourceUnwind::create(
-        expCtx, "foreignDoc", preserveNullAndEmptyArrays, includeArrayIndex));
+        expCtx, "foreignDoc", preserveNullAndEmptyArrays, includeArrayIndex, nested));
 
     auto modifiedPaths = lookup->getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);

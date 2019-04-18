@@ -671,11 +671,49 @@ public:
         auto specElem = spec.firstElement();
         return DocumentSourceUnwind::createFromBson(specElem, getExpCtx());
     }
+
+    bool resultsMatch(const boost::intrusive_ptr<DocumentSource>& source,
+                      const vector<DocumentSource::GetNextResult>& input,
+                      const vector<DocumentSource::GetNextResult>& expectedOut) {
+        auto mockSource = DocumentSourceMock::create(
+            std::deque<DocumentSource::GetNextResult>(input.begin(), input.end()));
+
+        source->setSource(mockSource.get());
+
+        for (auto&& expected : expectedOut) {
+            const auto res = source->getNext();
+
+            if (expected.getStatus() != res.getStatus()) {
+                log() << "expected status " << static_cast<int>(expected.getStatus()) << " but got "
+                      << static_cast<int>(res.getStatus());
+                return false;
+            }
+
+            if (expected.isAdvanced()) {
+                DocumentComparator comp;
+                if (comp.evaluate(expected.getDocument() != res.getDocument())) {
+                    log() << "expected " << expected.getDocument() << " got " << res.getDocument();
+                    return false;
+                }
+            }
+        }
+
+        const auto next = source->getNext();
+        if (!next.isEOF()) {
+            log() << "expected eof, but instead got status " << static_cast<int>(next.getStatus());
+            if (next.isAdvanced()) {
+                log() << "value was " << next.getDocument();
+            }
+            return false;
+        }
+        return true;
+    }
 };
 
 TEST_F(UnwindStageTest, AddsUnwoundPathToDependencies) {
-    auto unwind =
-        DocumentSourceUnwind::create(getExpCtx(), "x.y.z", false, boost::optional<string>("index"));
+    const bool nested = false;
+    auto unwind = DocumentSourceUnwind::create(
+        getExpCtx(), "x.y.z", false, boost::optional<string>("index"), nested);
     DepsTracker dependencies;
     ASSERT_EQUALS(DepsTracker::State::SEE_NEXT, unwind->getDependencies(&dependencies));
     ASSERT_EQUALS(1U, dependencies.fields.size());
@@ -686,9 +724,10 @@ TEST_F(UnwindStageTest, AddsUnwoundPathToDependencies) {
 
 TEST_F(UnwindStageTest, ShouldPropagatePauses) {
     const bool includeNullIfEmptyOrMissing = false;
+    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
     auto source =
         DocumentSourceMock::create({Document{{"array", vector<Value>{Value(1), Value(2)}}},
                                     DocumentSource::GetNextResult::makePauseExecution(),
@@ -710,9 +749,10 @@ TEST_F(UnwindStageTest, ShouldPropagatePauses) {
 
 TEST_F(UnwindStageTest, UnwindOnlyModifiesUnwoundPathWhenNotIncludingIndex) {
     const bool includeNullIfEmptyOrMissing = false;
+    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
 
     auto modifiedPaths = unwind->getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -722,9 +762,10 @@ TEST_F(UnwindStageTest, UnwindOnlyModifiesUnwoundPathWhenNotIncludingIndex) {
 
 TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
     const bool includeNullIfEmptyOrMissing = false;
+    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = std::string("arrIndex");
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
 
     auto modifiedPaths = unwind->getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -732,6 +773,39 @@ TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
     ASSERT_EQUALS(1U, modifiedPaths.paths.count("array"));
     ASSERT_EQUALS(1U, modifiedPaths.paths.count("arrIndex"));
 }
+
+TEST_F(UnwindStageTest, UnwindNestedOptionBasic) {
+    const bool includeNullIfEmptyOrMissing = false;
+    const bool nested = true;
+    const boost::optional<std::string> includeArrayIndex = boost::none;
+    auto unwind = DocumentSourceUnwind::create(
+        getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+
+    ASSERT_TRUE(resultsMatch(unwind,
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: [3]}}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {b: {c: 3}}}")}}));
+}
+
+TEST_F(UnwindStageTest, UnwindNestedOptionLeafNodeAtSubPath) {
+    const bool includeNullIfEmptyOrMissing = false;
+    const bool nested = true;
+    const boost::optional<std::string> includeArrayIndex = boost::none;
+    auto unwind = DocumentSourceUnwind::create(
+        getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+
+    // At "a.b" there is a leaf node.
+    ASSERT_TRUE(resultsMatch(unwind,
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: 3}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {b: 3}}")}}));
+}
+    
+// TODO: test about null/missing array and documents getting 'consumed' inside the pipeline
+// TODO: pause
+// TODO: with leaf nodes in the middle {a: {b: 1}}, {a: {b: [{c: 1}]}}
 
 //
 // Error cases.

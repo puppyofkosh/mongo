@@ -161,7 +161,7 @@ TEST_F(DocumentSourceGraphLookUpTest,
     expCtx->setResolvedNamespaces(StringMap<ExpressionContext::ResolvedNamespace>{
         {fromNs.coll().toString(), {fromNs, std::vector<BSONObj>()}}});
     expCtx->mongoProcessInterface = std::make_shared<MockMongoInterface>(std::move(fromContents));
-    auto unwindStage = DocumentSourceUnwind::create(expCtx, "results", false, boost::none);
+    auto unwindStage = DocumentSourceUnwind::create(expCtx, "results", false, boost::none, false);
     auto graphLookupStage =
         DocumentSourceGraphLookUp::create(expCtx,
                                           fromNs,
@@ -343,7 +343,7 @@ TEST_F(DocumentSourceGraphLookUpTest, ShouldPropagatePausesWhileUnwinding) {
     const bool preserveNullAndEmptyArrays = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwindStage = DocumentSourceUnwind::create(
-        expCtx, "results", preserveNullAndEmptyArrays, includeArrayIndex);
+        expCtx, "results", preserveNullAndEmptyArrays, includeArrayIndex, false);
 
     auto graphLookupStage =
         DocumentSourceGraphLookUp::create(expCtx,
@@ -430,7 +430,7 @@ TEST_F(DocumentSourceGraphLookUpTest, GraphLookupShouldReportFieldsModifiedByAbs
     expCtx->mongoProcessInterface =
         std::make_shared<MockMongoInterface>(std::deque<DocumentSource::GetNextResult>{});
     auto unwindStage =
-        DocumentSourceUnwind::create(expCtx, "results", false, std::string("arrIndex"));
+        DocumentSourceUnwind::create(expCtx, "results", false, std::string("arrIndex"), false);
     auto graphLookupStage =
         DocumentSourceGraphLookUp::create(expCtx,
                                           fromNs,

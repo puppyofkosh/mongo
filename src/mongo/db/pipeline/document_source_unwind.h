@@ -76,7 +76,8 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
         const std::string& path,
         bool includeNullIfEmptyOrMissing,
-        const boost::optional<std::string>& includeArrayIndex);
+        const boost::optional<std::string>& includeArrayIndex,
+        bool nested);
 
     std::string getUnwindPath() const {
         return _unwindPath.fullPath();
@@ -94,7 +95,8 @@ private:
     DocumentSourceUnwind(const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
                          const FieldPath& fieldPath,
                          bool includeNullIfEmptyOrMissing,
-                         const boost::optional<FieldPath>& includeArrayIndex);
+                         const boost::optional<FieldPath>& includeArrayIndex,
+                         bool nested);
 
     // Configuration state.
     const FieldPath _unwindPath;
@@ -105,8 +107,13 @@ private:
     // existing value, setting to null when the value was a non-array or empty array.
     const boost::optional<FieldPath> _indexPath;
 
+    // Whether this is a 'nested' unwind.
+    const bool _nested;
+
     // Iteration state.
     class Unwinder;
+    class StandardUnwinder;
+    class NestedUnwinder;
     std::unique_ptr<Unwinder> _unwinder;
 };
 
