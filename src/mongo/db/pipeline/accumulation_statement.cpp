@@ -47,6 +47,7 @@ using std::string;
 namespace {
 // Used to keep track of which Accumulators are registered under which name.
 static StringMap<Accumulator::Factory> factoryMap;
+
 }  // namespace
 
 void AccumulationStatement::registerAccumulator(std::string name, Accumulator::Factory factory) {

@@ -789,23 +789,76 @@ TEST_F(UnwindStageTest, UnwindNestedOptionBasic) {
 }
 
 TEST_F(UnwindStageTest, UnwindNestedOptionLeafNodeAtSubPath) {
-    const bool includeNullIfEmptyOrMissing = false;
+    const bool preserveNullAndEmpty = false;
+    const bool nested = true;
+    const boost::optional<std::string> includeArrayIndex = boost::none;
+    auto unwind = DocumentSourceUnwind::create(
+        getExpCtx(), "a.b.c", preserveNullAndEmpty, includeArrayIndex, nested);
+
+    // At "a.b" there is a leaf node. This means that "a.b.c" will be missing for the intermediate
+    // document after the "a" and "a.b" unwind, so the result with {b: 3} will be excluded.
+    ASSERT_TRUE(resultsMatch(
+        unwind,
+        {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: 3}]}")}},
+        {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
+
+    // The {c: null} value will be consumed by the $unwind of "a.b.c".
+    ASSERT_TRUE(resultsMatch(
+        unwind,
+        {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: null}}]}")}},
+        {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
+
+    // The {c: undefined} value will be consumed by the $unwind of "a.b.c".
+    ASSERT_TRUE(resultsMatch(
+        unwind,
+        {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: undefined}}]}")}},
+        {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
+
+    // The {c: []} will be consumed by the $unwind of "a.b.c".
+    ASSERT_TRUE(resultsMatch(
+        unwind,
+        {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: []}}]}")}},
+        {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
+}
+
+TEST_F(UnwindStageTest, UnwindNestedOptionWithPreserveNullLeafNodeAtSubPath) {
+    const bool includeNullIfEmptyOrMissing = true;
     const bool nested = true;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwind = DocumentSourceUnwind::create(
         getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
 
-    // At "a.b" there is a leaf node.
+    // At "a.b" there is a leaf node. This means that "a.b.c" will be missing for the intermediate
+    // document after the "a" and "a.b" unwind, though the 'includeNullIfEmptyOrMissing' flag will
+    // cause the document to be returned.
     ASSERT_TRUE(resultsMatch(unwind,
                              {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: 3}]}")}},
                              {Document{fromjson("{a: {b: {c: 1}}}")},
                               Document{fromjson("{a: {b: {c: 2}}}")},
                               Document{fromjson("{a: {b: 3}}")}}));
+
+    // Documents with empty arrays are preserved through $unwind, but the empty array itself is not.
+    ASSERT_TRUE(resultsMatch(unwind,
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: []}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {}}")}}));
+
+    // TODO: Similar test above but with null and undefined.
 }
-    
-// TODO: test about null/missing array and documents getting 'consumed' inside the pipeline
-// TODO: pause
-// TODO: with leaf nodes in the middle {a: {b: 1}}, {a: {b: [{c: 1}]}}
+
+// TODO: Write a test that includes a 'pause' and be sure it's propagated.
+
+// TODO: Test with multiple input documents
+
+// TODO: Test with mixed schema like: {a: [{b: {<object>}}, {b: [<array>]}]}
+
+// TODO: Test with nested arrays, e.g. {a: [[1,2]]}
+
+// TODO: Update test harness to check that 'nested' option is equivalent to multiple
+// $unwinds chained together.
+
+// TODO: Update dependency analysis. For 'nested' option, the modified path will just be
 
 //
 // Error cases.

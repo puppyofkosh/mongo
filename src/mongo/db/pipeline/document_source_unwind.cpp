@@ -193,6 +193,7 @@ public:
                 pathPrefix += '.';
             }
             pathPrefix.insert(pathPrefix.end(), field.begin(), field.end());
+            log() << "At index " << i << " is unwind for " << pathPrefix;
             _children.push_back(std::make_unique<StandardUnwinder>(
                 FieldPath(pathPrefix), preserveNullAndEmptyArrays, indexPath));
         }
@@ -210,13 +211,14 @@ public:
     }
 
     /**
-     * @return the next document unwound from the document provided to resetDocument(), using
+     * return the next document unwound from the document provided to resetDocument(), using
      * the current value in the array located at the provided unwindPath.
      *
      * Returns boost::none if the array is exhausted.
      */
     DocumentSource::GetNextResult getNext() override {
         if (auto res = _children.back()->getNext(); !res.isEOF()) {
+            log() << "returning document from last child";
             return res;
         }
 
@@ -225,6 +227,8 @@ public:
         size_t index = _children.size() - 1;
         boost::optional<Document> currentDocument;
         while (1) {
+            log() << "Loop entry. Index is " << index << " currentDoc is "
+                  << (currentDocument ? "not none" : "none");
             if (direction > 0) {
                 invariant(currentDocument);
 
@@ -233,8 +237,7 @@ public:
 
                 ++index;
                 while (index < _children.size()) {
-                    log() << "Reseting document for child " << index << " to "
-                          << *currentDocument;
+                    log() << "Reseting document for child " << index << " to " << *currentDocument;
                     _children[index]->resetDocument(*currentDocument);
                     GetNextResult res = _children[index]->getNext();
 
@@ -250,11 +253,16 @@ public:
                         return res;
                     }
 
+                    if (index + 1 == _children.size()) {
+                        // We don't want to move forward anymore. Instead, return the result.
+                        return res;
+                    }
+
                     currentDocument.emplace(res.getDocument());
                     ++index;
                 }
             } else {
-                log() << "moving backwards";
+                log() << "moving backwards. At index " << index;
                 invariant(direction == -1);
                 invariant(!currentDocument);
                 // Starting from 'index', go backwards and find an unwinder which has results ready.
@@ -270,6 +278,7 @@ public:
                     return next;
                 }
 
+                log() << "Found non eof at index " << index;
                 currentDocument.emplace(next.getDocument());
                 direction = 1;
             }
@@ -282,7 +291,7 @@ private:
     std::vector<std::unique_ptr<StandardUnwinder>> _children;
 
     /**
-     * TODO
+     * TODO: comment
      */
     std::pair<size_t, DocumentSource::GetNextResult> findLastNonEof(size_t startIndex) {
         size_t i = startIndex;
@@ -360,6 +369,8 @@ DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
 }
 
 DocumentSource::GetModPathsReturn DocumentSourceUnwind::getModifiedPaths() const {
+    // TODO: If the 'nested' option is used, the modified paths will be all subpaths of _unwindPath.
+
     std::set<std::string> modifiedFields{_unwindPath.fullPath()};
     if (_indexPath) {
         modifiedFields.insert(_indexPath->fullPath());
@@ -376,6 +387,9 @@ Value DocumentSourceUnwind::serialize(boost::optional<ExplainOptions::Verbosity>
 }
 
 DepsTracker::State DocumentSourceUnwind::getDependencies(DepsTracker* deps) const {
+    // TODO: If nested option is used, this should really be all of the subpaths of _unwindPath.
+    // TODO: Think about this.
+
     deps->fields.insert(_unwindPath.fullPath());
     return DepsTracker::State::SEE_NEXT;
 }
@@ -447,4 +461,4 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
     return DocumentSourceUnwind::create(
         pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath, nested);
 }
-}
+}  // namespace mongo
