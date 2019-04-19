@@ -37,9 +37,6 @@
 #include "mongo/db/pipeline/lite_parsed_document_source.h"
 #include "mongo/db/pipeline/value.h"
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-#include "mongo/util/log.h"
-
 namespace mongo {
 
 using boost::intrusive_ptr;
@@ -54,10 +51,9 @@ public:
     virtual void resetDocument(const Document& document) = 0;
 
     /**
-     * @return the next document unwound from the document provided to resetDocument(), using
-     * the current value in the array located at the provided unwindPath.
+     * Produces the next document unwound from the document provided to resetDocument().
      *
-     * Returns boost::none if the array is exhausted.
+     * Returns EOF if there are no more results for the current document.
      */
     virtual DocumentSource::GetNextResult getNext() = 0;
 };
@@ -72,10 +68,7 @@ public:
     void resetDocument(const Document& document) override;
 
     /**
-     * @return the next document unwound from the document provided to resetDocument(), using
-     * the current value in the array located at the provided unwindPath.
-     *
-     * Returns boost::none if the array is exhausted.
+     * @return the next document unwound from the document provided to resetDocument().
      */
     DocumentSource::GetNextResult getNext() override;
 
@@ -210,10 +203,9 @@ public:
     }
 
     /**
-     * return the next document unwound from the document provided to resetDocument(), using
-     * the current value in the array located at the provided unwindPath.
-     *
-     * Returns boost::none if the array is exhausted.
+     * Return the next document unwound from the last child unwinder. If the last child unwinder
+     * has no results, will feed results from earlier children forward until a result is available
+     * (or EOF is returned).
      */
     DocumentSource::GetNextResult getNext() override {
         if (auto res = _children.back()->getNext(); !res.isEOF()) {
@@ -228,8 +220,8 @@ public:
             if (direction > 0) {
                 invariant(currentDocument);
 
-                // We are moving towards the back of the pipeline, feeding documents
-                // from stage i to stage i + 1.
+                // We are moving towards the back of the pipeline, feeding documents from stage i
+                // to stage i + 1.
                 while (index < _children.size()) {
                     _children[index]->resetDocument(*currentDocument);
                     GetNextResult res = _children[index]->getNext();
@@ -240,9 +232,8 @@ public:
                         direction = -1;
                         currentDocument = boost::none;
                         break;
-                    } else if (res.isPaused()) {
-                        return res;
                     }
+                    invariant(res.isAdvanced());
 
                     if (index == _children.size() - 1) {
                         // The last child had a result.
@@ -255,15 +246,14 @@ public:
             } else {
                 invariant(direction == -1);
                 invariant(!currentDocument);
-                // Starting from 'index', go backwards and find an unwinder which has results ready.
+                // Starting from 'index', go backwards and find an unwinder which has results
+                // ready.
                 auto indexAndResult = findLastNonEof(index);
                 index = indexAndResult.first;
                 GetNextResult next = indexAndResult.second;
 
                 if (next.isEOF()) {
                     invariant(index == 0);
-                    return next;
-                } else if (next.isPaused()) {
                     return next;
                 }
                 invariant(next.isAdvanced());
@@ -285,14 +275,16 @@ private:
     std::vector<std::unique_ptr<StandardUnwinder>> _children;
 
     /**
-     * TODO: comment
+     * Starting from 'startIndex', walk backwards and find the last unwinder in '_children' which
+     * produces a non-EOF value. If all of the unwinders produce EOF, then EOF is returned.
+     *
+     * Returns a pair <index into '_children', GetNextResult from the child>.
      */
     std::pair<size_t, DocumentSource::GetNextResult> findLastNonEof(size_t startIndex) {
-        size_t i = startIndex;
-        for (; i-- != 0;) {
-            auto next = _children[i]->getNext();
+        for (; startIndex-- != 0;) {
+            auto next = _children[startIndex]->getNext();
             if (!next.isEOF()) {
-                return std::make_pair(i, next);
+                return std::make_pair(startIndex, next);
             }
         }
 

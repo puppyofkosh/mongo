@@ -107,7 +107,8 @@ private:
     // existing value, setting to null when the value was a non-array or empty array.
     const boost::optional<FieldPath> _indexPath;
 
-    // Whether this is a 'nested' unwind.
+    // Whether this is a 'nested' unwind. A nested unwind of 'a.b.c' is equivalent to an unwind on
+    // 'a' followed by an unwind on 'a.b' followed by an unwind on 'a.b.c'.
     const bool _nested;
 
     // Iteration state.

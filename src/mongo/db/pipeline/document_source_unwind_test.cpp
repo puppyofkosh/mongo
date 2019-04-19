@@ -860,6 +860,8 @@ TEST_F(UnwindStageTest, UnwindNestedOptionWithPreserveNullLeafNodeAtSubPath) {
 
 // TODO: Update dependency analysis. For 'nested' option, the modified path will just be
 
+// TODO tests with the includeArrayIndex option.
+
 //
 // Error cases.
 //
