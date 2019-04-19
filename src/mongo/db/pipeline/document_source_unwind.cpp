@@ -193,7 +193,6 @@ public:
                 pathPrefix += '.';
             }
             pathPrefix.insert(pathPrefix.end(), field.begin(), field.end());
-            log() << "At index " << i << " is unwind for " << pathPrefix;
             _children.push_back(std::make_unique<StandardUnwinder>(
                 FieldPath(pathPrefix), preserveNullAndEmptyArrays, indexPath));
         }
@@ -218,7 +217,6 @@ public:
      */
     DocumentSource::GetNextResult getNext() override {
         if (auto res = _children.back()->getNext(); !res.isEOF()) {
-            log() << "returning document from last child";
             return res;
         }
 
@@ -227,34 +225,27 @@ public:
         size_t index = _children.size() - 1;
         boost::optional<Document> currentDocument;
         while (1) {
-            log() << "Loop entry. Index is " << index << " currentDoc is "
-                  << (currentDocument ? "not none" : "none");
             if (direction > 0) {
                 invariant(currentDocument);
 
                 // We are moving towards the back of the pipeline, feeding documents
                 // from stage i to stage i + 1.
-
-                ++index;
                 while (index < _children.size()) {
-                    log() << "Reseting document for child " << index << " to " << *currentDocument;
                     _children[index]->resetDocument(*currentDocument);
                     GetNextResult res = _children[index]->getNext();
 
                     if (res.isEOF()) {
                         // This stage 'consumed' its document. We have to go back and find
-                        // an unwinder which has results ready.
+                        // an unwinder which has results that we can pass forward.
                         direction = -1;
                         currentDocument = boost::none;
                         break;
-                    }
-
-                    if (res.isPaused()) {
+                    } else if (res.isPaused()) {
                         return res;
                     }
 
-                    if (index + 1 == _children.size()) {
-                        // We don't want to move forward anymore. Instead, return the result.
+                    if (index == _children.size() - 1) {
+                        // The last child had a result.
                         return res;
                     }
 
@@ -262,25 +253,28 @@ public:
                     ++index;
                 }
             } else {
-                log() << "moving backwards. At index " << index;
                 invariant(direction == -1);
                 invariant(!currentDocument);
                 // Starting from 'index', go backwards and find an unwinder which has results ready.
                 auto indexAndResult = findLastNonEof(index);
                 index = indexAndResult.first;
                 GetNextResult next = indexAndResult.second;
+
                 if (next.isEOF()) {
                     invariant(index == 0);
                     return next;
-                }
-
-                if (next.isPaused()) {
+                } else if (next.isPaused()) {
                     return next;
                 }
+                invariant(next.isAdvanced());
 
-                log() << "Found non eof at index " << index;
+                // We should never have walked backwards if the last child unwinder has a non-eof.
+                invariant(index < _children.size() - 1);
                 currentDocument.emplace(next.getDocument());
+
+                // Next iteration, we move forward, and pass this document to the next unwinder.
                 direction = 1;
+                ++index;
             }
         }
 
@@ -299,12 +293,11 @@ private:
             auto next = _children[i]->getNext();
             if (!next.isEOF()) {
                 return std::make_pair(i, next);
-            } else if (i == 0) {
-                return std::make_pair(i, next);
             }
         }
 
-        MONGO_UNREACHABLE;
+        // We got to the beginning of the array, and did not find a non-eof value.
+        return std::make_pair(0, DocumentSource::GetNextResult::makeEOF());
     }
 };
 

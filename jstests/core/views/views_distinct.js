@@ -95,7 +95,7 @@
     allDocuments = [];
     allDocuments.push({a: 1, b: [2, 3, [4, 5], {c: 6}], d: {e: [1, 2]}});
     allDocuments.push({a: [1], b: [2, 3, 4, [5]], c: 6, d: {e: 1}});
-    allDocuments.push({a: [1, 2], b: 3, c: [6], d: [{e: 1}, {e: [1, 2]}]});
+    allDocuments.push({a: [1, 2], b: 3, c: [6], d: [{e: 1}, {e: [1, 2]}, {e: {someObject: 1}}]});
     allDocuments.push({a: [1, 2], b: [4, 5], c: [undefined], d: [1]});
     allDocuments.push({a: null, b: [4, 5, null, undefined], c: [], d: {e: null}});
     allDocuments.push({a: undefined, b: null, c: [null], d: {e: undefined}});
@@ -111,4 +111,5 @@
     assertIdentityViewDistinctMatchesCollection("c");
     assertIdentityViewDistinctMatchesCollection("d");
     assertIdentityViewDistinctMatchesCollection("e");
+    assertIdentityViewDistinctMatchesCollection("d.e");
 }());

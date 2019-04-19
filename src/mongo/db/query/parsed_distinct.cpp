@@ -142,6 +142,7 @@ StatusWith<BSONObj> ParsedDistinct::asAggregationCommand() const {
         BSONObjBuilder unwindBuilder(unwindStageBuilder.subobjStart("$unwind"));
         unwindBuilder.append("path", str::stream() << "$" << _key);
         unwindBuilder.append("preserveNullAndEmptyArrays", true);
+        unwindBuilder.append("nested", true);
         unwindBuilder.doneFast();
     }
     unwindStageBuilder.doneFast();
