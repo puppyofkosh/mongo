@@ -1,5 +1,5 @@
 // SERVER-8088: test $unwind with a scalar
-(function () {
+(function() {
     "use strict";
     load('jstests/libs/analyze_plan.js');  // For getAggPlanStage().
 
