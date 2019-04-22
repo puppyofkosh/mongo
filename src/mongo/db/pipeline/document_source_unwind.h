@@ -69,15 +69,14 @@ public:
     /**
      * Creates a new $unwind DocumentSource from a BSON specification.
      */
-    static boost::intrusive_ptr<DocumentSource> createFromBson(
+    static std::list<boost::intrusive_ptr<DocumentSource>> createFromBson(
         BSONElement elem, const boost::intrusive_ptr<ExpressionContext>& pExpCtx);
 
     static boost::intrusive_ptr<DocumentSourceUnwind> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
         const std::string& path,
         bool includeNullIfEmptyOrMissing,
-        const boost::optional<std::string>& includeArrayIndex,
-        bool nested);
+        const boost::optional<std::string>& includeArrayIndex);
 
     std::string getUnwindPath() const {
         return _unwindPath.fullPath();
@@ -95,8 +94,7 @@ private:
     DocumentSourceUnwind(const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
                          const FieldPath& fieldPath,
                          bool includeNullIfEmptyOrMissing,
-                         const boost::optional<FieldPath>& includeArrayIndex,
-                         bool nested);
+                         const boost::optional<FieldPath>& includeArrayIndex);
 
     // Configuration state.
     const FieldPath _unwindPath;
@@ -107,14 +105,8 @@ private:
     // existing value, setting to null when the value was a non-array or empty array.
     const boost::optional<FieldPath> _indexPath;
 
-    // Whether this is a 'nested' unwind. A nested unwind of 'a.b.c' is equivalent to an unwind on
-    // 'a' followed by an unwind on 'a.b' followed by an unwind on 'a.b.c'.
-    const bool _nested;
-
     // Iteration state.
     class Unwinder;
-    class StandardUnwinder;
-    class NestedUnwinder;
     std::unique_ptr<Unwinder> _unwinder;
 };
 

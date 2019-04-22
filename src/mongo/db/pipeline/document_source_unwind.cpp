@@ -43,34 +43,22 @@ using boost::intrusive_ptr;
 using std::string;
 using std::vector;
 
+/** Helper class to unwind array from a single document. */
 class DocumentSourceUnwind::Unwinder {
 public:
-    virtual ~Unwinder() = default;
-
+    Unwinder(const FieldPath& unwindPath,
+             bool preserveNullAndEmptyArrays,
+             const boost::optional<FieldPath>& indexPath);
     /** Reset the unwinder to unwind a new document. */
-    virtual void resetDocument(const Document& document) = 0;
+    void resetDocument(const Document& document);
 
     /**
-     * Produces the next document unwound from the document provided to resetDocument().
+     * @return the next document unwound from the document provided to resetDocument(), using
+     * the current value in the array located at the provided unwindPath.
      *
-     * Returns EOF if there are no more results for the current document.
+     * Returns boost::none if the array is exhausted.
      */
-    virtual DocumentSource::GetNextResult getNext() = 0;
-};
-
-/** Helper class to unwind array from a single document. */
-class DocumentSourceUnwind::StandardUnwinder : public DocumentSourceUnwind::Unwinder {
-public:
-    StandardUnwinder(const FieldPath& unwindPath,
-                     bool preserveNullAndEmptyArrays,
-                     const boost::optional<FieldPath>& indexPath);
-    /** Reset the unwinder to unwind a new document. */
-    void resetDocument(const Document& document) override;
-
-    /**
-     * @return the next document unwound from the document provided to resetDocument().
-     */
-    DocumentSource::GetNextResult getNext() override;
+    DocumentSource::GetNextResult getNext();
 
 private:
     // Tracks whether or not we can possibly return any more documents. Note we may return
@@ -99,15 +87,14 @@ private:
     size_t _index;
 };
 
-DocumentSourceUnwind::StandardUnwinder::StandardUnwinder(
-    const FieldPath& unwindPath,
-    bool preserveNullAndEmptyArrays,
-    const boost::optional<FieldPath>& indexPath)
+DocumentSourceUnwind::Unwinder::Unwinder(const FieldPath& unwindPath,
+                                         bool preserveNullAndEmptyArrays,
+                                         const boost::optional<FieldPath>& indexPath)
     : _unwindPath(unwindPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
       _indexPath(indexPath) {}
 
-void DocumentSourceUnwind::StandardUnwinder::resetDocument(const Document& document) {
+void DocumentSourceUnwind::Unwinder::resetDocument(const Document& document) {
     // Reset document specific attributes.
     _output.reset(document);
     _unwindPathFieldIndexes.clear();
@@ -116,7 +103,7 @@ void DocumentSourceUnwind::StandardUnwinder::resetDocument(const Document& docum
     _haveNext = true;
 }
 
-DocumentSource::GetNextResult DocumentSourceUnwind::StandardUnwinder::getNext() {
+DocumentSource::GetNextResult DocumentSourceUnwind::Unwinder::getNext() {
     // WARNING: Any functional changes to this method must also be implemented in the unwinding
     // implementation of the $lookup stage.
     if (!_haveNext) {
@@ -169,146 +156,15 @@ DocumentSource::GetNextResult DocumentSourceUnwind::StandardUnwinder::getNext() 
     return _haveNext ? _output.peek() : _output.freeze();
 }
 
-class DocumentSourceUnwind::NestedUnwinder : public DocumentSourceUnwind::Unwinder {
-public:
-    NestedUnwinder(const FieldPath& unwindPath,
-                   bool preserveNullAndEmptyArrays,
-                   const boost::optional<FieldPath>& indexPath) {
-        _children.reserve(unwindPath.getPathLength());
-
-        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a',
-        // 'a.b' and 'a.b.c'.
-        std::string pathPrefix;
-        pathPrefix.reserve(unwindPath.getPathLength());
-        for (size_t i = 0; i < unwindPath.getPathLength(); ++i) {
-            StringData field = unwindPath.getFieldName(i);
-            if (!pathPrefix.empty()) {
-                pathPrefix += '.';
-            }
-            pathPrefix.insert(pathPrefix.end(), field.begin(), field.end());
-            _children.push_back(std::make_unique<StandardUnwinder>(
-                FieldPath(pathPrefix), preserveNullAndEmptyArrays, indexPath));
-        }
-    }
-
-    /** Reset the unwinder to unwind a new document. */
-    void resetDocument(const Document& document) override {
-        // There should be no more documents anywhere in this mini pipeline.
-        for (auto&& child : _children) {
-            invariant(child->getNext().isEOF());
-        }
-
-        // Set the very first child to look at this document.
-        _children.front()->resetDocument(document);
-    }
-
-    /**
-     * Return the next document unwound from the last child unwinder. If the last child unwinder
-     * has no results, will feed results from earlier children forward until a result is available
-     * (or EOF is returned).
-     */
-    DocumentSource::GetNextResult getNext() override {
-        if (auto res = _children.back()->getNext(); !res.isEOF()) {
-            return res;
-        }
-
-        // 1 = forward, -1 = backward.
-        int direction = -1;
-        size_t index = _children.size() - 1;
-        boost::optional<Document> currentDocument;
-        while (1) {
-            if (direction > 0) {
-                invariant(currentDocument);
-
-                // We are moving towards the back of the pipeline, feeding documents from stage i
-                // to stage i + 1.
-                while (index < _children.size()) {
-                    _children[index]->resetDocument(*currentDocument);
-                    GetNextResult res = _children[index]->getNext();
-
-                    if (res.isEOF()) {
-                        // This stage 'consumed' its document. We have to go back and find
-                        // an unwinder which has results that we can pass forward.
-                        direction = -1;
-                        currentDocument = boost::none;
-                        break;
-                    }
-                    invariant(res.isAdvanced());
-
-                    if (index == _children.size() - 1) {
-                        // The last child had a result.
-                        return res;
-                    }
-
-                    currentDocument.emplace(res.getDocument());
-                    ++index;
-                }
-            } else {
-                invariant(direction == -1);
-                invariant(!currentDocument);
-                // Starting from 'index', go backwards and find an unwinder which has results
-                // ready.
-                auto indexAndResult = findLastNonEof(index);
-                index = indexAndResult.first;
-                GetNextResult next = indexAndResult.second;
-
-                if (next.isEOF()) {
-                    invariant(index == 0);
-                    return next;
-                }
-                invariant(next.isAdvanced());
-
-                // We should never have walked backwards if the last child unwinder has a non-eof.
-                invariant(index < _children.size() - 1);
-                currentDocument.emplace(next.getDocument());
-
-                // Next iteration, we move forward, and pass this document to the next unwinder.
-                direction = 1;
-                ++index;
-            }
-        }
-
-        MONGO_UNREACHABLE;
-    }
-
-private:
-    std::vector<std::unique_ptr<StandardUnwinder>> _children;
-
-    /**
-     * Starting from 'startIndex', walk backwards and find the last unwinder in '_children' which
-     * produces a non-EOF value. If all of the unwinders produce EOF, then EOF is returned.
-     *
-     * Returns a pair <index into '_children', GetNextResult from the child>.
-     */
-    std::pair<size_t, DocumentSource::GetNextResult> findLastNonEof(size_t startIndex) {
-        for (; startIndex-- != 0;) {
-            auto next = _children[startIndex]->getNext();
-            if (!next.isEOF()) {
-                return std::make_pair(startIndex, next);
-            }
-        }
-
-        // We got to the beginning of the array, and did not find a non-eof value.
-        return std::make_pair(0, DocumentSource::GetNextResult::makeEOF());
-    }
-};
-
 DocumentSourceUnwind::DocumentSourceUnwind(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                            const FieldPath& fieldPath,
                                            bool preserveNullAndEmptyArrays,
-                                           const boost::optional<FieldPath>& indexPath,
-                                           bool nested)
+                                           const boost::optional<FieldPath>& indexPath)
     : DocumentSource(pExpCtx),
       _unwindPath(fieldPath),
       _preserveNullAndEmptyArrays(preserveNullAndEmptyArrays),
       _indexPath(indexPath),
-      _nested(nested) {
-    if (nested) {
-        _unwinder.reset(new NestedUnwinder(fieldPath, preserveNullAndEmptyArrays, indexPath));
-    } else {
-        _unwinder.reset(new StandardUnwinder(fieldPath, preserveNullAndEmptyArrays, indexPath));
-    }
-}
+      _unwinder(new Unwinder(fieldPath, preserveNullAndEmptyArrays, indexPath)) {}
 
 REGISTER_DOCUMENT_SOURCE(unwind,
                          LiteParsedDocumentSourceDefault::parse,
@@ -322,14 +178,12 @@ intrusive_ptr<DocumentSourceUnwind> DocumentSourceUnwind::create(
     const intrusive_ptr<ExpressionContext>& expCtx,
     const string& unwindPath,
     bool preserveNullAndEmptyArrays,
-    const boost::optional<string>& indexPath,
-    bool nested) {
+    const boost::optional<string>& indexPath) {
     intrusive_ptr<DocumentSourceUnwind> source(
         new DocumentSourceUnwind(expCtx,
                                  FieldPath(unwindPath),
                                  preserveNullAndEmptyArrays,
-                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>(),
-                                 nested));
+                                 indexPath ? FieldPath(*indexPath) : boost::optional<FieldPath>()));
     return source;
 }
 
@@ -354,8 +208,6 @@ DocumentSource::GetNextResult DocumentSourceUnwind::getNext() {
 }
 
 DocumentSource::GetModPathsReturn DocumentSourceUnwind::getModifiedPaths() const {
-    // TODO: If the 'nested' option is used, the modified paths will be all subpaths of _unwindPath.
-
     std::set<std::string> modifiedFields{_unwindPath.fullPath()};
     if (_indexPath) {
         modifiedFields.insert(_indexPath->fullPath());
@@ -372,21 +224,18 @@ Value DocumentSourceUnwind::serialize(boost::optional<ExplainOptions::Verbosity>
 }
 
 DepsTracker::State DocumentSourceUnwind::getDependencies(DepsTracker* deps) const {
-    // TODO: If nested option is used, this should really be all of the subpaths of _unwindPath.
-    // TODO: Think about this.
-
     deps->fields.insert(_unwindPath.fullPath());
     return DepsTracker::State::SEE_NEXT;
 }
 
-intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
+std::list<intrusive_ptr<DocumentSource>> DocumentSourceUnwind::createFromBson(
     BSONElement elem, const intrusive_ptr<ExpressionContext>& pExpCtx) {
     // $unwind accepts either the legacy "{$unwind: '$path'}" syntax, or a nested document with
     // extra options.
     string prefixedPathString;
     bool preserveNullAndEmptyArrays = false;
-    bool nested = false;
     boost::optional<string> indexPath;
+    bool nested = false;
     if (elem.type() == Object) {
         for (auto&& subElem : elem.Obj()) {
             if (subElem.fieldNameStringData() == "path") {
@@ -443,7 +292,29 @@ intrusive_ptr<DocumentSource> DocumentSourceUnwind::createFromBson(
                           << prefixedPathString,
             prefixedPathString[0] == '$');
     string pathString(Expression::removeFieldPrefix(prefixedPathString));
-    return DocumentSourceUnwind::create(
-        pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath, nested);
+
+    if (nested) {
+        std::list<intrusive_ptr<DocumentSource>> res;
+
+        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a',
+        // 'a.b' and 'a.b.c'.
+        std::string pathPrefix;
+        FieldPath unwindPath(pathString);
+        pathPrefix.reserve(unwindPath.getPathLength());
+        for (size_t i = 0; i < unwindPath.getPathLength(); ++i) {
+            StringData field = unwindPath.getFieldName(i);
+            if (!pathPrefix.empty()) {
+                pathPrefix += '.';
+            }
+            pathPrefix.insert(pathPrefix.end(), field.begin(), field.end());
+            res.emplace_back(DocumentSourceUnwind::create(
+                pExpCtx, pathPrefix, preserveNullAndEmptyArrays, indexPath));
+        }
+
+        return res;
+    }
+
+    return {
+        DocumentSourceUnwind::create(pExpCtx, pathString, preserveNullAndEmptyArrays, indexPath)};
 }
 }  // namespace mongo

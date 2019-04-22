@@ -62,9 +62,12 @@ using std::vector;
 static const char* const ns = "unittests.document_source_group_tests";
 
 /**
- * Fixture for testing execution of the $unwind stage. Note this cannot inherit from
+ * Fixture for testing execution of a single $unwind stage. Note this cannot inherit from
  * AggregationContextFixture, since that inherits from unittest::Test, and this fixture is still
  * being used for old-style tests manually added to the suite below.
+ *
+ * Tests for the 'nested' option, which results in several $unwind stages should be performed
+ * separately.
  */
 class CheckResultsBase {
 public:
@@ -153,8 +156,9 @@ private:
      */
     void createSimpleUnwind() {
         auto specObj = BSON("$unwind" << unwindFieldPath());
-        _unwind = static_cast<DocumentSourceUnwind*>(
-            DocumentSourceUnwind::createFromBson(specObj.firstElement(), ctx()).get());
+        auto res = DocumentSourceUnwind::createFromBson(specObj.firstElement(), ctx());
+        invariant(res.size() == 1);
+        _unwind = res.front();
         checkBsonRepresentation(false, false);
     }
 
@@ -164,11 +168,11 @@ private:
     void createUnwind(bool preserveNullAndEmptyArrays, bool includeArrayIndex) {
         auto specObj =
             DOC("$unwind" << DOC("path" << unwindFieldPath() << "preserveNullAndEmptyArrays"
-                                        << preserveNullAndEmptyArrays
-                                        << "includeArrayIndex"
+                                        << preserveNullAndEmptyArrays << "includeArrayIndex"
                                         << (includeArrayIndex ? Value(indexPath()) : Value())));
-        _unwind = static_cast<DocumentSourceUnwind*>(
-            DocumentSourceUnwind::createFromBson(specObj.toBson().firstElement(), ctx()).get());
+        auto res = DocumentSourceUnwind::createFromBson(specObj.toBson().firstElement(), ctx());
+        invariant(res.size() == 1);
+        _unwind = res.front();
         checkBsonRepresentation(preserveNullAndEmptyArrays, includeArrayIndex);
     }
 
@@ -251,7 +255,7 @@ private:
     unique_ptr<QueryTestServiceContext> _queryServiceContext;
     ServiceContext::UniqueOperationContext _opCtx;
     intrusive_ptr<ExpressionContextForTest> _ctx;
-    intrusive_ptr<DocumentSourceUnwind> _unwind;
+    intrusive_ptr<DocumentSource> _unwind;
 };
 
 /** An empty collection produces no results. */
@@ -475,8 +479,9 @@ class SeveralMoreDocuments : public CheckResultsBase {
     deque<DocumentSource::GetNextResult> inputData() override {
         return {DOC("_id" << 0 << "a" << BSONNULL),
                 DOC("_id" << 1),
-                DOC("_id" << 2 << "a" << DOC_ARRAY("a"_sd
-                                                   << "b"_sd)),
+                DOC("_id" << 2 << "a"
+                          << DOC_ARRAY("a"_sd
+                                       << "b"_sd)),
                 DOC("_id" << 3),
                 DOC("_id" << 4 << "a" << DOC_ARRAY(1 << 2 << 3)),
                 DOC("_id" << 5 << "a" << DOC_ARRAY(4 << 5 << 6)),
@@ -662,58 +667,22 @@ class IncludeArrayIndexWithinUnwindPath : public CheckResultsBase {
 };
 
 /**
- * New-style fixture for testing the $unwind stage. Provides access to an ExpressionContext which
- * can be used to construct DocumentSourceUnwind.
+ * New-style fixture for testing a single $unwind stage. Provides access to an ExpressionContext
+ * which can be used to construct DocumentSourceUnwind.
  */
 class UnwindStageTest : public AggregationContextFixture {
 public:
     intrusive_ptr<DocumentSource> createUnwind(BSONObj spec) {
         auto specElem = spec.firstElement();
-        return DocumentSourceUnwind::createFromBson(specElem, getExpCtx());
-    }
-
-    bool resultsMatch(const boost::intrusive_ptr<DocumentSource>& source,
-                      const vector<DocumentSource::GetNextResult>& input,
-                      const vector<DocumentSource::GetNextResult>& expectedOut) {
-        auto mockSource = DocumentSourceMock::create(
-            std::deque<DocumentSource::GetNextResult>(input.begin(), input.end()));
-
-        source->setSource(mockSource.get());
-
-        for (auto&& expected : expectedOut) {
-            const auto res = source->getNext();
-
-            if (expected.getStatus() != res.getStatus()) {
-                log() << "expected status " << static_cast<int>(expected.getStatus()) << " but got "
-                      << static_cast<int>(res.getStatus());
-                return false;
-            }
-
-            if (expected.isAdvanced()) {
-                DocumentComparator comp;
-                if (comp.evaluate(expected.getDocument() != res.getDocument())) {
-                    log() << "expected " << expected.getDocument() << " got " << res.getDocument();
-                    return false;
-                }
-            }
-        }
-
-        const auto next = source->getNext();
-        if (!next.isEOF()) {
-            log() << "expected eof, but instead got status " << static_cast<int>(next.getStatus());
-            if (next.isAdvanced()) {
-                log() << "value was " << next.getDocument();
-            }
-            return false;
-        }
-        return true;
+        auto res = DocumentSourceUnwind::createFromBson(specElem, getExpCtx());
+        invariant(res.size() == 1);
+        return res.front();
     }
 };
 
 TEST_F(UnwindStageTest, AddsUnwoundPathToDependencies) {
-    const bool nested = false;
-    auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "x.y.z", false, boost::optional<string>("index"), nested);
+    auto unwind =
+        DocumentSourceUnwind::create(getExpCtx(), "x.y.z", false, boost::optional<string>("index"));
     DepsTracker dependencies;
     ASSERT_EQUALS(DepsTracker::State::SEE_NEXT, unwind->getDependencies(&dependencies));
     ASSERT_EQUALS(1U, dependencies.fields.size());
@@ -724,10 +693,9 @@ TEST_F(UnwindStageTest, AddsUnwoundPathToDependencies) {
 
 TEST_F(UnwindStageTest, ShouldPropagatePauses) {
     const bool includeNullIfEmptyOrMissing = false;
-    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
     auto source =
         DocumentSourceMock::create({Document{{"array", vector<Value>{Value(1), Value(2)}}},
                                     DocumentSource::GetNextResult::makePauseExecution(),
@@ -749,10 +717,9 @@ TEST_F(UnwindStageTest, ShouldPropagatePauses) {
 
 TEST_F(UnwindStageTest, UnwindOnlyModifiesUnwoundPathWhenNotIncludingIndex) {
     const bool includeNullIfEmptyOrMissing = false;
-    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = boost::none;
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
 
     auto modifiedPaths = unwind->getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -762,10 +729,9 @@ TEST_F(UnwindStageTest, UnwindOnlyModifiesUnwoundPathWhenNotIncludingIndex) {
 
 TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
     const bool includeNullIfEmptyOrMissing = false;
-    const bool nested = false;
     const boost::optional<std::string> includeArrayIndex = std::string("arrIndex");
     auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+        getExpCtx(), "array", includeNullIfEmptyOrMissing, includeArrayIndex);
 
     auto modifiedPaths = unwind->getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -774,71 +740,111 @@ TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
     ASSERT_EQUALS(1U, modifiedPaths.paths.count("arrIndex"));
 }
 
-TEST_F(UnwindStageTest, UnwindNestedOptionBasic) {
-    const bool includeNullIfEmptyOrMissing = false;
-    const bool nested = true;
-    const boost::optional<std::string> includeArrayIndex = boost::none;
-    auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+/**
+ * New-style fixture for testing a single $unwind stage. Provides access to an ExpressionContext
+ * which can be used to construct DocumentSourceUnwind.
+ */
+class UnwindStageNestedTest : public AggregationContextFixture {
+public:
+    std::unique_ptr<Pipeline, PipelineDeleter> createNestedUnwind(
+        const std::string& path,
+        bool preserveNullAndEmptyArrays,
+        boost::optional<std::string> arrayIndexPath) {
+        auto specObj =
+            DOC("$unwind" << DOC("path" << path << "preserveNullAndEmptyArrays"
+                                        << preserveNullAndEmptyArrays << "includeArrayIndex"
+                                        << (arrayIndexPath ? Value(*arrayIndexPath) : Value())
+                                        << "nested" << true));
+        auto res =
+            DocumentSourceUnwind::createFromBson(specObj.toBson().firstElement(), getExpCtx());
+        return uassertStatusOK(Pipeline::create(res, getExpCtx()));
+    }
 
-    ASSERT_TRUE(resultsMatch(unwind,
+    bool resultsMatch(Pipeline* unwindPipeline,
+                      const vector<DocumentSource::GetNextResult>& input,
+                      const vector<Document>& expectedOut) {
+        auto mockSource = DocumentSourceMock::create(
+            std::deque<DocumentSource::GetNextResult>(input.begin(), input.end()));
+
+        unwindPipeline->peekFront()->setSource(mockSource.get());
+
+        for (auto&& expected : expectedOut) {
+            const auto res = unwindPipeline->getNext();
+
+            if (res == boost::none) {
+                log() << "Expected document " << expected << " got none";
+                return false;
+            }
+
+            DocumentComparator comp;
+            if (comp.evaluate(expected != *res)) {
+                log() << "expected " << expected << " got " << *res;
+                return false;
+            }
+        }
+
+        const auto next = unwindPipeline->getNext();
+        if (next) {
+            log() << "expected eof, but instead got document " << *next;
+            return false;
+        }
+        return true;
+    }
+};
+
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionBasic) {
+    auto pipeline = createNestedUnwind("$a.b.c", false, boost::none);
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
                              {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: [3]}}]}")}},
                              {Document{fromjson("{a: {b: {c: 1}}}")},
                               Document{fromjson("{a: {b: {c: 2}}}")},
                               Document{fromjson("{a: {b: {c: 3}}}")}}));
 }
 
-TEST_F(UnwindStageTest, UnwindNestedOptionLeafNodeAtSubPath) {
-    const bool preserveNullAndEmpty = false;
-    const bool nested = true;
-    const boost::optional<std::string> includeArrayIndex = boost::none;
-    auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "a.b.c", preserveNullAndEmpty, includeArrayIndex, nested);
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionLeafNodeAtSubPath) {
+    auto pipeline = createNestedUnwind("$a.b.c", false, boost::none);
 
     // At "a.b" there is a leaf node. This means that "a.b.c" will be missing for the intermediate
     // document after the "a" and "a.b" unwind, so the result with {b: 3} will be excluded.
     ASSERT_TRUE(resultsMatch(
-        unwind,
+        pipeline.get(),
         {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: 3}]}")}},
         {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
 
     // The {c: null} value will be consumed by the $unwind of "a.b.c".
     ASSERT_TRUE(resultsMatch(
-        unwind,
+        pipeline.get(),
         {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: null}}]}")}},
         {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
 
     // The {c: undefined} value will be consumed by the $unwind of "a.b.c".
     ASSERT_TRUE(resultsMatch(
-        unwind,
+        pipeline.get(),
         {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: undefined}}]}")}},
         {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
 
     // The {c: []} will be consumed by the $unwind of "a.b.c".
     ASSERT_TRUE(resultsMatch(
-        unwind,
+        pipeline.get(),
         {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: []}}]}")}},
         {Document{fromjson("{a: {b: {c: 1}}}")}, Document{fromjson("{a: {b: {c: 2}}}")}}));
 }
 
-TEST_F(UnwindStageTest, UnwindNestedOptionWithPreserveNullLeafNodeAtSubPath) {
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionWithPreserveNullLeafNodeAtSubPath) {
     const bool includeNullIfEmptyOrMissing = true;
-    const bool nested = true;
-    const boost::optional<std::string> includeArrayIndex = boost::none;
-    auto unwind = DocumentSourceUnwind::create(
-        getExpCtx(), "a.b.c", includeNullIfEmptyOrMissing, includeArrayIndex, nested);
+    auto pipeline = createNestedUnwind("$a.b.c", includeNullIfEmptyOrMissing, boost::none);
 
     // At "a.b" there is a leaf node. This means that "a.b.c" will be missing for the intermediate
     // document after the "a" and "a.b" unwind, though the 'includeNullIfEmptyOrMissing' flag will
     // cause the document to be returned.
-    ASSERT_TRUE(resultsMatch(unwind,
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
                              {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: 3}]}")}},
                              {Document{fromjson("{a: {b: {c: 1}}}")},
                               Document{fromjson("{a: {b: {c: 2}}}")},
                               Document{fromjson("{a: {b: 3}}")}}));
 
     // Documents with empty arrays are preserved through $unwind, but the empty array itself is not.
-    ASSERT_TRUE(resultsMatch(unwind,
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
                              {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: []}]}")}},
                              {Document{fromjson("{a: {b: {c: 1}}}")},
                               Document{fromjson("{a: {b: {c: 2}}}")},
@@ -893,8 +899,7 @@ TEST_F(UnwindStageTest, ShouldRejectNonDollarPrefixedPath) {
 TEST_F(UnwindStageTest, ShouldRejectNonBoolPreserveNullAndEmptyArrays) {
     ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
                                                            << "$x"
-                                                           << "preserveNullAndEmptyArrays"
-                                                           << 2))),
+                                                           << "preserveNullAndEmptyArrays" << 2))),
                        AssertionException,
                        28809);
 }
@@ -902,8 +907,7 @@ TEST_F(UnwindStageTest, ShouldRejectNonBoolPreserveNullAndEmptyArrays) {
 TEST_F(UnwindStageTest, ShouldRejectNonStringIncludeArrayIndex) {
     ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
                                                            << "$x"
-                                                           << "includeArrayIndex"
-                                                           << 2))),
+                                                           << "includeArrayIndex" << 2))),
                        AssertionException,
                        28810);
 }
@@ -935,16 +939,13 @@ TEST_F(UnwindStageTest, ShoudlRejectDollarPrefixedIncludeArrayIndex) {
 TEST_F(UnwindStageTest, ShouldRejectUnrecognizedOption) {
     ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
                                                            << "$x"
-                                                           << "preserveNullAndEmptyArrays"
-                                                           << true
-                                                           << "foo"
-                                                           << 3))),
+                                                           << "preserveNullAndEmptyArrays" << true
+                                                           << "foo" << 3))),
                        AssertionException,
                        28811);
     ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
                                                            << "$x"
-                                                           << "foo"
-                                                           << 3))),
+                                                           << "foo" << 3))),
                        AssertionException,
                        28811);
 }
