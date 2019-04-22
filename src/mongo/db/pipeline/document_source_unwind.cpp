@@ -297,7 +297,16 @@ std::list<intrusive_ptr<DocumentSource>> DocumentSourceUnwind::createFromBson(
     if (nested) {
         std::list<intrusive_ptr<DocumentSource>> res;
 
-        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a', 'a.b' and 'a.b.c'.
+        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a', 'a.b' and 'a.b.c', with $match
+        // stages between. That is, a nested $unwind of 'a.b.c' will expand to:
+        // [
+        //     {$unwind: "$a"},
+        //     {$match: {a: {$not: {$type: "array"}}}},
+        //     {$unwind: "$a.b"},
+        //     {$match: {"a.b": {$not: {$type: "array"}}}},
+        //     {$unwind: "$a.b.c"}
+        // ]
+        // See comment below for why the $match stages are included.
         std::string pathPrefix;
         FieldPath unwindPath(pathString);
         pathPrefix.reserve(unwindPath.getPathLength());
