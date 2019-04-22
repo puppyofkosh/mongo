@@ -835,6 +835,11 @@ TEST_F(UnwindStageNestedTest, UnwindNestedOptionDoesNotGoThroughNestedArrays) {
     ASSERT_TRUE(resultsMatch(pipeline.get(),
                              {Document{fromjson("{a: [{b:1}, [{b:'should not be found'}]]}")}},
                              {Document{fromjson("{a: {b: 1}}")}}));
+
+    auto pipelineWithPreserveEmptyAndNull = createNestedUnwind("$a.b", true, boost::none);
+    ASSERT_TRUE(resultsMatch(pipelineWithPreserveEmptyAndNull.get(),
+                             {Document{fromjson("{a: [{b:1}, [{b:'should not be found'}]]}")}},
+                             {Document{fromjson("{a: {b: 1}}")}}));
 }
 
 TEST_F(UnwindStageNestedTest, UnwindNestedOptionLeafNodeAtSubPath) {

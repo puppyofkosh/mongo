@@ -33,6 +33,7 @@
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/pipeline/document.h"
+#include "mongo/db/pipeline/document_source_match.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/lite_parsed_document_source.h"
 #include "mongo/db/pipeline/value.h"
@@ -309,6 +310,22 @@ std::list<intrusive_ptr<DocumentSource>> DocumentSourceUnwind::createFromBson(
             pathPrefix.insert(pathPrefix.end(), field.begin(), field.end());
             res.emplace_back(DocumentSourceUnwind::create(
                 pExpCtx, pathPrefix, preserveNullAndEmptyArrays, indexPath));
+            if (i != unwindPath.getPathLength() - 1) {
+                // TODO: Is this justifiable?
+                // Filter out any remaining arrays under the given path prefix. This is to avoid a
+                // nested $unwind from examining arrays which are directly nested inside of another
+                // array. Elsewhere in the query language, the "rule" for these doubly-nested
+                // arrays is often to treat them as "blobs."
+
+                // We only do this for the path prefixes (and not the full path) so that if we have
+                // a document like {a: {b: [[1, 2]]}} and do a nested $unwind on "a.b", we'll still
+                // get the document {a: {b: [1, 2]}}.
+
+                BSONObj filter = BSON("" << BSON(pathPrefix << BSON("$not" << BSON("$type"
+                                                                                   << "array"))));
+                res.emplace_back(
+                    DocumentSourceMatch::createFromBson(filter.firstElement(), pExpCtx));
+            }
         }
 
         return res;
