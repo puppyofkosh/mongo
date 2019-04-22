@@ -801,6 +801,42 @@ TEST_F(UnwindStageNestedTest, UnwindNestedOptionBasic) {
                               Document{fromjson("{a: {b: {c: 3}}}")}}));
 }
 
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionBasicMultipleInputDocuments) {
+    auto pipeline = createNestedUnwind("$a.b.c", false, boost::none);
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: [3]}}]}")},
+                              Document{fromjson("{a: [{b: {c: [4]}}, {b: [{c: [5]}]}]}")}},
+                             {
+                                 Document{fromjson("{a: {b: {c: 1}}}")},
+                                 Document{fromjson("{a: {b: {c: 2}}}")},
+                                 Document{fromjson("{a: {b: {c: 3}}}")},
+                                 Document{fromjson("{a: {b: {c: 4}}}")},
+                                 Document{fromjson("{a: {b: {c: 5}}}")},
+                             }));
+}
+
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionNestedArrays) {
+    // Check that if there is a document like: {a.b.c: [[1]]}, that the innermost array doesn't get
+    // unwound.
+
+    auto pipeline = createNestedUnwind("$a.b.c", false, boost::none);
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b: {c: [[1], [2]]}}, {b: {c: [[3]]}}]}")}},
+                             {Document{fromjson("{a: {b: {c: [1]}}}")},
+                              Document{fromjson("{a: {b: {c: [2]}}}")},
+                              Document{fromjson("{a: {b: {c: [3]}}}")}}));
+}
+
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionDoesNotGoThroughNestedArrays) {
+    // Check that if there is a document like: {a: [[{b:1}]]}, (note {b:1} is two array-layers
+    // deep) that we don't unwind it when doing a nested unwind of 'a.b'.
+
+    auto pipeline = createNestedUnwind("$a.b", false, boost::none);
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b:1}, [{b:'should not be found'}]]}")}},
+                             {Document{fromjson("{a: {b: 1}}")}}));
+}
+
 TEST_F(UnwindStageNestedTest, UnwindNestedOptionLeafNodeAtSubPath) {
     auto pipeline = createNestedUnwind("$a.b.c", false, boost::none);
 
@@ -850,21 +886,44 @@ TEST_F(UnwindStageNestedTest, UnwindNestedOptionWithPreserveNullLeafNodeAtSubPat
                               Document{fromjson("{a: {b: {c: 2}}}")},
                               Document{fromjson("{a: {}}")}}));
 
-    // TODO: Similar test above but with null and undefined.
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: null}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {b: null}}")}}));
+
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: undefined}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {b: undefined}}")}}));
+
+    ASSERT_TRUE(resultsMatch(pipeline.get(),
+                             {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: {c: null}}]}")}},
+                             {Document{fromjson("{a: {b: {c: 1}}}")},
+                              Document{fromjson("{a: {b: {c: 2}}}")},
+                              Document{fromjson("{a: {b: {c: null}}}")}}));
 }
 
-// TODO: Write a test that includes a 'pause' and be sure it's propagated.
+TEST_F(UnwindStageNestedTest, UnwindNestedOptionWithIncludeArrayIndex) {
+    auto pipeline = createNestedUnwind("$a.b.c", false, boost::optional<std::string>("arrayInd"));
 
-// TODO: Test with multiple input documents
+    // The array index included in the final result should be the index of the array unwound at the
+    // path a.b.c (the last path unwound).
+    ASSERT_TRUE(resultsMatch(
+        pipeline.get(),
+        {Document{fromjson("{a: [{b: {c: [1, 2]}}, {b: [{c: [3]}]}, {b: {c: 'hello'}}]}")}},
+        {
+            Document{fromjson("{a: {b: {c: 1}}, arrayInd: 0}")},
+            Document{fromjson("{a: {b: {c: 2}}, arrayInd: 1}")},
+            Document{fromjson("{a: {b: {c: 3}}, arrayInd: 0}")},
+
+            // 'arrayInd' should be null if the value at 'a.b.c' is a non-array.
+            Document{fromjson("{a: {b: {c: 'hello'}}, arrayInd: null}")},
+        }));
+}
 
 // TODO: Test with mixed schema like: {a: [{b: {<object>}}, {b: [<array>]}]}
-
-// TODO: Test with nested arrays, e.g. {a: [[1,2]]}
-
-// TODO: Update test harness to check that 'nested' option is equivalent to multiple
-// $unwinds chained together.
-
-// TODO: Update dependency analysis. For 'nested' option, the modified path will just be
 
 // TODO tests with the includeArrayIndex option.
 
@@ -935,6 +994,15 @@ TEST_F(UnwindStageTest, ShoudlRejectDollarPrefixedIncludeArrayIndex) {
                        AssertionException,
                        28822);
 }
+
+TEST_F(UnwindStageTest, ShouldRejectNonBoolNested) {
+    ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
+                                                           << "$x"
+                                                           << "nested" << 2))),
+                       AssertionException,
+                       31019);
+}
+
 
 TEST_F(UnwindStageTest, ShouldRejectUnrecognizedOption) {
     ASSERT_THROWS_CODE(createUnwind(BSON("$unwind" << BSON("path"
