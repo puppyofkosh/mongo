@@ -297,8 +297,7 @@ std::list<intrusive_ptr<DocumentSource>> DocumentSourceUnwind::createFromBson(
     if (nested) {
         std::list<intrusive_ptr<DocumentSource>> res;
 
-        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a',
-        // 'a.b' and 'a.b.c'.
+        // Given 'unwindPath' 'a.b.c', build an unwinder for 'a', 'a.b' and 'a.b.c'.
         std::string pathPrefix;
         FieldPath unwindPath(pathString);
         pathPrefix.reserve(unwindPath.getPathLength());

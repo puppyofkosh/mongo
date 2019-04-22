@@ -32,4 +32,9 @@
     assert.eq(unwinds[1].$unwind.path, "$outer.firstInner");
     assert.eq(unwinds[2].$unwind.path, "$outer.firstInner.secondInner");
 
+    const matches = getAggPlanStages(expl, "$match");
+    assert.eq(matches.length, 2);
+    assert.eq(matches[0].$match.hasOwnProperty("outer"), true);
+    assert.eq(matches[1].$match.hasOwnProperty("outer.firstInner"), true);
+
 })();

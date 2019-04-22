@@ -741,8 +741,8 @@ TEST_F(UnwindStageTest, UnwindIncludesIndexPathWhenIncludingIndex) {
 }
 
 /**
- * New-style fixture for testing a single $unwind stage. Provides access to an ExpressionContext
- * which can be used to construct DocumentSourceUnwind.
+ * Fixture for testing 'nested' $unwind stage, which expands into to multiple document
+ * sources.
  */
 class UnwindStageNestedTest : public AggregationContextFixture {
 public:
@@ -780,14 +780,14 @@ public:
 
             DocumentComparator comp;
             if (comp.evaluate(expected != *res)) {
-                log() << "expected " << expected << " got " << *res;
+                log() << "Expected " << expected << " got " << *res;
                 return false;
             }
         }
 
         const auto next = unwindPipeline->getNext();
         if (next) {
-            log() << "expected eof, but instead got document " << *next;
+            log() << "Expected eof, but got document " << *next;
             return false;
         }
         return true;
@@ -929,10 +929,6 @@ TEST_F(UnwindStageNestedTest, UnwindNestedOptionWithIncludeArrayIndex) {
             Document{fromjson("{a: {b: {c: 'hello'}}, arrayInd: null}")},
         }));
 }
-
-// TODO: Test with mixed schema like: {a: [{b: {<object>}}, {b: [<array>]}]}
-
-// TODO tests with the includeArrayIndex option.
 
 //
 // Error cases.
