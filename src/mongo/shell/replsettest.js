@@ -2294,6 +2294,11 @@ var ReplSetTest = function(opts) {
         }
         baseOptions = Object.merge(baseOptions, this.nodeOptions["n" + n]);
         options = Object.merge(baseOptions, options);
+
+        // If the original options had a specific object value for 'setParameter', ensure that we
+        // keep the values set there.
+        options.setParameter = Object.merge(options.setParameter, baseOptions.setParameter);
+
         delete options.rsConfig;
 
         options.restart = options.restart || restart;
@@ -2619,7 +2624,7 @@ var ReplSetTest = function(opts) {
         if (isObject(opts.nodes)) {
             var len = 0;
             for (var i in opts.nodes) {
-                var options = self.nodeOptions["n" + len] =
+                var options = self.nodeOptions["n" + i] =
                     Object.merge(opts.nodeOptions, opts.nodes[i]);
                 if (i.startsWith("a")) {
                     options.arbiter = true;
@@ -2630,6 +2635,7 @@ var ReplSetTest = function(opts) {
 
             numNodes = len;
         } else if (Array.isArray(opts.nodes)) {
+            // TODO: this is dead code
             for (var i = 0; i < opts.nodes.length; i++) {
                 self.nodeOptions["n" + i] = Object.merge(opts.nodeOptions, opts.nodes[i]);
             }

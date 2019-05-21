@@ -1212,7 +1212,8 @@ var ShardingTest = function(params) {
                     rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
                 }
                 rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
-                rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
+                rsDefaults.nodes =
+                    rsDefaults.nodes || otherParams.numReplicas || otherParams["rs" + i].nodes;
             }
 
             if (startShardsAsRS && !(otherParams.rs || otherParams["rs" + i])) {
