@@ -374,14 +374,20 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::makePipelin
     }
 
     if (opts.attachCursorSource) {
-        pipeline = attachCursorSourceToPipeline(expCtx, pipeline.release());
+        pipeline = attachCursorSourceToPipeline(
+            expCtx, pipeline.release(), opts.doLocalReadIfCollectionIsSharded);
+    } else {
+        invariant(!opts.doLocalReadIfCollectionIsSharded);
     }
 
     return pipeline;
 }
 
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceStandalone::attachCursorSourceToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    Pipeline* ownedPipeline,
+    bool doLocalReadIfCollectionIsSharded  // Ignored.
+    ) {
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
                                                         PipelineDeleter(expCtx->opCtx));
 
@@ -439,7 +445,8 @@ boost::optional<Document> MongoInterfaceStandalone::lookupSingleDocument(
     UUID collectionUUID,
     const Document& documentKey,
     boost::optional<BSONObj> readConcern,
-    bool allowSpeculativeMajorityRead) {
+    bool allowSpeculativeMajorityRead,
+    bool doLocalReadIfCollectionIsSharded) {
     invariant(!readConcern);  // We don't currently support a read concern on mongod - it's only
                               // expected to be necessary on mongos.
     invariant(!allowSpeculativeMajorityRead);  // We don't expect 'allowSpeculativeMajorityRead' on
@@ -453,7 +460,10 @@ boost::optional<Document> MongoInterfaceStandalone::lookupSingleDocument(
             nss,
             collectionUUID,
             _getCollectionDefaultCollator(expCtx->opCtx, nss.db(), collectionUUID));
-        pipeline = makePipeline({BSON("$match" << documentKey)}, foreignExpCtx);
+
+        MakePipelineOptions opts;
+        opts.doLocalReadIfCollectionIsSharded = doLocalReadIfCollectionIsSharded;
+        pipeline = makePipeline({BSON("$match" << documentKey)}, foreignExpCtx, opts);
     } catch (const ExceptionFor<ErrorCodes::NamespaceNotFound>&) {
         return boost::none;
     }

@@ -55,7 +55,9 @@ public:
         const MakePipelineOptions opts = MakePipelineOptions{}) final;
 
     std::unique_ptr<Pipeline, PipelineDeleter> attachCursorSourceToPipeline(
-        const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) final;
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        Pipeline* ownedPipeline,
+        bool doLocalReadIfCollectionIsSharded) final;
 
     boost::optional<Document> lookupSingleDocument(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -63,7 +65,8 @@ public:
         UUID collectionUUID,
         const Document& documentKey,
         boost::optional<BSONObj> readConcern,
-        bool allowSpeculativeMajorityRead);
+        bool allowSpeculativeMajorityRead,
+        bool doLocalReadIfCollectionIsSharded) override;
 
 private:
     std::deque<DocumentSource::GetNextResult> _mockResults;

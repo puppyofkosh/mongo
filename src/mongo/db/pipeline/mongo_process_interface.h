@@ -87,6 +87,16 @@ public:
 
         bool optimize = true;
         bool attachCursorSource = true;
+
+        // Only meaningful when 'attachCursorSource' is 'true'.
+        //
+        // Normally if we try to build a pipeline for a sharded collection, we throw, because
+        // sharded $lookup is not allowed.
+        //
+        // However, if this option is set to true, instead of throwing, we will perform a local
+        // read, as if the collection were unsharded. This is _only_ makes sense when the caller is
+        // okay with getting results back from just the shard being queried.
+        bool doLocalReadIfCollectionIsSharded = false;
     };
 
     virtual ~MongoProcessInterface(){};
@@ -228,7 +238,9 @@ public:
      * compiler expects to find an implementation of PipelineDeleter.
      */
     virtual std::unique_ptr<Pipeline, PipelineDeleter> attachCursorSourceToPipeline(
-        const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* pipeline) = 0;
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        Pipeline* pipeline,
+        bool doLocalReadIfCollectionIsSharded) = 0;
 
     /**
      * Returns a vector of owned BSONObjs, each of which contains details of an in-progress
@@ -284,7 +296,8 @@ public:
         UUID,
         const Document& documentKey,
         boost::optional<BSONObj> readConcern,
-        bool allowSpeculativeMajorityRead = false) = 0;
+        bool allowSpeculativeMajorityRead = false,
+        bool doLocalReadIfCollectionIsSharded = false) = 0;
 
     /**
      * Returns a vector of all idle (non-pinned) local cursors.

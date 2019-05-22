@@ -310,8 +310,8 @@ std::unique_ptr<Pipeline, PipelineDeleter> DocumentSourceLookUp::buildPipeline(
 
     if (!_cache->isServing()) {
         // The cache has either been abandoned or has not yet been built. Attach a cursor.
-        pipeline = pExpCtx->mongoProcessInterface->attachCursorSourceToPipeline(_fromExpCtx,
-                                                                                pipeline.release());
+        pipeline = pExpCtx->mongoProcessInterface->attachCursorSourceToPipeline(
+            _fromExpCtx, pipeline.release(), false);
     }
 
     // If the cache has been abandoned, release it.

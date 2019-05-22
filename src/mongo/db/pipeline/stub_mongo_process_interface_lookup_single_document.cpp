@@ -49,7 +49,8 @@ StubMongoProcessInterfaceLookupSingleDocument::makePipeline(
     }
 
     if (opts.attachCursorSource) {
-        pipeline = attachCursorSourceToPipeline(expCtx, pipeline.release());
+        pipeline = attachCursorSourceToPipeline(
+            expCtx, pipeline.release(), opts.doLocalReadIfCollectionIsSharded);
     }
 
     return pipeline;
@@ -57,7 +58,9 @@ StubMongoProcessInterfaceLookupSingleDocument::makePipeline(
 
 std::unique_ptr<Pipeline, PipelineDeleter>
 StubMongoProcessInterfaceLookupSingleDocument::attachCursorSourceToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    Pipeline* ownedPipeline,
+    bool doLocalReadIfCollectionIsSharded) {
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
                                                         PipelineDeleter(expCtx->opCtx));
     pipeline->addInitialSource(DocumentSourceMock::createForTest(_mockResults));
@@ -70,7 +73,8 @@ boost::optional<Document> StubMongoProcessInterfaceLookupSingleDocument::lookupS
     UUID collectionUUID,
     const Document& documentKey,
     boost::optional<BSONObj> readConcern,
-    bool allowSpeculativeMajorityRead) {
+    bool allowSpeculativeMajorityRead,
+    bool doLocalReadIfCollectionIsSharded) {
     // The namespace 'nss' may be different than the namespace on the ExpressionContext in the
     // case of a change stream on a whole database so we need to make a copy of the
     // ExpressionContext with the new namespace.

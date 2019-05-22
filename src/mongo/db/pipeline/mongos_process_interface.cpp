@@ -130,15 +130,20 @@ std::unique_ptr<Pipeline, PipelineDeleter> MongoSInterface::makePipeline(
         pipeline->optimizePipeline();
     }
     if (pipelineOptions.attachCursorSource) {
+        // This option does not make sense on a mongos.
+        invariant(!pipelineOptions.doLocalReadIfCollectionIsSharded);
+
         // 'attachCursorSourceToPipeline' handles any complexity related to sharding.
-        pipeline = attachCursorSourceToPipeline(expCtx, pipeline.release());
+        pipeline = attachCursorSourceToPipeline(expCtx, pipeline.release(), false);
     }
 
     return pipeline;
 }
 
 std::unique_ptr<Pipeline, PipelineDeleter> MongoSInterface::attachCursorSourceToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    Pipeline* ownedPipeline,
+    bool doLocalReadIfCollectionIsSharded) {
     return sharded_agg_helpers::targetShardsAndAddMergeCursors(expCtx, ownedPipeline);
 }
 
@@ -148,7 +153,11 @@ boost::optional<Document> MongoSInterface::lookupSingleDocument(
     UUID collectionUUID,
     const Document& filter,
     boost::optional<BSONObj> readConcern,
-    bool allowSpeculativeMajorityRead) {
+    bool allowSpeculativeMajorityRead,
+    bool doLocalReadIfCollectionIsSharded) {
+    // This option does not make sense on mongos.
+    invariant(!doLocalReadIfCollectionIsSharded);
+
     auto foreignExpCtx = expCtx->copyWith(nss, collectionUUID);
 
     // Create the find command to be dispatched to the shard in order to return the post-change

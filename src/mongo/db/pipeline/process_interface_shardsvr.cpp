@@ -158,7 +158,9 @@ void MongoInterfaceShardServer::update(const boost::intrusive_ptr<ExpressionCont
 }
 
 unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceShardServer::attachCursorSourceToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* ownedPipeline) {
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    Pipeline* ownedPipeline,
+    bool doLocalReadIfCollectionIsSharded) {
     std::unique_ptr<Pipeline, PipelineDeleter> pipeline(ownedPipeline,
                                                         PipelineDeleter(expCtx->opCtx));
 
@@ -186,7 +188,7 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceShardServer::attachCursorSou
             nullptr;
     }();
 
-    if (isSharded) {
+    if (!doLocalReadIfCollectionIsSharded && isSharded) {
         const bool foreignShardedAllowed =
             getTestCommandsEnabled() && internalQueryAllowShardedLookup.load();
         if (foreignShardedAllowed) {
@@ -203,7 +205,8 @@ unique_ptr<Pipeline, PipelineDeleter> MongoInterfaceShardServer::attachCursorSou
     // this function, to be sure the collection didn't become sharded between the time we checked
     // whether it's sharded and the time we took the lock.
 
-    return MongoInterfaceStandalone::attachCursorSourceToPipeline(expCtx, pipeline.release());
+    return MongoInterfaceStandalone::attachCursorSourceToPipeline(
+        expCtx, pipeline.release(), doLocalReadIfCollectionIsSharded);
 }
 
 }  // namespace mongo

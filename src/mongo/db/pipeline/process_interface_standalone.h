@@ -102,7 +102,9 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
         const MakePipelineOptions opts = MakePipelineOptions{}) final;
     std::unique_ptr<Pipeline, PipelineDeleter> attachCursorSourceToPipeline(
-        const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* pipeline) override;
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        Pipeline* pipeline,
+        bool doLocalReadIfCollectionIsSharded) override;
     std::string getShardName(OperationContext* opCtx) const final;
     std::pair<std::vector<FieldPath>, bool> collectDocumentKeyFieldsForHostedCollection(
         OperationContext* opCtx, const NamespaceString&, UUID) const override;
@@ -114,7 +116,8 @@ public:
         UUID collectionUUID,
         const Document& documentKey,
         boost::optional<BSONObj> readConcern,
-        bool allowSpeculativeMajorityRead = false) final;
+        bool allowSpeculativeMajorityRead = false,
+        bool doLocalReadIfCollectionIsSharded = false) final;
     std::vector<GenericCursor> getIdleCursors(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                               CurrentOpUserMode userMode) const final;
     BackupCursorState openBackupCursor(OperationContext* opCtx) final;

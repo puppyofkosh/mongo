@@ -84,7 +84,8 @@ public:
         UUID collectionUUID,
         const Document& documentKey,
         boost::optional<BSONObj> readConcern,
-        bool allowSpeculativeMajorityRead = false) final;
+        bool allowSpeculativeMajorityRead = false,
+        bool doLocalReadIfCollectionIsSharded = false) final;
 
     std::vector<GenericCursor> getIdleCursors(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                               CurrentOpUserMode userMode) const final;
@@ -168,7 +169,9 @@ public:
     }
 
     std::unique_ptr<Pipeline, PipelineDeleter> attachCursorSourceToPipeline(
-        const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* pipeline) final;
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        Pipeline* pipeline,
+        bool doLocalReadIfCollectionIsSharded) final;
 
     std::string getShardName(OperationContext* opCtx) const final {
         MONGO_UNREACHABLE;
