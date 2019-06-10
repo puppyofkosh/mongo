@@ -795,6 +795,8 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
     if (!ppStatus.isOK()) {
         return ppStatus;
     }
+
+    // TODO: Eventually use the parser for agg projections.
     unique_ptr<ParsedProjection> pp(rawParsedProj);
 
     // ProjectionExec requires the MatchDetails from the query expression when the projection

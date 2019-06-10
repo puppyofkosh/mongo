@@ -148,6 +148,8 @@ PlanStage* buildStages(OperationContext* opCtx,
             if (nullptr == childStage) {
                 return nullptr;
             }
+
+            log() << "ian: projection default";
             return new ProjectionStageDefault(opCtx,
                                               pn->projection,
                                               ws,
@@ -162,6 +164,14 @@ PlanStage* buildStages(OperationContext* opCtx,
             if (nullptr == childStage) {
                 return nullptr;
             }
+            // return new ProjectionStageDefault(opCtx,
+            //                                   pn->projection,
+            //                                   ws,
+            //                                   std::move(childStage),
+            //                                   pn->fullExpression,
+            //                                   cq.getCollator());
+
+            log() << "ian: projection covered";
             return new ProjectionStageCovered(
                 opCtx, pn->projection, ws, std::move(childStage), pn->coveredKeyObj);
         }
@@ -172,7 +182,15 @@ PlanStage* buildStages(OperationContext* opCtx,
             if (nullptr == childStage) {
                 return nullptr;
             }
-            return new ProjectionStageSimple(opCtx, pn->projection, ws, std::move(childStage));
+
+            log() << "ian: projection simple";
+            return new ProjectionStageDefault(opCtx,
+                                              pn->projection,
+                                              ws,
+                                              std::move(childStage),
+                                              pn->fullExpression,
+                                              cq.getCollator());
+            // return new ProjectionStageSimple(opCtx, pn->projection, ws, std::move(childStage));
         }
         case STAGE_LIMIT: {
             const LimitNode* ln = static_cast<const LimitNode*>(root);

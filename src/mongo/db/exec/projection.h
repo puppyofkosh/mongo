@@ -33,6 +33,7 @@
 #include "mongo/db/exec/projection_exec.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression.h"
+#include "mongo/db/pipeline/parsed_aggregation_projection.h"
 #include "mongo/db/record_id.h"
 
 namespace mongo {
@@ -116,7 +117,12 @@ private:
     Status transform(WorkingSetMember* member) const final;
 
     // Fully-general heavy execution object.
-    ProjectionExec _exec;
+    // ProjectionExec _exec;
+    std::unique_ptr<parsed_aggregation_projection::ParsedAggregationProjection> _projExec;
+
+    // TODO: We may have to thread this through some other way.
+    // TODO: Make sure the opCtx on here isn't stale.
+    boost::intrusive_ptr<ExpressionContext> _expCtx;
 };
 
 /**

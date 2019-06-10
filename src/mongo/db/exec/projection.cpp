@@ -39,6 +39,7 @@
 #include "mongo/db/exec/working_set_computed_data.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression.h"
+#include "mongo/db/pipeline/parsed_inclusion_projection.h"
 #include "mongo/db/record_id.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
@@ -200,31 +201,81 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
                                                const MatchExpression& fullExpression,
                                                const CollatorInterface* collator)
     : ProjectionStage(opCtx, projObj, ws, std::move(child), "PROJECTION_DEFAULT"),
-      _exec(opCtx, projObj, &fullExpression, collator) {}
+      _expCtx(new ExpressionContext(opCtx, collator)) {
+
+    log() << "ian: Using parsedAgg projection";
+    _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
+        _expCtx,
+        projObj,
+        parsed_aggregation_projection::ParsedAggregationProjection::ProjectionPolicies{});
+}
 
 Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
     // The default no-fast-path case.
-    if (_exec.needsSortKey() && !member->hasComputed(WSM_SORT_KEY))
-        return Status(ErrorCodes::InternalError,
-                      "sortKey meta-projection requested but no data available");
 
-    if (_exec.returnKey()) {
-        auto keys = _exec.computeReturnKeyProjection(
-            member->hasComputed(WSM_INDEX_KEY) ? indexKey(*member) : BSONObj(),
-            _exec.needsSortKey() ? sortKey(*member) : BSONObj());
-        if (!keys.isOK())
-            return keys.getStatus();
+    // TODO:
+    // if (_exec.needsSortKey() && !member->hasComputed(WSM_SORT_KEY))
+    //     return Status(ErrorCodes::InternalError,
+    //                   "sortKey meta-projection requested but no data available");
 
-        transitionMemberToOwnedObj(keys.getValue(), member);
-        return Status::OK();
+    // TODO:
+    // if (_exec.returnKey()) {
+    //     auto keys = _exec.computeReturnKeyProjection(
+    //         member->hasComputed(WSM_INDEX_KEY) ? indexKey(*member) : BSONObj(),
+    //         _exec.needsSortKey() ? sortKey(*member) : BSONObj());
+    //     if (!keys.isOK())
+    //         return keys.getStatus();
+
+    //     transitionMemberToOwnedObj(keys.getValue(), member);
+    //     return Status::OK();
+    // }
+
+    if (member->hasObj()) {
+        log() << "ian: Using parsedAgg projection";
+        Document doc(member->obj.value());
+
+        Document out = _projExec->applyTransformation(doc);
+        transitionMemberToOwnedObj(out.toBson(), member);
+    } else {
+        // only inclusion projections can be covered.
+        parsed_aggregation_projection::ParsedInclusionProjection* inclusionProj =
+            dynamic_cast<parsed_aggregation_projection::ParsedInclusionProjection*>(
+                _projExec.get());
+        invariant(inclusionProj);
+
+        MutableDocument md;
+
+        // TODO: This is horribly inefficient. We should use the projected fields from the
+        // projection spec.  In find projection, the user is required to write out: each field
+        // name, so the list of projected fields is easy to get. We'll have to write something
+        // similar for agg projection.
+        //
+        // We don't support covering for subfields (e.g. if your index is on a but projection is on
+        // 'a.b' you can't get a covered projection). So it should be sufficient to just list all
+        // of the "leaf node" fields from the projection.
+        //
+        // E.g.
+        // db.c.createIndex({a: 1});
+        // db.c.find({}, {_id: 0, "a.b": 1}).explain()
+        // Still gives collscan
+        //
+        for (auto&& kd : member->keyData) {
+            for (auto&& keyPatternElt : kd.indexKeyPattern) {
+                auto fieldName = keyPatternElt.fieldNameStringData();
+                log() << "kp field name is " << fieldName;
+
+                auto elt =
+                    IndexKeyDatum::getFieldDotted(member->keyData, keyPatternElt.fieldName());
+                invariant(elt);
+                md.setNestedField(fieldName, Value(*elt));
+            }
+        }
+
+        Document doc(md.freeze());
+
+        Document out = _projExec->applyTransformation(doc);
+        transitionMemberToOwnedObj(out.toBson(), member);
     }
-
-    auto projected = provideMetaFieldsAndPerformExec(_exec, *member);
-
-    if (!projected.isOK())
-        return projected.getStatus();
-
-    transitionMemberToOwnedObj(projected.getValue(), member);
 
     return Status::OK();
 }
