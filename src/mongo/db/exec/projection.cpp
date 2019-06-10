@@ -243,6 +243,8 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
                 _projExec.get());
         invariant(inclusionProj);
 
+        DocumentSource::GetModPathsReturn modPaths = inclusionProj->getModifiedPaths();
+
         MutableDocument md;
 
         // TODO: This is horribly inefficient. We should use the projected fields from the
@@ -259,16 +261,10 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
         // db.c.find({}, {_id: 0, "a.b": 1}).explain()
         // Still gives collscan
         //
-        for (auto&& kd : member->keyData) {
-            for (auto&& keyPatternElt : kd.indexKeyPattern) {
-                auto fieldName = keyPatternElt.fieldNameStringData();
-                log() << "kp field name is " << fieldName;
-
-                auto elt =
-                    IndexKeyDatum::getFieldDotted(member->keyData, keyPatternElt.fieldName());
-                invariant(elt);
-                md.setNestedField(fieldName, Value(*elt));
-            }
+        for (auto&& path : modPaths.paths) {
+            auto elt = IndexKeyDatum::getFieldDotted(member->keyData, path);
+            invariant(elt);
+            md.setNestedField(path, Value(*elt));
         }
 
         Document doc(md.freeze());
