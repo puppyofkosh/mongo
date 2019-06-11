@@ -109,8 +109,6 @@ void ParsedInclusionProjection::parse(const BSONObj& spec) {
                 break;
             }
             case BSONType::Object: {
-                std::cout << "ian: elem might be an expression" << elem;
-
                 // This is either an expression, or a nested specification.
                 if (parseObjectAsExpression(fieldName, elem.Obj(), _expCtx->variablesParseState)) {
                     // It was an expression.
@@ -176,7 +174,7 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
         if (objSpec.firstElementFieldNameStringData() == "$elemMatch") {
             BSONObjBuilder bob;
             bob.append(pathToObject, objSpec);
-            BSONObj match = bob.done();
+            BSONObj match = bob.obj();
             //BSONObj obj = objSpec.firstElement().wrap(pathToObject);
 
             std::cout << "ian: parsing elemMatch: " << match << "\n";
@@ -187,7 +185,7 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
             _root->addExpressionForPath(
                 pathToObject,
                 ExpressionInternalFindElemMatch::create(
-                    _expCtx, std::string(pathToObject), match, std::move(matcher)));
+                    _expCtx, std::string(pathToObject), objSpec, match, std::move(matcher)));
         } else {
             // Treat it as a generic agg expression.
             _root->addExpressionForPath(
