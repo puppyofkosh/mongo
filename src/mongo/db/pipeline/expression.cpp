@@ -6150,48 +6150,4 @@ Value ExpressionRegexMatch::evaluate(const Document& root) const {
     return executionState.nullish() ? Value(false) : Value(execute(&executionState) > 0);
 }
 
-
-/* -------------------------- ExpressionInternalFindElemMatch ------------------------------ */
-
-boost::intrusive_ptr<Expression> ExpressionInternalFindElemMatch::create(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const std::string& fp,
-    BSONObj elemMatchObj,
-    std::unique_ptr<MatchExpression> matchExpr) {
-
-    // TODO: this create() is deprecated. Why?
-    auto fieldPathExpr = ExpressionFieldPath::create(expCtx, fp);
-    return new ExpressionInternalFindElemMatch(
-        expCtx, std::move(fieldPathExpr), elemMatchObj, std::move(matchExpr));
-}
-
-Value ExpressionInternalFindElemMatch::evaluate(const Document& root) const {
-    // Apply the elemMatch.
-    Value val = _fieldPathToMatchOn->evaluate(root);
-
-    MatchDetails arrayDetails;
-    arrayDetails.requestElemMatchKey();
-
-    if (!_matchExpr->matchesBSON(root.toBson(), &arrayDetails)) {
-        std::cout << "ian: Document did not match!\n";
-        return Value();
-    }
-
-    if (val.getType() != BSONType::Array) {
-        return val;
-    }
-
-    Value matchingElem = val[arrayDetails.elemMatchKey()];
-    invariant(!matchingElem.missing());
-    return Value(std::vector<Value>{matchingElem});
-}
-
-boost::intrusive_ptr<Expression> ExpressionInternalFindElemMatch::optimize() {
-    return this;
-}
-
-Value ExpressionInternalFindElemMatch::serialize(bool explain) const {
-    MONGO_UNREACHABLE;
-}
-
 }  // namespace mongo

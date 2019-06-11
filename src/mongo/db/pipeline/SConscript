@@ -530,6 +530,19 @@ env.CppUnitTest(
 )
 
 env.Library(
+    target='find_expressions',
+    source=[
+        'find_expressions.cpp'
+    ],
+    LIBDEPS=[
+        'expression',
+        'field_path',
+        '$BUILD_DIR/mongo/db/matcher/expressions',
+    ]
+)
+
+
+env.Library(
     target='parsed_aggregation_projection',
     source=[
         'parsed_aggregation_projection.cpp',
@@ -541,6 +554,7 @@ env.Library(
     LIBDEPS=[
         'expression',
         'field_path',
+        'find_expressions',
         '$BUILD_DIR/mongo/db/matcher/expressions',
     ]
 )

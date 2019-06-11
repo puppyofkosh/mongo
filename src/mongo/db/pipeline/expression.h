@@ -2691,46 +2691,4 @@ public:
 
     using ExpressionRegex::ExpressionRegex;
 };
-
-// TODO: Maybe put this in a header file, maybe ExpressionInternal?
-class ExpressionInternalFindElemMatch final : public Expression {
-public:
-    /**
-     * Creates an ExpressionInternalFindElemMatch.
-     */
-    static boost::intrusive_ptr<Expression> create(const boost::intrusive_ptr<ExpressionContext>&,
-                                                   const std::string& fieldPath,
-                                                   BSONObj elemMatchObj,
-                                                   std::unique_ptr<MatchExpression> matchExpr);
-
-    Value evaluate(const Document& root) const final;
-    boost::intrusive_ptr<Expression> optimize() final;
-    Value serialize(bool explain) const final;
-
-    void acceptVisitor(ExpressionVisitor* visitor) final {
-        // TODO:
-        MONGO_UNREACHABLE;
-        // return visitor->visit(this);
-    }
-
-protected:
-    void _doAddDependencies(DepsTracker* deps) const final {
-        return;
-    }
-
-private:
-    ExpressionInternalFindElemMatch(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                    boost::intrusive_ptr<Expression> fieldPathExpr,
-                                    BSONObj elemMatchObj,
-                                    std::unique_ptr<MatchExpression> matchExpr)
-        : Expression(expCtx, {}),
-          _fieldPathToMatchOn(_children[0]),
-          _elemMatchObj(elemMatchObj),
-          _matchExpr(std::move(matchExpr))
-    {}
-
-    boost::intrusive_ptr<Expression>& _fieldPathToMatchOn; 
-    BSONObj _elemMatchObj;
-    std::unique_ptr<MatchExpression> _matchExpr;
-};
 }

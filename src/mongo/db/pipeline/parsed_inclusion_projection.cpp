@@ -31,6 +31,8 @@
 
 #include "mongo/db/pipeline/parsed_inclusion_projection.h"
 
+#include "mongo/db/pipeline/find_expressions.h"
+
 #include <algorithm>
 
 namespace mongo {
