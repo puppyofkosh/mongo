@@ -203,7 +203,6 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
     : ProjectionStage(opCtx, projObj, ws, std::move(child), "PROJECTION_DEFAULT"),
       _expCtx(new ExpressionContext(opCtx, collator)) {
 
-    log() << "ian: Using parsedAgg projection";
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
         _expCtx,
         projObj,
@@ -231,7 +230,6 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
     // }
 
     if (member->hasObj()) {
-        log() << "ian: Using parsedAgg projection";
         Document doc(member->obj.value());
 
         Document out = _projExec->applyTransformation(doc);

@@ -99,7 +99,7 @@ Value ExpressionInternalFindElemMatch::evaluate(const Document& root) const {
     boost::optional<size_t> optIndex = str::parseUnsignedBase10Integer(arrayDetails.elemMatchKey());
     invariant(optIndex);
     Value matchingElem = val[*optIndex];
-    
+
     std::cout << "matchingElem is " << matchingElem << std::endl;
     invariant(!matchingElem.missing());
     return Value(std::vector<Value>{matchingElem});

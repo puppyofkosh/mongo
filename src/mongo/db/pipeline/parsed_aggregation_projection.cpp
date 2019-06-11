@@ -99,6 +99,7 @@ void ProjectionSpecValidator::validate() {
         uasserted(40177, "specification must have at least one field");
     }
     for (auto&& elem : _rawObj) {
+        std::cout << "ian: parsing elem " << elem << std::endl;
         parseElement(elem, FieldPath(elem.fieldName()));
     }
 }

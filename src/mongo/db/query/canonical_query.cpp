@@ -46,6 +46,67 @@
 namespace mongo {
 namespace {
 
+bool isPositionalOperator(StringData fieldName) {
+    return str::contains(fieldName, ".$") && !str::contains(fieldName, ".$ref") &&
+        !str::contains(fieldName, ".$id") && !str::contains(fieldName, ".$db");
+}
+
+MatchExpression* findPredicateForPath(MatchExpression* me, StringData path) {
+    if (me->getCategory() == MatchExpression::MatchCategory::kLogical) {
+        for (size_t i = 0; i < me->numChildren(); ++i) {
+            MatchExpression* child = findPredicateForPath(me->getChild(i), path);
+            if (child) {
+                return child;
+            }
+        }
+        return nullptr;
+    }
+
+    if (!me->path().rawData()) {
+        // The node is "logical" and has no path.
+        return nullptr;
+    }
+
+    if (me->path().startsWith(path)) {
+        return me;
+    }
+    return nullptr;
+}
+
+// TODO: Eventually this should probably do two passes: the first checks whether there are even any
+// positional projections
+BSONObj desugarProjection(const BSONObj& originalProjection, MatchExpression* me) {
+    BSONObjBuilder bob;
+
+    bool foundPositional = false;
+    for (auto&& elem : originalProjection) {
+        if (!isPositionalOperator(elem.fieldNameStringData())) {
+            bob.append(elem);
+            continue;
+        }
+
+        invariant(!foundPositional);
+        foundPositional = true;
+
+        // In order to be consistent with existing behavior, we actually just find the place before
+        // the '.' (even though you'd think it should be before the ".$").
+        StringData beforePositional = str::before(elem.fieldNameStringData(), ".");
+
+        // Extract the part of the match expression which applies to this field.
+        MatchExpression* meForPath = findPredicateForPath(me, beforePositional);
+
+        {
+            // TODO: Instead of using $elemMatch, make a new expression called $positional which
+            // just takes the entire match expression.
+            BSONObjBuilder subObj(bob.subobjStart(beforePositional));
+            BSONObjBuilder elemMatch(subObj.subobjStart("$elemMatch"));
+            meForPath->serialize(&elemMatch);
+        }
+    }
+
+    return bob.obj();
+}
+
 /**
  * Comparator for MatchExpression nodes.  Returns an integer less than, equal to, or greater
  * than zero if 'lhs' is less than, equal to, or greater than 'rhs', respectively.
@@ -239,8 +300,17 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
     // Validate the projection if there is one.
     if (!_qr->getProj().isEmpty()) {
+        // Desugar the projection.
+        // TODO: Do we have to own this somewhere on the cq?
+        std::cout << "ian: original projection " << _qr->getProj() << std::endl;
+        BSONObj desugaredProj = desugarProjection(_qr->getProj(), _root.get());
+        std::cout << "ian: desugared projection " << desugaredProj << std::endl;
+
+        // Be sure that this projection is used from here out.
+        _qr->setProj(desugaredProj);
+
         ParsedProjection* pp;
-        Status projStatus = ParsedProjection::make(opCtx, _qr->getProj(), _root.get(), &pp);
+        Status projStatus = ParsedProjection::make(opCtx, desugaredProj, _root.get(), &pp);
         if (!projStatus.isOK()) {
             return projStatus;
         }
