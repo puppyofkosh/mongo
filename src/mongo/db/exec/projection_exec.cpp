@@ -87,6 +87,7 @@ ProjectionExec::ProjectionExec(OperationContext* opCtx,
 
                 // Create a MatchExpression for the elemMatch.
                 BSONObj elemMatchObj = e.wrap();
+                std::cout << "ian: We will parse the elemMatch as " << elemMatchObj << std::endl;
                 invariant(elemMatchObj.isOwned());
                 _elemMatchObjs.push_back(elemMatchObj);
                 boost::intrusive_ptr<ExpressionContext> expCtx(
@@ -333,6 +334,11 @@ BSONObj ProjectionExec::addMeta(BSONObjBuilder bob,
 Status ProjectionExec::projectHelper(const BSONObj& in,
                                      BSONObjBuilder* bob,
                                      const MatchDetails* details) const {
+
+    // TODO: To deal with positional projection: add a new internal expression which can be
+    // constructed from MatchDetails and takes a field ref/path. Then we'll have the parser convert
+    // '$' into this.
+    
     const ArrayOpType& arrayOpType = _arrayOpType;
 
     BSONObjIterator it(in);

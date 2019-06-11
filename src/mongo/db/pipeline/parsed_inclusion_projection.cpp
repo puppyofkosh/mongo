@@ -107,6 +107,8 @@ void ParsedInclusionProjection::parse(const BSONObj& spec) {
                 break;
             }
             case BSONType::Object: {
+                std::cout << "ian: elem might be an expression" << elem;
+
                 // This is either an expression, or a nested specification.
                 if (parseObjectAsExpression(fieldName, elem.Obj(), _expCtx->variablesParseState)) {
                     // It was an expression.
@@ -166,8 +168,29 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
         // This is an expression like {$add: [...]}. We have already verified that it has only one
         // field.
         invariant(objSpec.nFields() == 1);
-        _root->addExpressionForPath(
-            pathToObject, Expression::parseExpression(_expCtx, objSpec, variablesParseState));
+
+        // It could be a special find() project expression.
+        // TODO: Add flag for find() projection.
+        if (objSpec.firstElementFieldNameStringData() == "$elemMatch") {
+            BSONObjBuilder bob;
+            bob.append(pathToObject, objSpec);
+            BSONObj match = bob.done();
+            //BSONObj obj = objSpec.firstElement().wrap(pathToObject);
+
+            std::cout << "ian: parsing elemMatch: " << match << "\n";
+
+            std::unique_ptr<MatchExpression> matcher =
+                uassertStatusOK(MatchExpressionParser::parse(match, _expCtx));
+
+            _root->addExpressionForPath(
+                pathToObject,
+                ExpressionInternalFindElemMatch::create(
+                    _expCtx, std::string(pathToObject), match, std::move(matcher)));
+        } else {
+            // Treat it as a generic agg expression.
+            _root->addExpressionForPath(
+                pathToObject, Expression::parseExpression(_expCtx, objSpec, variablesParseState));
+        }
         return true;
     }
     return false;
