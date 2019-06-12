@@ -179,11 +179,14 @@ public:
      * Main entry point for a ParsedAggregationProjection.
      *
      * Throws a AssertionException if 'spec' is an invalid projection specification.
+     * 
+     * 'matchExpression' is only used by the 'find' variant of projection, for positional projection.
      */
     static std::unique_ptr<ParsedAggregationProjection> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
         const BSONObj& spec,
-        ProjectionPolicies policies);
+        ProjectionPolicies policies,
+        const MatchExpression* matchExpression = nullptr);
 
     virtual ~ParsedAggregationProjection() = default;
 

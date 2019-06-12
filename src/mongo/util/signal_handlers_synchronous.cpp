@@ -109,7 +109,7 @@ public:
     }
 
 private:
-    static const size_t maxLogLineSize = 100 * 1000;
+    static const size_t maxLogLineSize = 300 * 1000;
     char _buffer[maxLogLineSize];
 };
 

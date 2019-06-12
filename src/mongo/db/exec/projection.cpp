@@ -206,7 +206,8 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
         _expCtx,
         projObj,
-        parsed_aggregation_projection::ParsedAggregationProjection::ProjectionPolicies{});
+        parsed_aggregation_projection::ParsedAggregationProjection::ProjectionPolicies{},
+        &fullExpression);
 }
 
 Status ProjectionStageDefault::transform(WorkingSetMember* member) const {

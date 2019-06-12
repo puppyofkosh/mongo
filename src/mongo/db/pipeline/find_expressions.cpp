@@ -113,4 +113,56 @@ Value ExpressionInternalFindElemMatch::serialize(bool explain) const {
     MONGO_UNREACHABLE;
 }
 
+/* -------------------------- ExpressionInternalFindPositional ------------------------------ */
+
+boost::intrusive_ptr<Expression> ExpressionInternalFindPositional::create(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const std::string& fp,
+    const MatchExpression* matchExpr) {
+
+    // TODO: this create() is deprecated. Why?
+    auto fieldPathExpr = ExpressionFieldPath::create(expCtx, fp);
+    return new ExpressionInternalFindPositional(expCtx, std::move(fieldPathExpr), matchExpr);
+}
+
+Value ExpressionInternalFindPositional::evaluate(const Document& root) const {
+    MatchDetails details;
+    details.requestElemMatchKey();
+    invariant(_matchExpr);
+
+    invariant(_matchExpr->matchesBSON(root.toBson(), &details));
+
+    // Match existing behavior in find().
+    uassert(ErrorCodes::BadValue,
+            "positional operator '.$' requires correspoding field in query specifier",
+            details.hasElemMatchKey());
+
+    Value val = _fieldPathToMatchOn->evaluate(root);
+    if (val.getType() != BSONType::Array) {
+        return val;
+    }
+
+    // Return an array with the first matching element.
+    boost::optional<size_t> optIndex = str::parseUnsignedBase10Integer(details.elemMatchKey());
+    invariant(optIndex);
+    Value matchingElem = val[*optIndex];
+
+    // Match existing behavior in find().
+    uassert(ErrorCodes::BadValue,
+            "positional operator element mismatch",
+            !matchingElem.missing());
+    
+    std::cout << "matchingElem is " << matchingElem << std::endl;
+    invariant(!matchingElem.missing());
+    return Value(std::vector<Value>{matchingElem});
+}
+
+Value ExpressionInternalFindPositional::serialize(bool explain) const {
+    MONGO_UNREACHABLE;
+}
+
+boost::intrusive_ptr<Expression> ExpressionInternalFindPositional::optimize() {
+    return this;
+}
+
 }  // namespace mongo

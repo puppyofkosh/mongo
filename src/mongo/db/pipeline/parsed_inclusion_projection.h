@@ -91,8 +91,11 @@ protected:
 class ParsedInclusionProjection : public ParsedAggregationProjection {
 public:
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                              ProjectionPolicies policies)
-        : ParsedAggregationProjection(expCtx, policies), _root(new InclusionNode(policies)) {}
+                              ProjectionPolicies policies,
+                              const MatchExpression* precedingMatchingExpression)
+        : ParsedAggregationProjection(expCtx, policies),
+          _root(new InclusionNode(policies)),
+          _precedingMatchExpression(precedingMatchingExpression) {}
 
     TransformerType getType() const final {
         return TransformerType::kInclusionProjection;
@@ -189,6 +192,9 @@ private:
 
     // The InclusionNode tree does most of the execution work once constructed.
     std::unique_ptr<InclusionNode> _root;
+
+    // Only used for 'find' projection features, namely the positional projection '$'.
+    const MatchExpression* _precedingMatchExpression;
 };
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

@@ -46,31 +46,46 @@
 namespace mongo {
 namespace {
 
+bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData matchfield) {
+    if (query->getCategory() == MatchExpression::MatchCategory::kLogical) {
+        for (unsigned int i = 0; i < query->numChildren(); ++i) {
+            if (hasPositionalOperatorMatch(query->getChild(i), matchfield)) {
+                return true;
+            }
+        }
+    } else {
+        StringData queryPath = query->path();
+        // We have to make a distinction between match expressions that are
+        // initialized with an empty field/path name "" and match expressions
+        // for which the path is not meaningful (eg. $where).
+        if (!queryPath.rawData()) {
+            return false;
+        }
+        StringData pathPrefix = str::before(queryPath, '.');
+        return pathPrefix == matchfield;
+    }
+    return false;
+}
+
 bool isPositionalOperator(StringData fieldName) {
     return str::contains(fieldName, ".$") && !str::contains(fieldName, ".$ref") &&
         !str::contains(fieldName, ".$id") && !str::contains(fieldName, ".$db");
 }
 
-MatchExpression* findPredicateForPath(MatchExpression* me, StringData path) {
-    if (me->getCategory() == MatchExpression::MatchCategory::kLogical) {
-        for (size_t i = 0; i < me->numChildren(); ++i) {
-            MatchExpression* child = findPredicateForPath(me->getChild(i), path);
-            if (child) {
-                return child;
-            }
-        }
-        return nullptr;
+void validatePositionalProjection(const std::string& lhs, const MatchExpression* query) {
+    StringData after = str::after(lhs, ".$");
+    if (after.find(".$"_sd) != std::string::npos) {
+        uasserted(ErrorCodes::BadValue,
+                  str::stream() << "Positional projection '" << lhs << "' contains "
+                                << "the positional operator more than once.");
     }
 
-    if (!me->path().rawData()) {
-        // The node is "logical" and has no path.
-        return nullptr;
+    StringData matchfield = str::before(lhs, '.');
+    if (query && !hasPositionalOperatorMatch(query, matchfield)) {
+        uasserted(ErrorCodes::BadValue,
+                  str::stream() << "Positional projection '" << lhs << "' does not "
+                                << "match the query document.");
     }
-
-    if (me->path().startsWith(path)) {
-        return me;
-    }
-    return nullptr;
 }
 
 // TODO: Eventually this should probably do two passes: the first checks whether there are even any
@@ -85,22 +100,23 @@ BSONObj desugarProjection(const BSONObj& originalProjection, MatchExpression* me
             continue;
         }
 
-        invariant(!foundPositional);
+        uassert(ErrorCodes::BadValue,
+                "Cannot specify more than one positional proj. per query.",
+                !foundPositional);
         foundPositional = true;
+
+        validatePositionalProjection(elem.fieldName(), me);
 
         // In order to be consistent with existing behavior, we actually just find the place before
         // the '.' (even though you'd think it should be before the ".$").
-        StringData beforePositional = str::before(elem.fieldNameStringData(), ".");
-
-        // Extract the part of the match expression which applies to this field.
-        MatchExpression* meForPath = findPredicateForPath(me, beforePositional);
+        StringData beforePositional = str::before(elem.fieldNameStringData(), ".$");
 
         {
             // TODO: Instead of using $elemMatch, make a new expression called $positional which
             // just takes the entire match expression.
             BSONObjBuilder subObj(bob.subobjStart(beforePositional));
-            BSONObjBuilder elemMatch(subObj.subobjStart("$elemMatch"));
-            meForPath->serialize(&elemMatch);
+            BSONObjBuilder elemMatch(subObj.subobjStart("$_internalFindPositional"));
+            me->serialize(&elemMatch);
         }
     }
 
@@ -309,6 +325,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         // Be sure that this projection is used from here out.
         _qr->setProj(desugaredProj);
 
+        // TODO: Eventually remove or replace this.
         ParsedProjection* pp;
         Status projStatus = ParsedProjection::make(opCtx, desugaredProj, _root.get(), &pp);
         if (!projStatus.isOK()) {

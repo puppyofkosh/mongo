@@ -175,7 +175,7 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
             BSONObjBuilder bob;
             bob.append(pathToObject, objSpec);
             BSONObj match = bob.obj();
-            //BSONObj obj = objSpec.firstElement().wrap(pathToObject);
+            // BSONObj obj = objSpec.firstElement().wrap(pathToObject);
 
             std::cout << "ian: parsing elemMatch: " << match << "\n";
 
@@ -186,6 +186,12 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
                 pathToObject,
                 ExpressionInternalFindElemMatch::create(
                     _expCtx, std::string(pathToObject), objSpec, match, std::move(matcher)));
+        } else if (objSpec.firstElementFieldNameStringData() == "$_internalFindPositional") {
+            invariant(_precedingMatchExpression);
+            _root->addExpressionForPath(
+                pathToObject,
+                ExpressionInternalFindPositional::create(
+                    _expCtx, std::string(pathToObject), _precedingMatchExpression));
         } else {
             // Treat it as a generic agg expression.
             _root->addExpressionForPath(

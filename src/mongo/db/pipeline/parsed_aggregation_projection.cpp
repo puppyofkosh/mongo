@@ -314,7 +314,8 @@ private:
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const BSONObj& spec,
-    ProjectionPolicies policies) {
+    ProjectionPolicies policies,
+    const MatchExpression* matchExpression) {
     // Check that the specification was valid. Status returned is unspecific because validate()
     // is used by the $addFields stage as well as $project.
     // If there was an error, uassert with a $project-specific message.
@@ -330,7 +331,7 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     std::unique_ptr<ParsedAggregationProjection> parsedProject(
         projectionType == TransformerType::kInclusionProjection
             ? static_cast<ParsedAggregationProjection*>(
-                  new ParsedInclusionProjection(expCtx, policies))
+                  new ParsedInclusionProjection(expCtx, policies, matchExpression))
             : static_cast<ParsedAggregationProjection*>(
                   new ParsedExclusionProjection(expCtx, policies)));
 

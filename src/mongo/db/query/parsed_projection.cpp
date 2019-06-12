@@ -186,6 +186,8 @@ Status ParsedProjection::make(OperationContext* opCtx,
                     requiresDocument = true;
                 }
                 pp->_metaFields.push_back(elem.fieldNameStringData());
+            } else if (e2.fieldNameStringData() == "$_internalFindPositional") {
+                // TODO: We've temporarily allowed this case before I remove ParsedProjection.
             } else {
                 return Status(ErrorCodes::BadValue,
                               string("Unsupported projection option: ") + elem.toString());
