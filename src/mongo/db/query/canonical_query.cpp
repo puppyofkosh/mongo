@@ -37,9 +37,11 @@
 #include "mongo/db/matcher/expression_array.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/db/pipeline/parsed_aggregation_projection.h"
 #include "mongo/db/query/canonical_query_encoder.h"
 #include "mongo/db/query/collation/collator_factory_interface.h"
 #include "mongo/db/query/indexability.h"
+#include "mongo/db/query/logical_projection.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/util/log.h"
 
@@ -323,12 +325,10 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         _qr->setProj(desugaredProj);
 
         // TODO: Eventually remove or replace this with a LogicalProjection.
-        ParsedProjection* pp;
-        Status projStatus = ParsedProjection::make(opCtx, desugaredProj, _root.get(), &pp);
-        if (!projStatus.isOK()) {
-            return projStatus;
-        }
-        _proj.reset(pp);
+        _proj = LogicalProjection::parse(
+            desugaredProj,
+            {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
+             ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {

@@ -40,7 +40,6 @@ namespace mongo {
 class ProjectionExecAgg::ProjectionExecutor {
 public:
     using ParsedAggregationProjection = parsed_aggregation_projection::ParsedAggregationProjection;
-    using ProjectionPolicies = ParsedAggregationProjection::ProjectionPolicies;
 
     using TransformerType = TransformerInterface::TransformerType;
 
@@ -53,7 +52,7 @@ public:
         boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(nullptr, nullptr));
 
         // Create a ProjectionPolicies object, to be populated based on the passed arguments.
-        ParsedAggregationProjection::ProjectionPolicies projectionPolicies;
+        ProjectionPolicies projectionPolicies;
 
         // Default projection behaviour is to include _id if the projection spec omits it. If the
         // caller has specified that we should *exclude* _id by default, do so here. We translate

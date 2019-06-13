@@ -11,6 +11,8 @@
 
     load("jstests/libs/analyze_plan.js");
 
+    assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
+
     let coll = db["projection_dotted_paths"];
     coll.drop();
     assert.commandWorked(coll.createIndex({a: 1, "b.c": 1, "b.d": 1, c: 1}));

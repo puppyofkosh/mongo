@@ -152,7 +152,6 @@ void ProjectionSpecValidator::parseNestedObject(const BSONObj& thisLevelSpec,
 
 namespace {
 
-using ProjectionPolicies = ParsedAggregationProjection::ProjectionPolicies;
 using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 }  // namespace
@@ -167,11 +166,11 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     // If there was an error, uassert with a $project-specific message.
     ProjectionSpecValidator::uassertValid(spec, "$project");
 
-    LogicalProjection lp = LogicalProjection::parse(spec, policies);
+    auto lp = LogicalProjection::parse(spec, policies);
 
     // We can't use make_unique() here, since the branches have different types.
     std::unique_ptr<ParsedAggregationProjection> parsedProject(
-        lp.type() == TransformerType::kInclusionProjection
+        lp->type() == LogicalProjection::ProjectType::kInclusion
             ? static_cast<ParsedAggregationProjection*>(
                   new ParsedInclusionProjection(expCtx, policies, matchExpression))
             : static_cast<ParsedAggregationProjection*>(

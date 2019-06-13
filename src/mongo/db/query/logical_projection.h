@@ -31,14 +31,11 @@
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
-#include "mongo/db/pipeline/parsed_aggregation_projection.h"
+#include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/util/str.h"
 
 namespace mongo {
 
-using TransformerType = TransformerInterface::TransformerType;
-using ProjectionPolicies =
-    parsed_aggregation_projection::ParsedAggregationProjection::ProjectionPolicies;
 using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 /**
@@ -46,6 +43,11 @@ using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
  */
 class LogicalProjection {
 public:
+    enum class ProjectType { kInclusion, kExclusion };
+
+    LogicalProjection(const BSONObj& spec, ProjectionPolicies policies)
+        : _rawObj(spec), _policies(policies) {}
+
     /**
      * Returns true if the projection requires match details from the query, and false
      * otherwise. This is only relevant for find() projection, because of the positional projection
@@ -59,9 +61,9 @@ public:
      * Is the full document required to compute this projection?
      */
     bool requiresDocument() const {
-        invariant(!(_hasExpression && (*_parsedType == TransformerType::kExclusionProjection)));
+        invariant(!(_hasExpression && (*_parsedType == ProjectType::kExclusion)));
 
-        return _hasExpression || (*_parsedType == TransformerType::kExclusionProjection);
+        return _hasExpression || (*_parsedType == ProjectType::kExclusion);
     }
 
     /**
@@ -116,8 +118,7 @@ public:
      * for {_id: 0, "a.b": 1} and returns false for {_id: 0, a: 1, b: 1}).
      */
     bool hasDottedFieldPath() const {
-        MONGO_UNREACHABLE;
-        // return _hasDottedFieldPath;
+        return _hasDottedFieldPath;
     }
 
     /**
@@ -125,25 +126,20 @@ public:
      * fields (ones which are defined by an expression or a literal) are treated as inclusion
      * projections for in this context of the $project stage.
      */
-    static LogicalProjection parse(const BSONObj& spec, ProjectionPolicies policies) {
-        LogicalProjection parser(spec, policies);
-        parser.parse();
-        invariant(parser._parsedType);
-        invariant(*parser._parsedType == TransformerType::kInclusionProjection ||
-                  *parser._parsedType == TransformerType::kExclusionProjection);
+    static std::unique_ptr<LogicalProjection> parse(const BSONObj& spec, ProjectionPolicies policies) {
+        auto parser = std::make_unique<LogicalProjection>(spec, policies);
+        parser->parse();
+        invariant(parser->_parsedType);
 
         return parser;
     }
 
-    TransformerType type() {
+    ProjectType type() {
         invariant(_parsedType);
         return *_parsedType;
     }
 
 private:
-    LogicalProjection(const BSONObj& spec, ProjectionPolicies policies)
-        : _rawObj(spec), _policies(policies) {}
-
     /**
      * Traverses '_rawObj' to determine the type of projection, populating '_parsedType' in the
      * process.
@@ -174,10 +170,10 @@ private:
     void parseMetaObject(StringData metadataRequested);
 
     // The original object. Used to generate more helpful error messages.
-    const BSONObj& _rawObj;
+    BSONObj _rawObj;
 
     // This will be populated during parse().
-    boost::optional<TransformerType> _parsedType;
+    boost::optional<ProjectType> _parsedType;
 
     // Policies associated with the projection which determine its runtime behaviour.
     ProjectionPolicies _policies;

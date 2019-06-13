@@ -538,7 +538,7 @@ struct ProjectionNode : QuerySolutionNode {
     ProjectionNode(std::unique_ptr<QuerySolutionNode> child,
                    const MatchExpression& fullExpression,
                    BSONObj projection,
-                   ParsedProjection parsed)
+                   LogicalProjection parsed)
         : QuerySolutionNode(std::move(child)),
           _sorts(SimpleBSONObjComparator::kInstance.makeBSONObjSet()),
           fullExpression(fullExpression),
@@ -597,7 +597,7 @@ public:
     // use a BSONObj.
     BSONObj projection;
 
-    ParsedProjection parsed;
+    LogicalProjection parsed;
 };
 
 /**
@@ -624,7 +624,7 @@ struct ProjectionNodeCovered final : ProjectionNode {
     ProjectionNodeCovered(std::unique_ptr<QuerySolutionNode> child,
                           const MatchExpression& fullExpression,
                           BSONObj projection,
-                          ParsedProjection parsed,
+                          LogicalProjection parsed,
                           BSONObj coveredKeyObj)
         : ProjectionNode(std::move(child), fullExpression, projection, parsed),
           coveredKeyObj(std::move(coveredKeyObj)) {}

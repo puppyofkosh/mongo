@@ -178,7 +178,7 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
         _expCtx,
         projObj,
-        parsed_aggregation_projection::ParsedAggregationProjection::ProjectionPolicies{},
+        ProjectionPolicies{},
         &fullExpression);
 }
 

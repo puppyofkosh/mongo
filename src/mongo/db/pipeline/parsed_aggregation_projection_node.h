@@ -47,8 +47,6 @@ namespace parsed_aggregation_projection {
  */
 class ProjectionNode {
 public:
-    using ProjectionPolicies = ParsedAggregationProjection::ProjectionPolicies;
-
     ProjectionNode(ProjectionPolicies policies, std::string pathToNode = "");
 
     virtual ~ProjectionNode() = default;

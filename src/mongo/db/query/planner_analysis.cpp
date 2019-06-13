@@ -293,10 +293,10 @@ void geoSkipValidationOn(const std::set<StringData>& twoDSphereFields,
 /**
  * If any field is missing from the list of fields the projection wants, we are not covered.
  */
-auto isCoveredOrAlreadyFetched(const vector<StringData>& fields,
+auto isCoveredOrAlreadyFetched(const vector<std::string>& fields,
                                const QuerySolutionNode& solnRoot) {
     for (size_t i = 0; i < fields.size(); ++i) {
-        if (!solnRoot.hasField(fields[i].toString()))
+        if (!solnRoot.hasField(fields[i]))
             return false;
     }
     return true;

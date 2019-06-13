@@ -66,13 +66,13 @@ void LogicalProjection::parse() {
         BSONElement elem = _rawObj.firstElement();
         if (elem.fieldNameStringData() == "_id" && (elem.isBoolean() || elem.isNumber()) &&
             !elem.trueValue()) {
-            _parsedType = TransformerType::kExclusionProjection;
+            _parsedType = ProjectType::kExclusion;
         }
     }
 
     // Default to inclusion if nothing (except maybe '_id') is explicitly included or excluded.
     if (!_parsedType) {
-        _parsedType = TransformerInterface::TransformerType::kInclusionProjection;
+        _parsedType = ProjectType::kInclusion;
     }
 
     // If we're keeping _id insert it to the front of the list of required fields.
@@ -86,7 +86,7 @@ void LogicalProjection::parseElement(const BSONElement& elem, const FieldPath& p
     if (pathToElem.getPathLength() > 1) {
         _hasDottedFieldPath = true;
     }
-    
+
     if (elem.type() == BSONType::Object) {
         return parseNestedObject(elem.Obj(), pathToElem);
     }
@@ -107,9 +107,8 @@ void LogicalProjection::parseElement(const BSONElement& elem, const FieldPath& p
                     str::stream() << "Bad projection specification, '_id' may not be a "
                                      "computed field in an exclusion projection: "
                                   << _rawObj.toString(),
-                    !_parsedType ||
-                        _parsedType == TransformerInterface::TransformerType::kInclusionProjection);
-            _parsedType = TransformerInterface::TransformerType::kInclusionProjection;
+                    !_parsedType || _parsedType == ProjectType::kInclusion);
+            _parsedType = ProjectType::kInclusion;
         }
 
         _hasId = elem.trueValue();
@@ -120,9 +119,8 @@ void LogicalProjection::parseElement(const BSONElement& elem, const FieldPath& p
                 str::stream() << "Bad projection specification, cannot exclude fields "
                                  "other than '_id' in an inclusion projection: "
                               << _rawObj.toString(),
-                !_parsedType ||
-                    (*_parsedType == TransformerInterface::TransformerType::kExclusionProjection));
-        _parsedType = TransformerInterface::TransformerType::kExclusionProjection;
+                !_parsedType || (*_parsedType == ProjectType::kExclusion));
+        _parsedType = ProjectType::kExclusion;
 
         _excludedFields.push_back(pathToElem.fullPath());
     } else {
@@ -133,9 +131,8 @@ void LogicalProjection::parseElement(const BSONElement& elem, const FieldPath& p
                 str::stream() << "Bad projection specification, cannot include fields or "
                                  "add computed fields during an exclusion projection: "
                               << _rawObj.toString(),
-                !_parsedType ||
-                    (*_parsedType == TransformerInterface::TransformerType::kInclusionProjection));
-        _parsedType = TransformerInterface::TransformerType::kInclusionProjection;
+                !_parsedType || (*_parsedType == ProjectType::kInclusion));
+        _parsedType = ProjectType::kInclusion;
 
         // This was a "leaf" of an inclusion projection, so add it to the list of required fields
         // (unless it's _id, which will be taken care of separately).
@@ -174,9 +171,8 @@ void LogicalProjection::parseNestedObject(const BSONObj& thisLevelSpec, const Fi
                     str::stream() << "Bad projection specification, cannot include fields or "
                                      "add computed fields during an exclusion projection: "
                                   << _rawObj.toString(),
-                    !_parsedType ||
-                        _parsedType == TransformerInterface::TransformerType::kInclusionProjection);
-            _parsedType = TransformerInterface::TransformerType::kInclusionProjection;
+                    !_parsedType || _parsedType == ProjectType::kInclusion);
+            _parsedType = ProjectType::kInclusion;
 
             if (fieldName == "$_internalFindPositional") {
                 _requiresMatchDetails = true;
@@ -217,7 +213,7 @@ bool LogicalProjection::isFieldRetainedExactly(StringData path) const {
     }
 
     invariant(_parsedType);
-    if (*_parsedType == TransformerType::kExclusionProjection) {
+    if (*_parsedType == ProjectType::kExclusion) {
         // If we are an exclusion projection, and the path, or a parent or child of the path, is
         // contained in _excludedFields, our output likely does not preserve that field.
         for (auto&& excluded : _excludedFields) {
