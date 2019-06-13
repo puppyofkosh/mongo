@@ -88,34 +88,6 @@ void transitionMemberToOwnedObj(const BSONObj& bo, WorkingSetMember* member) {
     member->transitionToOwnedObj();
 }
 
-StatusWith<BSONObj> provideMetaFieldsAndPerformExec(const ProjectionExec& exec,
-                                                    const WorkingSetMember& member) {
-    if (exec.needsGeoNearDistance() && !member.hasComputed(WSM_COMPUTED_GEO_DISTANCE))
-        return Status(ErrorCodes::InternalError, "near loc dist requested but no data available");
-
-    if (exec.needsGeoNearPoint() && !member.hasComputed(WSM_GEO_NEAR_POINT))
-        return Status(ErrorCodes::InternalError, "near loc proj requested but no data available");
-
-    return member.hasObj()
-        ? exec.project(member.obj.value(),
-                       exec.needsGeoNearDistance()
-                           ? boost::optional<const double>(geoDistance(member))
-                           : boost::none,
-                       exec.needsGeoNearPoint() ? geoPoint(member) : BSONObj(),
-                       exec.needsSortKey() ? sortKey(member) : BSONObj(),
-                       exec.needsTextScore() ? boost::optional<const double>(textScore(member))
-                                             : boost::none,
-                       member.recordId.repr())
-        : exec.projectCovered(
-              member.keyData,
-              exec.needsGeoNearDistance() ? boost::optional<const double>(geoDistance(member))
-                                          : boost::none,
-              exec.needsGeoNearPoint() ? geoPoint(member) : BSONObj(),
-              exec.needsSortKey() ? sortKey(member) : BSONObj(),
-              exec.needsTextScore() ? boost::optional<const double>(textScore(member))
-                                    : boost::none,
-              member.recordId.repr());
-}
 }  // namespace
 
 ProjectionStage::ProjectionStage(OperationContext* opCtx,

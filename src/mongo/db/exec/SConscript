@@ -82,19 +82,19 @@ env.CppUnitTest(
     ],
 )
 
-env.CppUnitTest(
-    target = "projection_exec_test",
-    source = [
-        "projection_exec_test.cpp",
-    ],
-    LIBDEPS = [
-        "$BUILD_DIR/mongo/db/auth/authmocks",
-        "$BUILD_DIR/mongo/db/query_exec",
-        "$BUILD_DIR/mongo/db/query/collation/collator_interface_mock",
-        "$BUILD_DIR/mongo/db/query/query_test_service_context",
-        "$BUILD_DIR/mongo/db/service_context_d",
-    ],
-)
+# env.CppUnitTest(
+#     target = "projection_exec_test",
+#     source = [
+#         "projection_exec_test.cpp",
+#     ],
+#     LIBDEPS = [
+#         "$BUILD_DIR/mongo/db/auth/authmocks",
+#         "$BUILD_DIR/mongo/db/query_exec",
+#         "$BUILD_DIR/mongo/db/query/collation/collator_interface_mock",
+#         "$BUILD_DIR/mongo/db/query/query_test_service_context",
+#         "$BUILD_DIR/mongo/db/service_context_d",
+#     ],
+# )
 
 env.CppUnitTest(
     target='projection_exec_agg_test',
