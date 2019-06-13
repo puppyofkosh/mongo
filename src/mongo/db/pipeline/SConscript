@@ -550,6 +550,9 @@ env.Library(
         'parsed_exclusion_projection.cpp',
         'parsed_inclusion_projection.cpp',
         'parsed_add_fields.cpp',
+        # TODO: ian eventually we should move this and the ProjectTypeParser and friends into a
+        # separate lib.
+        '$BUILD_DIR/mongo/db/query/logical_projection.cpp',
     ],
     LIBDEPS=[
         'expression',

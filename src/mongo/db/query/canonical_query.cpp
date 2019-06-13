@@ -322,7 +322,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         // Be sure that this projection is used from here out.
         _qr->setProj(desugaredProj);
 
-        // TODO: Eventually remove or replace this.
+        // TODO: Eventually remove or replace this with a LogicalProjection.
         ParsedProjection* pp;
         Status projStatus = ParsedProjection::make(opCtx, desugaredProj, _root.get(), &pp);
         if (!projStatus.isOK()) {
