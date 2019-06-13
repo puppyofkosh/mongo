@@ -112,11 +112,8 @@ BSONObj desugarProjection(const BSONObj& originalProjection, MatchExpression* me
         StringData beforePositional = str::before(elem.fieldNameStringData(), ".$");
 
         {
-            // TODO: Instead of using $elemMatch, make a new expression called $positional which
-            // just takes the entire match expression.
             BSONObjBuilder subObj(bob.subobjStart(beforePositional));
             BSONObjBuilder elemMatch(subObj.subobjStart("$_internalFindPositional"));
-            me->serialize(&elemMatch);
         }
     }
 
