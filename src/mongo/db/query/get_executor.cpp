@@ -790,31 +790,27 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
                                                   unique_ptr<PlanStage> root) {
     invariant(!proj.isEmpty());
 
-    ParsedProjection* rawParsedProj;
-    Status ppStatus = ParsedProjection::make(opCtx, proj.getOwned(), cq->root(), &rawParsedProj);
-    if (!ppStatus.isOK()) {
-        return ppStatus;
-    }
-
-    // TODO: Eventually use the parser for agg projections.
-    unique_ptr<ParsedProjection> pp(rawParsedProj);
+    auto lp =
+        LogicalProjection::parse(proj,
+                                 {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
+                                  ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
 
     // ProjectionExec requires the MatchDetails from the query expression when the projection
     // uses the positional operator. Since the query may no longer match the newly-updated
     // document, we forbid this case.
-    if (!allowPositional && pp->requiresMatchDetails()) {
+    if (!allowPositional && lp->requiresMatchDetails()) {
         return {ErrorCodes::BadValue,
                 "cannot use a positional projection and return the new document"};
     }
 
     // $meta sortKey is not allowed to be projected in findAndModify commands.
-    if (pp->wantSortKey()) {
+    if (lp->wantSortKey()) {
         return {ErrorCodes::BadValue,
                 "Cannot use a $meta sortKey projection in findAndModify commands."};
     }
 
     return {make_unique<ProjectionStageDefault>(opCtx,
-                                                proj,
+                                                lp->getProjObj(),
                                                 ws,
                                                 std::unique_ptr<PlanStage>(root.release()),
                                                 *cq->root(),

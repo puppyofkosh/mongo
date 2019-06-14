@@ -69,8 +69,6 @@ public:
     /**
      * If requiresDocument() == false, what fields are required to compute
      * the projection?
-     *
-     * Returned StringDatas are owned by, and have the lifetime of, the ParsedProjection.
      */
     const std::vector<std::string>& getRequiredFields() const {
         return _requiredFields;

@@ -20,7 +20,7 @@ env.Library(
         "canonical_query.cpp",
         "canonical_query_encoder.cpp",
         "index_tag.cpp",
-        "parsed_projection.cpp",
+#        "parsed_projection.cpp",
         "plan_cache.cpp",
         "plan_cache_indexability.cpp",
         "plan_enumerator.cpp",
@@ -334,16 +334,16 @@ env.CppUnitTest(
     ],
 )
 
-env.CppUnitTest(
-    target="parsed_projection_test",
-    source=[
-        "parsed_projection_test.cpp"
-    ],
-    LIBDEPS=[
-        "query_planner",
-        "query_test_service_context",
-    ],
-)
+# env.CppUnitTest(
+#     target="parsed_projection_test",
+#     source=[
+#         "parsed_projection_test.cpp"
+#     ],
+#     LIBDEPS=[
+#         "query_planner",
+#         "query_test_service_context",
+#     ],
+# )
 
 env.CppUnitTest(
     target="plan_cache_test",
