@@ -20,6 +20,8 @@
     // For isReplSet
     load("jstests/libs/fixture_helpers.js");
 
+    assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
+    
     var coll = db.collation;
     coll.drop();
 

@@ -260,6 +260,8 @@ public:
             auto parsedNss =
                 NamespaceString{CommandHelpers::parseNsFromCommand(_dbName, _request.body)};
             const bool isExplain = false;
+
+            log() << "ian: the original request was " << _request.body;
             auto qr =
                 parseCmdObjectToQueryRequest(opCtx, std::move(parsedNss), _request.body, isExplain);
 

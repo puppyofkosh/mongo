@@ -579,9 +579,11 @@ void QueryRequest::asFindCommandInternal(BSONObjBuilder* cmdBuilder) const {
 void QueryRequest::addReturnKeyMetaProj() {
     BSONObjBuilder projBob;
     projBob.appendElements(_proj);
-    // We use $$ because it's never going to show up in a user's projection.
+    // We use some awful keyname because it's never going to show up in a user's projection.
     // The exact text doesn't matter.
-    BSONObj indexKey = BSON("$$" << BSON("$meta" << QueryRequest::metaIndexKey));
+    // TODO: We'll have to figure out what to do about this.
+    BSONObj indexKey =
+        BSON("__TODO_FIGURE_OUT_WORKAROUND" << BSON("$meta" << QueryRequest::metaIndexKey));
     projBob.append(indexKey.firstElement());
     _proj = projBob.obj();
 }

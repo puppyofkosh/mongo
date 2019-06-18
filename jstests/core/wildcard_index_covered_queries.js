@@ -74,7 +74,7 @@
     // to do so and will instead produce a non-covered query. However, this query will nonetheless
     // output the correct results.
     // TODO: This should be removed if we ban support for $-prefixed field names.
-    // const shouldFailToCover = true;
+    const shouldFailToCover = true;
     // assertWildcardProvidesCoveredSolution(
     //     {d: {$in: [0, 25, 50, 75, 100]}}, {_id: 0, d: 1, $_path: 1}, shouldFailToCover);
 
