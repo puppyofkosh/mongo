@@ -158,16 +158,9 @@ using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const BSONObj& spec,
+    LogicalProjection* lp,
     ProjectionPolicies policies,
     const MatchExpression* matchExpression) {
-    // Check that the specification was valid. Status returned is unspecific because validate()
-    // is used by the $addFields stage as well as $project.
-    // If there was an error, uassert with a $project-specific message.
-    ProjectionSpecValidator::uassertValid(spec, "$project");
-
-    auto lp = LogicalProjection::parse(spec, policies);
-
     // We can't use make_unique() here, since the branches have different types.
     std::unique_ptr<ParsedAggregationProjection> parsedProject(
         lp->type() == LogicalProjection::ProjectType::kInclusion
@@ -177,8 +170,23 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
                   new ParsedExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
-    parsedProject->parse(spec);
+    parsedProject->parse(lp->getProjObj());
     return parsedProject;
+}
+
+std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const BSONObj& spec,
+    ProjectionPolicies policies,
+    const MatchExpression* matchExpression) {
+    // Check that the specification was valid. Status returned is unspecific because validate()
+    // is used by the $addFields stage as well as $project.
+    // If there was an error, uassert with a $project-specific message.
+    ProjectionSpecValidator::uassertValid(spec, "$project");
+
+    auto lp = LogicalProjection::parse({spec}, policies);
+
+    return create(expCtx, lp.get(), policies, matchExpression);
 }
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

@@ -14,6 +14,8 @@
     var t = db.getCollection(collName);
     t.drop();
 
+    assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
+
     /**
      * Asserts that the specified query and projection returns the expected
      * result, using both the find() operation and the findAndModify command.
@@ -265,7 +267,7 @@
                     update: {$set: {c: 'xyz'}},
                     new: true
                   },
-                  {_id: 42, b: [{name: 'second', value: 2}], c: 'xyz'});
+                  {_id: 42, c: 'xyz', b: [{name: 'second', value: 2}]});
 
     // Query on an array of objects while using $elemMatch in the projection,
     // where the matched array element is modified.

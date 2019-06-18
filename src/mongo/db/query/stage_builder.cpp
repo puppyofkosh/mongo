@@ -164,16 +164,13 @@ PlanStage* buildStages(OperationContext* opCtx,
             if (nullptr == childStage) {
                 return nullptr;
             }
-            // return new ProjectionStageDefault(opCtx,
-            //                                   pn->projection,
-            //                                   ws,
-            //                                   std::move(childStage),
-            //                                   pn->fullExpression,
-            //                                   cq.getCollator());
 
-            log() << "ian: projection covered";
-            return new ProjectionStageCovered(
-                opCtx, pn->projection, ws, std::move(childStage), pn->coveredKeyObj);
+            return new ProjectionStageDefault(opCtx,
+                                              pn->projection,
+                                              ws,
+                                              std::move(childStage),
+                                              pn->fullExpression,
+                                              cq.getCollator());
         }
         case STAGE_PROJECTION_SIMPLE: {
             auto pn = static_cast<const ProjectionNodeSimple*>(root);
@@ -190,7 +187,6 @@ PlanStage* buildStages(OperationContext* opCtx,
                                               std::move(childStage),
                                               pn->fullExpression,
                                               cq.getCollator());
-            // return new ProjectionStageSimple(opCtx, pn->projection, ws, std::move(childStage));
         }
         case STAGE_LIMIT: {
             const LimitNode* ln = static_cast<const LimitNode*>(root);

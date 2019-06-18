@@ -42,85 +42,12 @@
 #include "mongo/db/query/collation/collator_factory_interface.h"
 #include "mongo/db/query/indexability.h"
 #include "mongo/db/query/logical_projection.h"
+#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
 namespace {
-
-bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData matchfield) {
-    if (query->getCategory() == MatchExpression::MatchCategory::kLogical) {
-        for (unsigned int i = 0; i < query->numChildren(); ++i) {
-            if (hasPositionalOperatorMatch(query->getChild(i), matchfield)) {
-                return true;
-            }
-        }
-    } else {
-        StringData queryPath = query->path();
-        // We have to make a distinction between match expressions that are
-        // initialized with an empty field/path name "" and match expressions
-        // for which the path is not meaningful (eg. $where).
-        if (!queryPath.rawData()) {
-            return false;
-        }
-        StringData pathPrefix = str::before(queryPath, '.');
-        return pathPrefix == matchfield;
-    }
-    return false;
-}
-
-bool isPositionalOperator(StringData fieldName) {
-    return str::contains(fieldName, ".$") && !str::contains(fieldName, ".$ref") &&
-        !str::contains(fieldName, ".$id") && !str::contains(fieldName, ".$db");
-}
-
-void validatePositionalProjection(const std::string& lhs, const MatchExpression* query) {
-    StringData after = str::after(lhs, ".$");
-    if (after.find(".$"_sd) != std::string::npos) {
-        uasserted(ErrorCodes::BadValue,
-                  str::stream() << "Positional projection '" << lhs << "' contains "
-                                << "the positional operator more than once.");
-    }
-
-    StringData matchfield = str::before(lhs, '.');
-    if (query && !hasPositionalOperatorMatch(query, matchfield)) {
-        uasserted(ErrorCodes::BadValue,
-                  str::stream() << "Positional projection '" << lhs << "' does not "
-                                << "match the query document.");
-    }
-}
-
-// TODO: Eventually this should probably do two passes: the first checks whether there are even any
-// positional projections
-BSONObj desugarProjection(const BSONObj& originalProjection, MatchExpression* me) {
-    BSONObjBuilder bob;
-
-    bool foundPositional = false;
-    for (auto&& elem : originalProjection) {
-        if (!isPositionalOperator(elem.fieldNameStringData())) {
-            bob.append(elem);
-            continue;
-        }
-
-        uassert(ErrorCodes::BadValue,
-                "Cannot specify more than one positional proj. per query.",
-                !foundPositional);
-        foundPositional = true;
-
-        validatePositionalProjection(elem.fieldName(), me);
-
-        // In order to be consistent with existing behavior, we actually just find the place before
-        // the '.' (even though you'd think it should be before the ".$").
-        StringData beforePositional = str::before(elem.fieldNameStringData(), ".$");
-
-        {
-            BSONObjBuilder subObj(bob.subobjStart(beforePositional));
-            BSONObjBuilder elemMatch(subObj.subobjStart("$_internalFindPositional"));
-        }
-    }
-
-    return bob.obj();
-}
 
 /**
  * Comparator for MatchExpression nodes.  Returns an integer less than, equal to, or greater
@@ -318,11 +245,11 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?
         std::cout << "ian: original projection " << _qr->getProj() << std::endl;
-        BSONObj desugaredProj = desugarProjection(_qr->getProj(), _root.get());
-        std::cout << "ian: desugared projection " << desugaredProj << std::endl;
+        auto desugaredProj = projection_desugarer::desugarProjection(_qr->getProj(), _root.get());
+        std::cout << "ian: desugared projection " << desugaredProj.desugaredObj << std::endl;
 
         // Be sure that this projection is used from here out.
-        _qr->setProj(desugaredProj);
+        _qr->setProj(desugaredProj.desugaredObj);
 
         // TODO: Eventually remove or replace this with a LogicalProjection.
         _proj = LogicalProjection::parse(

@@ -70,6 +70,7 @@
 #include "mongo/db/query/planner_analysis.h"
 #include "mongo/db/query/planner_ixselect.h"
 #include "mongo/db/query/planner_wildcard_helpers.h"
+#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/db/query/query_knobs_gen.h"
 #include "mongo/db/query/query_planner.h"
 #include "mongo/db/query/query_planner_common.h"
@@ -790,8 +791,10 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
                                                   unique_ptr<PlanStage> root) {
     invariant(!proj.isEmpty());
 
+    auto desugaredProj = projection_desugarer::desugarProjection(proj, nullptr);
+
     auto lp =
-        LogicalProjection::parse(proj,
+        LogicalProjection::parse(desugaredProj,
                                  {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
                                   ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
 

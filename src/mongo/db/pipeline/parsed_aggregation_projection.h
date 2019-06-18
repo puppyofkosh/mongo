@@ -65,7 +65,8 @@ private:
     ProjectionSpecValidator(const BSONObj& spec) : _rawObj(spec) {}
 
     /**
-     * Uses '_seenPaths' to see if 'path' conflicts with any paths that have already been specified.
+     * Uses '_seenPaths' to see if 'path' conflicts with any paths that have already been
+     * specified.
      *
      * For example, a user is not allowed to specify {'a': 1, 'a.b': 1}, or some similar conflicting
      * paths.
@@ -142,13 +143,15 @@ private:
  */
 class ParsedAggregationProjection : public TransformerInterface {
 public:
-
     /**
      * Main entry point for a ParsedAggregationProjection.
      *
      * Throws a AssertionException if 'spec' is an invalid projection specification.
-     * 
-     * 'matchExpression' is only used by the 'find' variant of projection, for positional projection.
+     *
+     * 'matchExpression' is only used by the 'find' variant of projection, for positional
+     * projection.
+     *
+     * This is the entry point for "agg-only" projections. The projection will not be desugared.
      */
     static std::unique_ptr<ParsedAggregationProjection> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -156,10 +159,20 @@ public:
         ProjectionPolicies policies,
         const MatchExpression* matchExpression = nullptr);
 
+    /**
+     * Entry point for desugared "find" projections.
+     */
+    static std::unique_ptr<ParsedAggregationProjection> create(
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        LogicalProjection* lp,
+        ProjectionPolicies policies,
+        const MatchExpression* matchExpression);
+
     virtual ~ParsedAggregationProjection() = default;
 
     /**
-     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has already
+     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has
+     * already
      * been verified to not have any conflicting path specifications, and not to mix and match
      * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
      * track which variables are defined so that they can later be referenced at execution time.

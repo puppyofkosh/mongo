@@ -32,6 +32,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/pipeline/projection_policies.h"
+#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/util/str.h"
 
 namespace mongo {
@@ -124,8 +125,10 @@ public:
      * fields (ones which are defined by an expression or a literal) are treated as inclusion
      * projections for in this context of the $project stage.
      */
-    static std::unique_ptr<LogicalProjection> parse(const BSONObj& spec, ProjectionPolicies policies) {
-        auto parser = std::make_unique<LogicalProjection>(spec, policies);
+    static std::unique_ptr<LogicalProjection> parse(const DesugaredProjection& spec,
+                                                    ProjectionPolicies policies) {
+        std::cout << "ian: parsing projection " << spec.desugaredObj << std::endl;
+        auto parser = std::make_unique<LogicalProjection>(spec.desugaredObj, policies);
         parser->parse();
         invariant(parser->_parsedType);
 
