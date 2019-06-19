@@ -200,6 +200,7 @@ void ProjectionExec::add(const string& field, int skip, int limit) {
 // Execution
 //
 
+// TODO: Can I delete this?
 StatusWith<BSONObj> ProjectionExec::computeReturnKeyProjection(const BSONObj& indexKey,
                                                                const BSONObj& sortKey) const {
     BSONObjBuilder bob;
@@ -338,7 +339,7 @@ Status ProjectionExec::projectHelper(const BSONObj& in,
     // TODO: To deal with positional projection: add a new internal expression which can be
     // constructed from MatchDetails and takes a field ref/path. Then we'll have the parser convert
     // '$' into this.
-    
+
     const ArrayOpType& arrayOpType = _arrayOpType;
 
     BSONObjIterator it(in);

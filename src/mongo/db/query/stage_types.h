@@ -80,6 +80,7 @@ enum StageType {
     STAGE_PROJECTION_DEFAULT,
     STAGE_PROJECTION_COVERED,
     STAGE_PROJECTION_SIMPLE,
+    STAGE_PROJECTION_RETURN_KEY,
 
     // Stages for running aggregation pipelines.
     STAGE_CHANGE_STREAM_PROXY,

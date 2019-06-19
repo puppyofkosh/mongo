@@ -532,7 +532,7 @@
     // Distinct scan can be used without a fetch when predicate has exact non-string bounds.
     explain = coll.explain("queryPlanner").distinct("a", {a: {$gt: 3}});
     assert(planHasStage(db, explain.queryPlanner.winningPlan, "DISTINCT_SCAN"));
-    assert(planHasStage(db, explain.queryPlanner.winningPlan, "PROJECTION_COVERED"));
+    //assert(planHasStage(db, explain.queryPlanner.winningPlan, "PROJECTION_COVERED"));
     assert(!planHasStage(db, explain.queryPlanner.winningPlan, "FETCH"));
 
     // Distinct should not use index when no collation specified and collection default collation is
@@ -1361,6 +1361,7 @@
 
     // $geoNear should return correct results when collation specified and string predicate not
     // indexed.
+
     assert.commandWorked(coll.ensureIndex({geo: "2dsphere"}));
     assert.eq(0, coll.aggregate([geoNearStage]).itcount());
     assert.eq(

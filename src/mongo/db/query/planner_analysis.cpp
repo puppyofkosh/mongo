@@ -389,6 +389,9 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
                                                                std::move(coveredKeyObj));
             }
         }
+    } else if (query.getProj()->wantIndexKey()) {
+        return std::make_unique<ProjectionNodeReturnKey>(
+            std::move(solnRoot), *query.root(), qr.getProj(), *query.getProj());
     }
 
     addSortKeyGeneratorStageIfNeeded();

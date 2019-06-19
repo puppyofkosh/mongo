@@ -906,6 +906,16 @@ ProjectionNode* ProjectionNodeDefault::clone() const {
     return copy.release();
 }
 
+ProjectionNode* ProjectionNodeReturnKey::clone() const {
+    auto copy = std::make_unique<ProjectionNodeReturnKey>(
+        std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
+        fullExpression,
+        projection,
+        parsed);
+    ProjectionNode::cloneProjectionData(copy.get());
+    return copy.release();
+}
+    
 ProjectionNode* ProjectionNodeCovered::clone() const {
     auto copy = std::make_unique<ProjectionNodeCovered>(
         std::unique_ptr<QuerySolutionNode>(children[0]->clone()),

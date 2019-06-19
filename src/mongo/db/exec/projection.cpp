@@ -166,6 +166,44 @@ std::unique_ptr<PlanStageStats> ProjectionStage::getStats() {
     return ret;
 }
 
+ProjectionStageReturnKey::ProjectionStageReturnKey(OperationContext* opCtx,
+                                                   const BSONObj& projObj,
+                                                   WorkingSet* ws,
+                                                   std::unique_ptr<PlanStage> child,
+                                                   const MatchExpression& fullExpression,
+                                                   const CollatorInterface* collator)
+    : ProjectionStage(opCtx, projObj, ws, std::move(child), "PROJECTION_RETURN_KEY") {}
+
+StatusWith<BSONObj> ProjectionStageReturnKey::computeReturnKeyProjection(
+    const BSONObj& indexKey, const BSONObj& sortKey) const {
+    BSONObjBuilder bob;
+
+    if (!indexKey.isEmpty()) {
+        bob.appendElements(indexKey);
+    }
+
+    // TODO:
+    // Must be possible to do both returnKey meta-projection and sortKey meta-projection so that
+    // mongos can support returnKey.
+    // for (auto fieldName : _sortKeyMetaFields)
+    //     bob.append(fieldName, sortKey);
+
+    return bob.obj();
+}
+
+Status ProjectionStageReturnKey::transform(WorkingSetMember* member) const {
+    auto keys = computeReturnKeyProjection(
+        member->hasComputed(WSM_INDEX_KEY) ? indexKey(*member) : BSONObj(),
+        // TODO: ian: deal with sortKey and returnKey
+        // _exec.needsSortKey() ? sortKey(*member) :
+        BSONObj());
+    if (!keys.isOK())
+        return keys.getStatus();
+
+    transitionMemberToOwnedObj(keys.getValue(), member);
+    return Status::OK();
+}
+
 ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
                                                const BSONObj& projObj,
                                                WorkingSet* ws,
@@ -176,10 +214,7 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
       _expCtx(new ExpressionContext(opCtx, collator)) {
 
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
-        _expCtx,
-        projObj,
-        ProjectionPolicies{},
-        &fullExpression);
+        _expCtx, projObj, ProjectionPolicies{}, &fullExpression);
 }
 
 Status ProjectionStageDefault::transform(WorkingSetMember* member) const {

@@ -32,7 +32,7 @@ load("jstests/libs/analyze_plan.js");
 
     // Check that the plan is covered.
     explain = coll.find().hint({a: 1}).sort({a: 1}).returnKey().explain();
-    assert(isIndexOnly(db, explain.queryPlanner.winningPlan));
+    assert(isIndexOnly(db, explain.queryPlanner.winningPlan), explain.queryPlanner.winningPlan);
     explain = coll.find().hint({a: 1}).sort({a: -1}).returnKey().explain();
     assert(isIndexOnly(db, explain.queryPlanner.winningPlan));
 

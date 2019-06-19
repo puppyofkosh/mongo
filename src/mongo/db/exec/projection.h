@@ -125,6 +125,26 @@ private:
     boost::intrusive_ptr<ExpressionContext> _expCtx;
 };
 
+class ProjectionStageReturnKey final : public ProjectionStage {
+public:
+    ProjectionStageReturnKey(OperationContext* opCtx,
+                             const BSONObj& projObj,
+                             WorkingSet* ws,
+                             std::unique_ptr<PlanStage> child,
+                             const MatchExpression& fullExpression,
+                             const CollatorInterface* collator);
+
+    StageType stageType() const final {
+        return STAGE_PROJECTION_DEFAULT;
+    }
+
+private:
+    StatusWith<BSONObj> computeReturnKeyProjection(const BSONObj& indexKey,
+                                                   const BSONObj& sortKey) const;
+
+    Status transform(WorkingSetMember* member) const final;
+};
+
 /**
  * This class is used when the projection is totally covered by one index and the following rules
  * are met: the projection consists only of inclusions e.g. '{field: 1}', it has no $meta

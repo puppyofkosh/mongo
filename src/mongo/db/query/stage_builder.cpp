@@ -188,6 +188,22 @@ PlanStage* buildStages(OperationContext* opCtx,
                                               pn->fullExpression,
                                               cq.getCollator());
         }
+        case STAGE_PROJECTION_RETURN_KEY: {
+            auto pn = static_cast<const ProjectionNodeReturnKey*>(root);
+            unique_ptr<PlanStage> childStage{
+                buildStages(opCtx, collection, cq, qsol, pn->children[0], ws)};
+            if (nullptr == childStage) {
+                return nullptr;
+            }
+
+            log() << "ian: projection return key";
+            return new ProjectionStageReturnKey(opCtx,
+                                                pn->projection,
+                                                ws,
+                                                std::move(childStage),
+                                                pn->fullExpression,
+                                                cq.getCollator());
+        }
         case STAGE_LIMIT: {
             const LimitNode* ln = static_cast<const LimitNode*>(root);
             PlanStage* childStage = buildStages(opCtx, collection, cq, qsol, ln->children[0], ws);

@@ -617,6 +617,20 @@ struct ProjectionNodeDefault final : ProjectionNode {
     }
 };
 
+struct ProjectionNodeReturnKey final : ProjectionNode {
+    using ProjectionNode::ProjectionNode;
+
+    StageType getType() const final {
+        return STAGE_PROJECTION_RETURN_KEY;
+    }
+
+    ProjectionNode* clone() const final;
+
+    StringData projectionImplementationTypeToString() const final {
+        return "PROJECTION_RETURN_KEY"_sd;
+    }
+};
+
 /**
  * This is a fast-path for when the projection is fully covered by one index.
  */
