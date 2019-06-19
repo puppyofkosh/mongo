@@ -45,7 +45,7 @@ public:
     /**
      * Throws a AssertionException if a field name does not pass validation.
      */
-    static void uassertValidFieldName(StringData fieldName);
+    static void uassertValidFieldName(StringData fieldName, bool allowDollarPrefixedFieldName = false);
 
     /**
      * Concatenates 'prefix' and 'suffix' using dotted path notation. 'prefix' is allowed to be
@@ -66,9 +66,11 @@ public:
      *
      * Field names are validated using uassertValidFieldName().
      */
-    /* implicit */ FieldPath(std::string inputPath);
+    FieldPath(std::string inputPath, bool allowDollarPrefixedFieldName);
+    /* implicit */ FieldPath(std::string inputPath) : FieldPath(std::move(inputPath), false) {}
     /* implicit */ FieldPath(StringData inputPath) : FieldPath(inputPath.toString()) {}
     /* implicit */ FieldPath(const char* inputPath) : FieldPath(std::string(inputPath)) {}
+
 
     /**
      * Returns the number of path elements in the field path.
@@ -127,6 +129,8 @@ private:
     // string::npos (which evaluates to -1) and the last contains _fieldPath.size() to facilitate
     // lookup.
     std::vector<size_t> _fieldPathDotPosition;
+
+    bool _allowDollarPrefixedFieldName;
 };
 
 inline bool operator<(const FieldPath& lhs, const FieldPath& rhs) {

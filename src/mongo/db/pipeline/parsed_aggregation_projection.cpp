@@ -101,7 +101,7 @@ void ProjectionSpecValidator::validate() {
     }
     for (auto&& elem : _rawObj) {
         std::cout << "ian: parsing elem " << elem << std::endl;
-        parseElement(elem, FieldPath(elem.fieldName()));
+        parseElement(elem, FieldPath(elem.fieldName(), true));
     }
 }
 

@@ -48,8 +48,10 @@ string FieldPath::getFullyQualifiedPath(StringData prefix, StringData suffix) {
     return str::stream() << prefix << "." << suffix;
 }
 
-FieldPath::FieldPath(std::string inputPath)
-    : _fieldPath(std::move(inputPath)), _fieldPathDotPosition{string::npos} {
+FieldPath::FieldPath(std::string inputPath, bool allowDollarPrefixedFieldName)
+    : _fieldPath(std::move(inputPath)),
+      _fieldPathDotPosition{string::npos},
+      _allowDollarPrefixedFieldName(allowDollarPrefixedFieldName) {
     uassert(40352, "FieldPath cannot be constructed with empty string", !_fieldPath.empty());
     uassert(40353, "FieldPath must not end with a '.'.", _fieldPath[_fieldPath.size() - 1] != '.');
 
@@ -69,13 +71,15 @@ FieldPath::FieldPath(std::string inputPath)
             "FieldPath is too long",
             pathLength <= BSONDepth::getMaxAllowableDepth());
     for (size_t i = 0; i < pathLength; ++i) {
-        uassertValidFieldName(getFieldName(i));
+        uassertValidFieldName(getFieldName(i), _allowDollarPrefixedFieldName);
     }
 }
 
-void FieldPath::uassertValidFieldName(StringData fieldName) {
+void FieldPath::uassertValidFieldName(StringData fieldName, bool allowDollarPrefixedFieldName) {
     uassert(15998, "FieldPath field names may not be empty strings.", !fieldName.empty());
-    uassert(16410, "FieldPath field names may not start with '$'.", fieldName[0] != '$');
+    uassert(16410,
+            "FieldPath field names may not start with '$'.",
+            !(!allowDollarPrefixedFieldName && fieldName[0] == '$'));
     uassert(
         16411, "FieldPath field names may not contain '\0'.", fieldName.find('\0') == string::npos);
     uassert(

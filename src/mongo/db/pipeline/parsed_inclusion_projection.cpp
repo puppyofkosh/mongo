@@ -105,7 +105,7 @@ void ParsedInclusionProjection::parse(const BSONObj& spec) {
             case BSONType::NumberDecimal: {
                 // This is an inclusion specification.
                 invariant(elem.trueValue());
-                _root->addProjectionForPath(FieldPath(elem.fieldName()));
+                _root->addProjectionForPath(FieldPath(elem.fieldName(), true));
                 break;
             }
             case BSONType::Object: {
@@ -133,7 +133,7 @@ void ParsedInclusionProjection::parse(const BSONObj& spec) {
             default: {
                 // This is a literal value.
                 _root->addExpressionForPath(
-                    FieldPath(elem.fieldName()),
+                    FieldPath(elem.fieldName(), true),
                     Expression::parseOperand(_expCtx, elem, _expCtx->variablesParseState));
             }
         }
@@ -219,7 +219,7 @@ void ParsedInclusionProjection::parseSubObject(const BSONObj& subObj,
             case BSONType::NumberDecimal: {
                 // This is an inclusion specification.
                 invariant(elem.trueValue());
-                node->addProjectionForPath(FieldPath(elem.fieldName()));
+                node->addProjectionForPath(FieldPath(elem.fieldName(), false));
                 break;
             }
             case BSONType::Object: {
@@ -238,7 +238,7 @@ void ParsedInclusionProjection::parseSubObject(const BSONObj& subObj,
             default: {
                 // This is a literal value.
                 node->addExpressionForPath(
-                    FieldPath(elem.fieldName()),
+                    FieldPath(elem.fieldName(), false),
                     Expression::parseOperand(_expCtx, elem, variablesParseState));
             }
         }

@@ -57,7 +57,7 @@ bool isPrefixOf(StringData first, StringData second) {
 void LogicalProjection::parse() {
     size_t nFields = 0;
     for (auto&& elem : _rawObj) {
-        parseElement(elem, FieldPath(elem.fieldName()));
+        parseElement(elem, FieldPath(elem.fieldName(), true));
         nFields++;
     }
 

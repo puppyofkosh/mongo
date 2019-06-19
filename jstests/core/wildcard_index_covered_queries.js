@@ -13,6 +13,7 @@
     load("jstests/aggregation/extras/utils.js");  // For arrayEq.
     load("jstests/libs/analyze_plan.js");         // For getPlanStages and isIndexOnly.
 
+    assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
     const assertArrayEq = (l, r) => assert(arrayEq(l, r));
 
     const coll = db.wildcard_covered_query;
@@ -75,8 +76,8 @@
     // output the correct results.
     // TODO: This should be removed if we ban support for $-prefixed field names.
     const shouldFailToCover = true;
-    // assertWildcardProvidesCoveredSolution(
-    //     {d: {$in: [0, 25, 50, 75, 100]}}, {_id: 0, d: 1, $_path: 1}, shouldFailToCover);
+    assertWildcardProvidesCoveredSolution(
+        {d: {$in: [0, 25, 50, 75, 100]}}, {_id: 0, d: 1, $_path: 1}, shouldFailToCover);
 
     // Verify that predicates which produce inexact-fetch bounds are not covered by a $** index.
     assertWildcardProvidesCoveredSolution(
