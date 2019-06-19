@@ -57,10 +57,11 @@ load("jstests/libs/analyze_plan.js");
 
     // returnKey takes precedence over other a regular exclusion projection. Should still be
     // covered.
-    results = coll.find({}, {a: 0}).hint({a: 1}).sort({a: -1}).returnKey().toArray();
-    assert.eq(results, [{a: 3}, {a: 2}, {a: 1}]);
-    explain = coll.find({}, {a: 0}).hint({a: 1}).sort({a: -1}).returnKey().explain();
-    assert(isIndexOnly(db, explain.queryPlanner.winningPlan));
+
+    // returnKey is incompatible with exclusion projection.
+    let err =
+        assert.throws(() => coll.find({}, {a: 0}).hint({a: 1}).sort({a: -1}).returnKey().toArray());
+    assert.commandFailedWithCode(err, 40182);
 
     // Unlike other projections, sortKey meta-projection can co-exist with returnKey.
     results =

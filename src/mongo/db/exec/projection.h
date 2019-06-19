@@ -103,7 +103,7 @@ public:
      * ProjectionNodeDefault should use this for construction.
      */
     ProjectionStageDefault(OperationContext* opCtx,
-                           const BSONObj& projObj,
+                           const LogicalProjection& logicalProjection,
                            WorkingSet* ws,
                            std::unique_ptr<PlanStage> child,
                            const MatchExpression& fullExpression,
@@ -128,7 +128,7 @@ private:
 class ProjectionStageReturnKey final : public ProjectionStage {
 public:
     ProjectionStageReturnKey(OperationContext* opCtx,
-                             const BSONObj& projObj,
+                             const LogicalProjection& projObj,
                              WorkingSet* ws,
                              std::unique_ptr<PlanStage> child,
                              const MatchExpression& fullExpression,
@@ -143,6 +143,8 @@ private:
                                                    const BSONObj& sortKey) const;
 
     Status transform(WorkingSetMember* member) const final;
+
+    LogicalProjection _logicalProjection;
 };
 
 /**

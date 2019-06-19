@@ -64,7 +64,16 @@ public:
     bool requiresDocument() const {
         invariant(!(_hasExpression && (*_parsedType == ProjectType::kExclusion)));
 
-        return _hasExpression || (*_parsedType == ProjectType::kExclusion);
+        return (_hasExpression || (*_parsedType == ProjectType::kExclusion)) &&
+            !_hasIndexKeyProjection;
+    }
+
+    const std::vector<std::string>& sortKeyMetaFields() const {
+        return _sortKeyMetaFields;
+    }
+
+    bool needsSortKey() const {
+        return !_sortKeyMetaFields.empty();
     }
 
     /**
@@ -168,7 +177,7 @@ private:
      */
     void parseNestedObject(const BSONObj& thisLevelSpec, const FieldPath& prefix);
 
-    void parseMetaObject(StringData metadataRequested);
+    void parseMetaObject(StringData fieldName, StringData metadataRequested);
 
     // The original object. Used to generate more helpful error messages.
     BSONObj _rawObj;
@@ -203,6 +212,9 @@ private:
 
     // Keep track of which fields have expressions as values.
     std::vector<std::string> _expressionFields;
+
+    // All of the fields which had sortKey metadata requested about them.
+    std::vector<std::string> _sortKeyMetaFields;
 };
 
 }  // namespace mongo

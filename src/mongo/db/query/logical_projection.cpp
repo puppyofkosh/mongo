@@ -140,7 +140,7 @@ void LogicalProjection::parseElement(const BSONElement& elem, const FieldPath& p
     }
 }
 
-void LogicalProjection::parseMetaObject(StringData requestedMeta) {
+void LogicalProjection::parseMetaObject(StringData fieldName, StringData requestedMeta) {
     if (requestedMeta == QueryRequest::metaTextScore) {
         _wantTextScore = true;
     } else if (requestedMeta == QueryRequest::metaIndexKey) {
@@ -151,6 +151,7 @@ void LogicalProjection::parseMetaObject(StringData requestedMeta) {
         _wantGeoNearPoint = true;
     } else if (requestedMeta == QueryRequest::metaSortKey) {
         _wantSortKey = true;
+        _sortKeyMetaFields.push_back(fieldName.toString());
     } else {
         // We don't recognize it, so the query layer doesn't care.
     }
@@ -184,7 +185,7 @@ void LogicalProjection::parseNestedObject(const BSONObj& thisLevelSpec, const Fi
                 uassert(ErrorCodes::BadValue,  // TODO: badValue
                         "field for $meta cannot be nested",
                         prefix.getPathLength() == 1);
-                parseMetaObject(elem.valuestr());
+                parseMetaObject(prefix.fullPath(), elem.valuestr());
             }
 
             // TODO: The $meta sortKey may be covered.

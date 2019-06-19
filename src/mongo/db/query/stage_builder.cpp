@@ -150,8 +150,9 @@ PlanStage* buildStages(OperationContext* opCtx,
             }
 
             log() << "ian: projection default";
+            invariant(cq.getProj());
             return new ProjectionStageDefault(opCtx,
-                                              pn->projection,
+                                              *cq.getProj(),
                                               ws,
                                               std::move(childStage),
                                               pn->fullExpression,
@@ -165,8 +166,9 @@ PlanStage* buildStages(OperationContext* opCtx,
                 return nullptr;
             }
 
+            invariant(cq.getProj());
             return new ProjectionStageDefault(opCtx,
-                                              pn->projection,
+                                              *cq.getProj(),
                                               ws,
                                               std::move(childStage),
                                               pn->fullExpression,
@@ -181,8 +183,9 @@ PlanStage* buildStages(OperationContext* opCtx,
             }
 
             log() << "ian: projection simple";
+            invariant(cq.getProj());
             return new ProjectionStageDefault(opCtx,
-                                              pn->projection,
+                                              *cq.getProj(),
                                               ws,
                                               std::move(childStage),
                                               pn->fullExpression,
@@ -197,8 +200,9 @@ PlanStage* buildStages(OperationContext* opCtx,
             }
 
             log() << "ian: projection return key";
+            invariant(cq.getProj());
             return new ProjectionStageReturnKey(opCtx,
-                                                pn->projection,
+                                                *cq.getProj(),
                                                 ws,
                                                 std::move(childStage),
                                                 pn->fullExpression,

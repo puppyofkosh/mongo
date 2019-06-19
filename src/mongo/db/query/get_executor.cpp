@@ -420,8 +420,9 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
                 canonicalQuery->getProj()->wantIndexKey() ||
                 canonicalQuery->getProj()->wantSortKey() ||
                 canonicalQuery->getProj()->hasDottedFieldPath()) {
+                invariant(canonicalQuery->getProj());
                 root = make_unique<ProjectionStageDefault>(opCtx,
-                                                           canonicalQuery->getProj()->getProjObj(),
+                                                           *canonicalQuery->getProj(),
                                                            ws,
                                                            std::move(root),
                                                            *canonicalQuery->root(),
@@ -813,7 +814,7 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
     }
 
     return {make_unique<ProjectionStageDefault>(opCtx,
-                                                lp->getProjObj(),
+                                                *lp.get(),
                                                 ws,
                                                 std::unique_ptr<PlanStage>(root.release()),
                                                 *cq->root(),
