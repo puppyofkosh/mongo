@@ -2521,6 +2521,10 @@ intrusive_ptr<Expression> ExpressionMeta::parse(
         return new ExpressionMeta(expCtx, MetaType::SEARCH_SCORE);
     } else if (expr.valueStringData() == "searchHighlights") {
         return new ExpressionMeta(expCtx, MetaType::SEARCH_HIGHLIGHTS);
+    } else if (expr.valueStringData() == "geoNearDistance") {
+        return new ExpressionMeta(expCtx, MetaType::GEO_NEAR_DISTANCE);
+    } else if (expr.valueStringData() == "geoNearPoint") {
+        return new ExpressionMeta(expCtx, MetaType::GEO_NEAR_POINT);
     } else {
         uasserted(17308, "Unsupported argument to $meta: " + expr.String());
     }
@@ -2544,11 +2548,19 @@ Value ExpressionMeta::serialize(bool explain) const {
         case MetaType::SEARCH_HIGHLIGHTS:
             return Value(DOC("$meta"
                              << "searchHighlights"_sd));
+        case MetaType::GEO_NEAR_DISTANCE:
+            return Value(DOC("$meta"
+                             << "geoNearDistance"_sd));
+        case MetaType::GEO_NEAR_POINT:
+            return Value(DOC("$meta"
+                             << "geoNearPoint"_sd));
     }
     MONGO_UNREACHABLE;
 }
 
 Value ExpressionMeta::evaluate(const Document& root) const {
+    std::cout << "ian: Evaluating meta of " << serialize(true) << " on doc " << root
+              << "do we have the metadata?" << root.hasGeoNearDistance() << std::endl;
     switch (_metaType) {
         case MetaType::TEXT_SCORE:
             return root.hasTextScore() ? Value(root.getTextScore()) : Value();
@@ -2558,6 +2570,10 @@ Value ExpressionMeta::evaluate(const Document& root) const {
             return root.hasSearchScore() ? Value(root.getSearchScore()) : Value();
         case MetaType::SEARCH_HIGHLIGHTS:
             return root.hasSearchHighlights() ? Value(root.getSearchHighlights()) : Value();
+        case MetaType::GEO_NEAR_DISTANCE:
+            return root.hasGeoNearDistance() ? Value(root.getGeoNearDistance()) : Value();
+        case MetaType::GEO_NEAR_POINT:
+            return root.hasGeoNearPoint() ? Value(root.getGeoNearPoint()) : Value();
     }
     MONGO_UNREACHABLE;
 }

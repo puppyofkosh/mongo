@@ -212,18 +212,38 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
                                                std::unique_ptr<PlanStage> child,
                                                const MatchExpression& fullExpression,
                                                const CollatorInterface* collator)
-    : ProjectionStage(opCtx, logicalProjection.getProjObj(), ws, std::move(child), "PROJECTION_DEFAULT"),
+    : ProjectionStage(
+          opCtx, logicalProjection.getProjObj(), ws, std::move(child), "PROJECTION_DEFAULT"),
+      _logicalProjection(logicalProjection),
       _expCtx(new ExpressionContext(opCtx, collator)) {
 
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
         _expCtx, logicalProjection.getProjObj(), ProjectionPolicies{}, &fullExpression);
 }
 
+namespace {
+void appendMetadata(WorkingSetMember* member, MutableDocument* md, const LogicalProjection& lp) {
+    invariant(member);
+    invariant(md);
+
+    if (lp.wantGeoNearDistance()) {
+        std::cout << "ian: appending geoNear distance" << std::endl;
+        md->setGeoNearDistance(geoDistance(*member));
+    }
+
+    if (lp.wantGeoNearPoint()) {
+        std::cout << "ian: appending geoNear point" << std::endl;
+        md->setGeoNearPoint(Value(geoPoint(*member)));
+    }
+}
+}
+
 Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
     if (member->hasObj()) {
-        Document doc(member->obj.value());
+        MutableDocument doc(Document(member->obj.value()));
+        appendMetadata(member, &doc, _logicalProjection);
 
-        Document out = _projExec->applyTransformation(doc);
+        Document out = _projExec->applyTransformation(doc.freeze());
         transitionMemberToOwnedObj(out.toBson(), member);
     } else {
         // only inclusion projections can be covered.
@@ -255,9 +275,9 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
             invariant(elt);
             md.setNestedField(path, Value(*elt));
         }
+        appendMetadata(member, &md, _logicalProjection);
 
         Document doc(md.freeze());
-
         Document out = _projExec->applyTransformation(doc);
         transitionMemberToOwnedObj(out.toBson(), member);
     }

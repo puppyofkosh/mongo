@@ -68,7 +68,7 @@ GeoNearRandomTest.prototype.testPt = function(pt, opts) {
 
     let query = {loc: {}};
     query.loc[opts.sphere ? '$nearSphere' : '$near'] = pt;
-    const proj = {dis: {$meta: "geoNearDistance"}};
+    const proj = {dis: {$meta: "geoNearDistance"}, loc: {$meta: "geoNearPoint"}};
     const runQuery = (limit) => this.t.find(query, proj).limit(opts.nToTest).toArray();
 
     let last = runQuery(1);
@@ -84,11 +84,15 @@ GeoNearRandomTest.prototype.testPt = function(pt, opts) {
     // Test that a query using $near or $nearSphere returns the same points in order as the $geoNear
     // aggregation stage.
     const queryResults = runQuery(opts.nToTest);
-    const aggResults = this.t
-                           .aggregate([
-                               {$geoNear: {near: pt, distanceField: "dis", spherical: opts.sphere}},
-                               {$limit: opts.nToTest}
-                           ])
-                           .toArray();
+    const aggResults =
+        this.t
+            .aggregate([
+                {
+                  $geoNear:
+                      {near: pt, distanceField: "dis", spherical: opts.sphere, includeLocs: "loc"}
+                },
+                {$limit: opts.nToTest}
+            ])
+            .toArray();
     assert.eq(queryResults, aggResults);
 };

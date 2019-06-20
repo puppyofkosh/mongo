@@ -185,11 +185,15 @@ assert.eq(4, t.find({loc: {$near: offCenter, $maxDistance: step * 1.9}}).count()
 // **************
 // Make sure we can get all nearby points to point in range
 assert.eq(overallMax,
-          t.aggregate({$geoNear: {near: offCenter, distanceField: "d"}}).toArray()[0].loc.y);
+          t.aggregate({$geoNear: {near: offCenter, distanceField: "d", includeLocs: "loc"}})
+              .toArray()[0]
+              .loc.y);
 
 // Make sure we can get all nearby points to point on boundary
 assert.eq(overallMin,
-          t.aggregate({$geoNear: {near: onBoundsNeg, distanceField: "d"}}).toArray()[0].loc.y);
+          t.aggregate({$geoNear: {near: onBoundsNeg, distanceField: "d", includeLocs: "loc"}})
+              .toArray()[0]
+              .loc.y);
 
 // Make sure we can't get all nearby points to point over boundary
 assert.commandFailedWithCode(db.runCommand({

@@ -195,7 +195,7 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
         } else {
             // Treat it as a generic agg expression.
             _root->addExpressionForPath(
-                pathToObject, Expression::parseExpression(_expCtx, objSpec, variablesParseState));
+                FieldPath(pathToObject.toString(), true), Expression::parseExpression(_expCtx, objSpec, variablesParseState));
         }
         return true;
     }

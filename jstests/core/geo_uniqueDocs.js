@@ -5,6 +5,8 @@ collName = 'geo_uniqueDocs_test';
 t = db.geo_uniqueDocs_test;
 t.drop();
 
+assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
+
 assert.commandWorked(t.save({locs: [[0, 2], [3, 4]]}));
 assert.commandWorked(t.save({locs: [[6, 8], [10, 10]]}));
 

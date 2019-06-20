@@ -118,6 +118,7 @@ private:
 
     // Fully-general heavy execution object.
     // ProjectionExec _exec;
+    LogicalProjection _logicalProjection;
     std::unique_ptr<parsed_aggregation_projection::ParsedAggregationProjection> _projExec;
 
     // TODO: We may have to thread this through some other way.
