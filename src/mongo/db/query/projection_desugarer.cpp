@@ -81,6 +81,39 @@ void validatePositionalProjection(const std::string& lhs, const MatchExpression*
                                 << "match the query document.");
     }
 }
+boost::optional<BSONObj> convertToAggSlice(BSONElement elt) {
+    if (elt.isABSONObj()) {
+        BSONObj obj = elt.embeddedObject();
+
+        BSONElement firstElem = obj.firstElement();
+        if (firstElem.fieldNameStringData() == "$slice") {
+            if (firstElem.isNumber()) {
+                int i = firstElem.numberInt();
+                if (i < 0) {
+                    return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
+                                                       << obj.firstElement().numberInt()
+                                                       << -1 * obj.firstElement().numberInt()));
+                } else {
+                    return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
+                                                       << obj.firstElement().numberInt()));
+                }
+            } else if (firstElem.type() == BSONType::Array) {
+                BSONObj arr = firstElem.embeddedObject();
+                invariant(2 == arr.nFields());
+
+                BSONObjIterator it(arr);
+                int skip = it.next().numberInt();
+                int limit = it.next().numberInt();
+
+                return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
+                                                   << skip << limit));
+            }
+        }
+    }
+
+    return boost::none;
+}
+
 }  // namespace
 
 // TODO: Eventually this should probably do two passes: the first checks whether there are even any
@@ -90,6 +123,11 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
 
     bool foundPositional = false;
     for (auto&& elem : originalProjection) {
+        auto convertedSlice = convertToAggSlice(elem);
+        if (convertedSlice) {
+            bob.append(elem.fieldNameStringData(), *convertedSlice);
+            continue;
+        }
         if (!isPositionalOperator(elem.fieldNameStringData())) {
             bob.append(elem);
             continue;
@@ -114,5 +152,5 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
 
     return {bob.obj()};
 }
-} // namespace projection_desugarer
-} // namespace mongo
+}  // namespace projection_desugarer
+}  // namespace mongo
