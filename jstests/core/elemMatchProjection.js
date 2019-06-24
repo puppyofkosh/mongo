@@ -85,8 +85,7 @@
               "single object match first");
 
     assert.eq(undefined,
-              coll.find({group: 3, 'x.a': 2}, {_id: 0, 'x.$': 1}).sort({_id:
-              1}).toArray()[0]._id,
+              coll.find({group: 3, 'x.a': 2}, {_id: 0, 'x.$': 1}).sort({_id: 1}).toArray()[0]._id,
               "single object match with filtered _id");
 
     assert.eq(1,

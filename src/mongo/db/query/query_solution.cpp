@@ -915,7 +915,7 @@ ProjectionNode* ProjectionNodeReturnKey::clone() const {
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
 }
-    
+
 ProjectionNode* ProjectionNodeCovered::clone() const {
     auto copy = std::make_unique<ProjectionNodeCovered>(
         std::unique_ptr<QuerySolutionNode>(children[0]->clone()),

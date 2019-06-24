@@ -45,7 +45,8 @@ public:
     /**
      * Throws a AssertionException if a field name does not pass validation.
      */
-    static void uassertValidFieldName(StringData fieldName, bool allowDollarPrefixedFieldName = false);
+    static void uassertValidFieldName(StringData fieldName,
+                                      bool allowDollarPrefixedFieldName = false);
 
     /**
      * Concatenates 'prefix' and 'suffix' using dotted path notation. 'prefix' is allowed to be

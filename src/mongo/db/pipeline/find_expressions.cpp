@@ -148,10 +148,8 @@ Value ExpressionInternalFindPositional::evaluate(const Document& root) const {
     Value matchingElem = val[*optIndex];
 
     // Match existing behavior in find().
-    uassert(ErrorCodes::BadValue,
-            "positional operator element mismatch",
-            !matchingElem.missing());
-    
+    uassert(ErrorCodes::BadValue, "positional operator element mismatch", !matchingElem.missing());
+
     std::cout << "matchingElem is " << matchingElem << std::endl;
     invariant(!matchingElem.missing());
     return Value(std::vector<Value>{matchingElem});

@@ -105,8 +105,8 @@ boost::optional<BSONObj> convertToAggSlice(BSONElement elt) {
                 int skip = it.next().numberInt();
                 int limit = it.next().numberInt();
 
-                return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
-                                                   << skip << limit));
+                return BSON("$slice"
+                            << BSON_ARRAY(("$" + elt.fieldNameStringData()) << skip << limit));
             }
         }
     }

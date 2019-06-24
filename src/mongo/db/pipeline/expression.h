@@ -1647,7 +1647,7 @@ private:
         GEO_NEAR_DISTANCE,
         GEO_NEAR_POINT,
     };
-    
+
     ExpressionMeta(const boost::intrusive_ptr<ExpressionContext>& expCtx, MetaType metaType);
 
     MetaType _metaType;

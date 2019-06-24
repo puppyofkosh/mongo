@@ -21,7 +21,7 @@
     load("jstests/libs/fixture_helpers.js");
 
     assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
-    
+
     var coll = db.collation;
     coll.drop();
 
@@ -532,7 +532,7 @@
     // Distinct scan can be used without a fetch when predicate has exact non-string bounds.
     explain = coll.explain("queryPlanner").distinct("a", {a: {$gt: 3}});
     assert(planHasStage(db, explain.queryPlanner.winningPlan, "DISTINCT_SCAN"));
-    //assert(planHasStage(db, explain.queryPlanner.winningPlan, "PROJECTION_COVERED"));
+    // assert(planHasStage(db, explain.queryPlanner.winningPlan, "PROJECTION_COVERED"));
     assert(!planHasStage(db, explain.queryPlanner.winningPlan, "FETCH"));
 
     // Distinct should not use index when no collation specified and collection default collation is
