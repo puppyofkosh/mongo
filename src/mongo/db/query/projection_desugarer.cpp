@@ -88,15 +88,8 @@ boost::optional<BSONObj> convertToAggSlice(BSONElement elt) {
         BSONElement firstElem = obj.firstElement();
         if (firstElem.fieldNameStringData() == "$slice") {
             if (firstElem.isNumber()) {
-                int i = firstElem.numberInt();
-                if (i < 0) {
-                    return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
-                                                       << obj.firstElement().numberInt()
-                                                       << -1 * obj.firstElement().numberInt()));
-                } else {
-                    return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
-                                                       << obj.firstElement().numberInt()));
-                }
+                return BSON("$slice" << BSON_ARRAY(("$" + elt.fieldNameStringData())
+                                                   << obj.firstElement().numberInt()));
             } else if (firstElem.type() == BSONType::Array) {
                 BSONObj arr = firstElem.embeddedObject();
                 invariant(2 == arr.nFields());
