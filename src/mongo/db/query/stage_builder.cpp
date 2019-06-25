@@ -149,7 +149,6 @@ PlanStage* buildStages(OperationContext* opCtx,
                 return nullptr;
             }
 
-            log() << "ian: projection default";
             invariant(cq.getProj());
             return new ProjectionStageDefault(opCtx,
                                               *cq.getProj(),
@@ -182,7 +181,6 @@ PlanStage* buildStages(OperationContext* opCtx,
                 return nullptr;
             }
 
-            log() << "ian: projection simple";
             invariant(cq.getProj());
             return new ProjectionStageDefault(opCtx,
                                               *cq.getProj(),
@@ -199,7 +197,6 @@ PlanStage* buildStages(OperationContext* opCtx,
                 return nullptr;
             }
 
-            log() << "ian: projection return key";
             invariant(cq.getProj());
             return new ProjectionStageReturnKey(opCtx,
                                                 *cq.getProj(),

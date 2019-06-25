@@ -2559,8 +2559,6 @@ Value ExpressionMeta::serialize(bool explain) const {
 }
 
 Value ExpressionMeta::evaluate(const Document& root) const {
-    std::cout << "ian: Evaluating meta of " << serialize(true) << " on doc " << root
-              << "do we have the metadata?" << root.hasGeoNearDistance() << std::endl;
     switch (_metaType) {
         case MetaType::TEXT_SCORE:
             return root.hasTextScore() ? Value(root.getTextScore()) : Value();

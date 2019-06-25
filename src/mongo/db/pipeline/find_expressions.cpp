@@ -78,14 +78,7 @@ Value ExpressionInternalFindElemMatch::evaluate(const Document& root) const {
     MatchDetails arrayDetails;
     arrayDetails.requestElemMatchKey();
 
-    std::cout << "ian: ExpressionInternalFindElemMatch::evaluate() doc is " << root << "\n";
-    std::cout << "ian: ExpressionInternalFindElemMatch::evaluate() val at fieldpath is " << val
-              << "\n";
-    std::cout << "ian: ExpressionInternalFindElemMatch::evaluate() _matchExpr is "
-              << _matchExpr->debugString() << std::endl;
-
     if (!_matchExpr->matchesBSON(root.toBson(), &arrayDetails)) {
-        std::cout << "ian: Document did not match!\n";
         return Value();
     }
 
@@ -93,14 +86,10 @@ Value ExpressionInternalFindElemMatch::evaluate(const Document& root) const {
         return val;
     }
 
-    std::cout << "ian: elemMatch key is " << arrayDetails.elemMatchKey() << std::endl;
-    std::cout << "val is " << val << std::endl;
-
     boost::optional<size_t> optIndex = str::parseUnsignedBase10Integer(arrayDetails.elemMatchKey());
     invariant(optIndex);
     Value matchingElem = val[*optIndex];
 
-    std::cout << "matchingElem is " << matchingElem << std::endl;
     invariant(!matchingElem.missing());
     return Value(std::vector<Value>{matchingElem});
 }

@@ -244,9 +244,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     if (!_qr->getProj().isEmpty()) {
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?
-        std::cout << "ian: original projection " << _qr->getProj() << std::endl;
         auto desugaredProj = projection_desugarer::desugarProjection(_qr->getProj(), _root.get());
-        std::cout << "ian: desugared projection " << desugaredProj.desugaredObj << std::endl;
 
         // Be sure that this projection is used from here out.
         _qr->setProj(desugaredProj.desugaredObj);

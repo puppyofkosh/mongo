@@ -227,12 +227,10 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
     invariant(md);
 
     if (lp.wantGeoNearDistance()) {
-        std::cout << "ian: appending geoNear distance" << std::endl;
         md->setGeoNearDistance(geoDistance(*member));
     }
 
     if (lp.wantGeoNearPoint()) {
-        std::cout << "ian: appending geoNear point" << std::endl;
         md->setGeoNearPoint(Value(geoPoint(*member)));
     }
 }

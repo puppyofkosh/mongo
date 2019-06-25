@@ -136,7 +136,6 @@ public:
      */
     static std::unique_ptr<LogicalProjection> parse(const DesugaredProjection& spec,
                                                     ProjectionPolicies policies) {
-        std::cout << "ian: parsing projection " << spec.desugaredObj << std::endl;
         auto parser = std::make_unique<LogicalProjection>(spec.desugaredObj, policies);
         parser->parse();
         invariant(parser->_parsedType);
