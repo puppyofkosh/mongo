@@ -42,10 +42,13 @@
 
 #include "mongo/db/commands/feature_compatibility_version_documentation.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/pipeline/document.h"
+#include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/find_expressions.h"
 #include "mongo/db/pipeline/value.h"
 #include "mongo/db/query/datetime/date_time_support.h"
+#include "mongo/db/server_options.h"
 #include "mongo/platform/bits.h"
 #include "mongo/platform/decimal128.h"
 #include "mongo/util/regex_util.h"
@@ -103,15 +106,41 @@ Value ExpressionInternalFindElemMatch::serialize(bool explain) const {
 }
 
 /* -------------------------- ExpressionInternalFindPositional ------------------------------ */
-
+REGISTER_EXPRESSION_WITH_MIN_VERSION(
+    _internalFindPositional,
+    ExpressionInternalFindPositional::parse,
+    // TODO: Should be 4.4!
+    ServerGlobalParams::FeatureCompatibility::Version::kFullyUpgradedTo42);
 boost::intrusive_ptr<Expression> ExpressionInternalFindPositional::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const std::string& fp,
-    const MatchExpression* matchExpr) {
+    std::unique_ptr<MatchExpression> matchExpr) {
 
     // TODO: this create() is deprecated. Why?
     auto fieldPathExpr = ExpressionFieldPath::create(expCtx, fp);
-    return new ExpressionInternalFindPositional(expCtx, std::move(fieldPathExpr), matchExpr);
+    return new ExpressionInternalFindPositional(
+        expCtx, std::move(fieldPathExpr), std::move(matchExpr));
+}
+
+// TODO: maybe use ExpressionFixedArity
+boost::intrusive_ptr<Expression> ExpressionInternalFindPositional::parse(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    BSONElement expr,
+    const VariablesParseState& vpsIn) {
+    uassert(ErrorCodes::BadValue, "expr should be object", expr.type() == BSONType::Object);
+
+    BSONObj obj = expr.embeddedObject();
+    uassert(
+        ErrorCodes::BadValue, "match should be object", obj["match"].type() == BSONType::Object);
+    auto match =
+        uassertStatusOK(MatchExpressionParser::parse(obj["match"].embeddedObject(), expCtx));
+
+    uassert(ErrorCodes::BadValue,
+            "field name should be string",
+            obj["field"].type() == BSONType::String);
+    auto fieldName = obj["field"].String();
+
+    return ExpressionInternalFindPositional::create(expCtx, fieldName, std::move(match));
 }
 
 Value ExpressionInternalFindPositional::evaluate(const Document& root) const {

@@ -116,12 +116,15 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
 
     bool foundPositional = false;
     for (auto&& elem : originalProjection) {
-        auto convertedSlice = convertToAggSlice(elem);
-        if (convertedSlice) {
-            bob.append(elem.fieldNameStringData(), *convertedSlice);
-            continue;
-        }
         if (!isPositionalOperator(elem.fieldNameStringData())) {
+
+            // If it's not positional is it $slice?
+            auto convertedSlice = convertToAggSlice(elem);
+            if (convertedSlice) {
+                bob.append(elem.fieldNameStringData(), *convertedSlice);
+                continue;
+            }
+
             bob.append(elem);
             continue;
         }
@@ -140,6 +143,11 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
         {
             BSONObjBuilder subObj(bob.subobjStart(beforePositional));
             BSONObjBuilder elemMatch(subObj.subobjStart("$_internalFindPositional"));
+
+            elemMatch.append("field", beforePositional);
+
+            BSONObjBuilder match(subObj.subobjStart("match"));
+            me->serialize(&match);
         }
     }
 

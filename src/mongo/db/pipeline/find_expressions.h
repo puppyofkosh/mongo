@@ -106,12 +106,17 @@ private:
 
 class ExpressionInternalFindPositional final : public Expression {
 public:
+    static boost::intrusive_ptr<Expression> parse(
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        BSONElement expr,
+        const VariablesParseState& vpsIn);
+
     /**
      * Creates an ExpressionInternalFindElemMatch.
      */
     static boost::intrusive_ptr<Expression> create(const boost::intrusive_ptr<ExpressionContext>&,
                                                    const std::string& fieldPath,
-                                                   const MatchExpression* matchExpr);
+                                                   std::unique_ptr<MatchExpression> matchExpr);
 
     Value evaluate(const Document& root) const final;
     boost::intrusive_ptr<Expression> optimize() final;
@@ -131,13 +136,13 @@ protected:
 private:
     ExpressionInternalFindPositional(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                      boost::intrusive_ptr<Expression> fieldPathExpr,
-                                     const MatchExpression* matchExpr)
+                                     std::unique_ptr<MatchExpression> matchExpr)
         : Expression(expCtx, {std::move(fieldPathExpr)}),
           _fieldPathToMatchOn(_children[0]),
           _matchExpr(std::move(matchExpr)) {}
     boost::intrusive_ptr<Expression>& _fieldPathToMatchOn;
 
-    const MatchExpression* _matchExpr;
+    std::unique_ptr<MatchExpression> _matchExpr;
 };
 
 }  // namespace mongo
