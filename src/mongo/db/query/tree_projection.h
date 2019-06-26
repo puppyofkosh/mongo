@@ -67,6 +67,7 @@ public:
     }
 
     const ProjectionPolicies policies;
+
 private:
     // For building the logical tree
     bool parseObjectAsExpression(StringData pathToObject,

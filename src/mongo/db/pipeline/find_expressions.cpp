@@ -61,17 +61,44 @@ namespace mongo {
 
 /* -------------------------- ExpressionInternalFindElemMatch ------------------------------ */
 
+REGISTER_EXPRESSION_WITH_MIN_VERSION(
+    _internalFindElemMatch,
+    ExpressionInternalFindElemMatch::parse,
+    // TODO: Should be 4.4!
+    ServerGlobalParams::FeatureCompatibility::Version::kFullyUpgradedTo42);
+
+boost::intrusive_ptr<Expression> ExpressionInternalFindElemMatch::parse(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    BSONElement expr,
+    const VariablesParseState& vpsIn) {
+    uassert(ErrorCodes::BadValue, "expr should be object", expr.type() == BSONType::Object);
+
+    BSONObj obj = expr.embeddedObject();
+    uassert(ErrorCodes::BadValue, "path should be string", obj["path"].type() == BSONType::String);
+    uassert(
+        ErrorCodes::BadValue, "match should be object", obj["match"].type() == BSONType::Object);
+
+    BSONObjBuilder bob;
+    bob.append(obj["path"].String(), expr["match"].embeddedObject());
+    BSONObj match = bob.obj();
+
+    std::unique_ptr<MatchExpression> matcher =
+        uassertStatusOK(MatchExpressionParser::parse(match, expCtx));
+
+    return ExpressionInternalFindElemMatch::create(
+        expCtx, obj["path"].String(), match, std::move(matcher));
+}
+
 boost::intrusive_ptr<Expression> ExpressionInternalFindElemMatch::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const std::string& fp,
-    BSONObj originalProjection,
     BSONObj elemMatchObj,
     std::unique_ptr<MatchExpression> matchExpr) {
 
     // TODO: this create() is deprecated. Why?
     auto fieldPathExpr = ExpressionFieldPath::create(expCtx, fp);
     return new ExpressionInternalFindElemMatch(
-        expCtx, std::move(fieldPathExpr), originalProjection, elemMatchObj, std::move(matchExpr));
+        expCtx, std::move(fieldPathExpr), elemMatchObj, std::move(matchExpr));
 }
 
 Value ExpressionInternalFindElemMatch::evaluate(const Document& root) const {

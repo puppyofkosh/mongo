@@ -85,9 +85,7 @@ void TreeProjection::parseSubObject(const BSONObj& subObj, TreeProjectionNode* n
             }
             default: {
                 // This is a literal value.
-                node->addProjectionForPath(
-                    FieldPath(elem.fieldName()),
-                    ProjectionValue(elem));
+                node->addProjectionForPath(FieldPath(elem.fieldName()), ProjectionValue(elem));
             }
         }
     }

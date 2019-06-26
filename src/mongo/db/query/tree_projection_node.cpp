@@ -54,7 +54,8 @@ TreeProjectionNode* TreeProjectionNode::addOrGetChild(const std::string& field) 
 TreeProjectionNode* TreeProjectionNode::addChild(const std::string& field) {
     invariant(!str::contains(field, "."));
     _orderToProcessAdditionsAndChildren.push_back(field);
-    auto insertedPair = _children.emplace(std::make_pair(field, std::make_unique<TreeProjectionNode>(_policies)));
+    auto insertedPair =
+        _children.emplace(std::make_pair(field, std::make_unique<TreeProjectionNode>(_policies)));
     return insertedPair.first->second.get();
 }
 

@@ -169,26 +169,10 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
         // field.
         invariant(objSpec.nFields() == 1);
 
-        // It could be a special find() project expression.
-        // TODO: Add flag for find() projection.
-        if (objSpec.firstElementFieldNameStringData() == "$elemMatch") {
-            BSONObjBuilder bob;
-            bob.append(pathToObject, objSpec);
-            BSONObj match = bob.obj();
-
-            std::unique_ptr<MatchExpression> matcher =
-                uassertStatusOK(MatchExpressionParser::parse(match, _expCtx));
-
-            _root->addExpressionForPath(
-                pathToObject,
-                ExpressionInternalFindElemMatch::create(
-                    _expCtx, std::string(pathToObject), objSpec, match, std::move(matcher)));
-        } else {
-            // Treat it as a generic agg expression.
-            _root->addExpressionForPath(
-                FieldPath(pathToObject.toString(), true),
-                Expression::parseExpression(_expCtx, objSpec, variablesParseState));
-        }
+        // Treat it as a generic agg expression.
+        _root->addExpressionForPath(
+            FieldPath(pathToObject.toString(), true),
+            Expression::parseExpression(_expCtx, objSpec, variablesParseState));
         return true;
     }
     return false;

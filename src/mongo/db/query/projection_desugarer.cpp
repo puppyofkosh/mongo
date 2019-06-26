@@ -82,7 +82,7 @@ void validatePositionalProjection(const std::string& lhs, const MatchExpression*
     }
 }
 boost::optional<BSONObj> convertToAggSlice(BSONElement elt) {
-    if (elt.isABSONObj()) {
+    if (elt.type() == BSONType::Object) {
         BSONObj obj = elt.embeddedObject();
 
         BSONElement firstElem = obj.firstElement();
@@ -123,6 +123,24 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
             if (convertedSlice) {
                 bob.append(elem.fieldNameStringData(), *convertedSlice);
                 continue;
+            }
+
+            if (elem.type() == BSONType::Object) {
+                BSONObj obj = elem.embeddedObject();
+
+                // Is it an $elemMatch?
+                if (obj.firstElementFieldNameStringData() == "$elemMatch") {
+                    BSONObjBuilder convertedElemMatch(bob.subobjStart(elem.fieldNameStringData()));
+                    BSONObjBuilder elemMatch(
+                        convertedElemMatch.subobjStart("$_internalFindElemMatch"));
+                    elemMatch.append("path", elem.fieldNameStringData());
+                    uassert(ErrorCodes::BadValue,
+                            "$elemMatch should be object",
+                            obj.firstElement().type() == BSONType::Object);
+                    elemMatch.append("match", obj);
+
+                    continue;
+                }
             }
 
             bob.append(elem);

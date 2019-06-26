@@ -59,12 +59,16 @@ namespace mongo {
 // TODO: Maybe put this in a header file, maybe ExpressionInternal?
 class ExpressionInternalFindElemMatch final : public Expression {
 public:
+    static boost::intrusive_ptr<Expression> parse(
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        BSONElement expr,
+        const VariablesParseState& vpsIn);
+
     /**
      * Creates an ExpressionInternalFindElemMatch.
      */
     static boost::intrusive_ptr<Expression> create(const boost::intrusive_ptr<ExpressionContext>&,
                                                    const std::string& fieldPath,
-                                                   BSONObj originalProj,
                                                    BSONObj elemMatchObj,
                                                    std::unique_ptr<MatchExpression> matchExpr);
 
@@ -86,19 +90,13 @@ protected:
 private:
     ExpressionInternalFindElemMatch(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                     boost::intrusive_ptr<Expression> fieldPathExpr,
-                                    BSONObj originalProjection,
                                     BSONObj elemMatchObj,
                                     std::unique_ptr<MatchExpression> matchExpr)
         : Expression(expCtx, {std::move(fieldPathExpr)}),
           _fieldPathToMatchOn(_children[0]),
-          _originalProjection(originalProjection),
           _elemMatchObj(elemMatchObj),
           _matchExpr(std::move(matchExpr)) {}
     boost::intrusive_ptr<Expression>& _fieldPathToMatchOn;
-
-    // keep a reference to the original projection around since _matchExpr references
-    // values inside of it.
-    BSONObj _originalProjection;
 
     BSONObj _elemMatchObj;
     std::unique_ptr<MatchExpression> _matchExpr;

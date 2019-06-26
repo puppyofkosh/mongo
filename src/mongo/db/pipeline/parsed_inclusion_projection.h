@@ -31,11 +31,11 @@
 
 #include <memory>
 
-#include "mongo/db/query/tree_projection.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/db/pipeline/parsed_aggregation_projection.h"
 #include "mongo/db/pipeline/parsed_aggregation_projection_node.h"
+#include "mongo/db/query/tree_projection.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/stdx/unordered_map.h"
 #include "mongo/stdx/unordered_set.h"
