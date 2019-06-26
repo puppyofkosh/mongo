@@ -31,6 +31,7 @@
 
 #include <memory>
 
+#include "mongo/db/query/tree_projection.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/db/pipeline/parsed_aggregation_projection.h"
@@ -96,6 +97,9 @@ public:
         : ParsedAggregationProjection(expCtx, policies),
           _root(new InclusionNode(policies)),
           _precedingMatchExpression(precedingMatchingExpression) {}
+
+    ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                              TreeProjection* tp);
 
     TransformerType getType() const final {
         return TransformerType::kInclusionProjection;
@@ -186,6 +190,10 @@ private:
     void parseSubObject(const BSONObj& subObj,
                         const VariablesParseState& variablesParseState,
                         InclusionNode* node);
+
+    // For converting from TreeProjection to this.
+    void convertTree(TreeProjection* tp, InclusionNode* root);
+    void convertNode(TreeProjectionNode* tp, InclusionNode* ic, bool isTopLevel);
 
     // Not strictly necessary to track here, but makes serialization easier.
     bool _idExcluded = false;

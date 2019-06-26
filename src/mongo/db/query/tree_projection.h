@@ -48,7 +48,7 @@ public:
     enum class ProjectType { kInclusion, kExclusion };
 
     TreeProjection(ProjectionPolicies policies)
-        : _policies(policies), _root(new TreeProjectionNode(policies)) {}
+        : policies(policies), _root(new TreeProjectionNode(policies)) {}
 
     /**
      * Parses 'spec' to determine whether it is an inclusion or exclusion projection. 'Computed'
@@ -62,6 +62,11 @@ public:
         return t;
     }
 
+    TreeProjectionNode* root() {
+        return _root.get();
+    }
+
+    const ProjectionPolicies policies;
 private:
     // For building the logical tree
     bool parseObjectAsExpression(StringData pathToObject,
@@ -69,8 +74,6 @@ private:
                                  TreeProjectionNode* parent);
     void buildLogicalProjectionTree(const BSONObj& spec);
     void parseSubObject(const BSONObj& subObj, TreeProjectionNode* node);
-
-    const ProjectionPolicies _policies;
 
     // Tree representation
     std::unique_ptr<TreeProjectionNode> _root;

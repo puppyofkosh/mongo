@@ -175,6 +175,24 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     return parsedProject;
 }
 
+namespace {
+std::unique_ptr<ParsedAggregationProjection> createFromTreeProj(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    LogicalProjection* lp,
+    TreeProjection* tp) {
+    // We can't use make_unique() here, since the branches have different types.
+    std::unique_ptr<ParsedAggregationProjection> parsedProject(
+        lp->type() == LogicalProjection::ProjectType::kInclusion
+            ? static_cast<ParsedAggregationProjection*>(new ParsedInclusionProjection(expCtx, tp))
+            : static_cast<ParsedAggregationProjection*>(
+                  new ParsedExclusionProjection(expCtx, tp->policies)));
+
+    // Actually parse the specification.
+    parsedProject->parse(lp->getProjObj());
+    return parsedProject;
+}
+}
+
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const BSONObj& spec,
@@ -189,7 +207,7 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
 
     auto tp = TreeProjection::parse(*lp, policies);
 
-    return create(expCtx, lp.get(), policies, matchExpression);
+    return createFromTreeProj(expCtx, lp.get(), tp.get());
 }
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

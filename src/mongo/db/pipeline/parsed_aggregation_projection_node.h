@@ -124,6 +124,10 @@ public:
     void serialize(boost::optional<ExplainOptions::Verbosity> explain,
                    MutableDocument* output) const;
 
+    void setProcessingOrder(std::vector<std::string> order) {
+        _orderToProcessAdditionsAndChildren = std::move(order);
+    }
+
 protected:
     // Returns a unique_ptr to a new instance of the implementing class for the given 'fieldName'.
     virtual std::unique_ptr<ProjectionNode> makeChild(std::string fieldName) const = 0;

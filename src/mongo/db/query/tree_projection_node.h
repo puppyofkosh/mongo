@@ -57,6 +57,8 @@ struct ProjectionValue {
 
 class TreeProjectionNode {
 public:
+    using ChildMap = stdx::unordered_map<std::string, std::unique_ptr<TreeProjectionNode>>;
+    
     TreeProjectionNode(ProjectionPolicies p) : _policies(p) {}
 
     /**
@@ -70,6 +72,18 @@ public:
      * the child node if it already exists, or the newly-created child otherwise.
      */
     TreeProjectionNode* addOrGetChild(const std::string& field);
+
+    const ChildMap& getChildren() const {
+        return _children;
+    }
+
+    const StringMap<ProjectionValue>& getProjections() const {
+        return _projections;
+    }
+
+    const std::vector<std::string> getProcessingOrder() const {
+        return _orderToProcessAdditionsAndChildren;
+    }
 
 private:
     TreeProjectionNode* addChild(const std::string& field);
