@@ -123,6 +123,18 @@ env.Library(
 )
 
 env.Library(
+    target="tree_projection",
+    source=[
+        "tree_projection.cpp",
+        "tree_projection_node.cpp"
+    ],
+    LIBDEPS=[
+        "$BUILD_DIR/mongo/base",
+        "logical_projection"
+    ],
+)
+
+env.Library(
     target="explain_options",
     source=[
         "explain_options.cpp",

@@ -32,6 +32,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/pipeline/projection_policies.h"
+
 #include "mongo/db/query/projection_desugarer.h"
 #include "mongo/util/str.h"
 
@@ -177,6 +178,7 @@ private:
     void parseNestedObject(const BSONObj& thisLevelSpec, const FieldPath& prefix);
 
     void parseMetaObject(StringData fieldName, StringData metadataRequested);
+
 
     // The original object. Used to generate more helpful error messages.
     BSONObj _rawObj;

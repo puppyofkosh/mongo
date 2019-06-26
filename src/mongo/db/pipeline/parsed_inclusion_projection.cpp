@@ -175,7 +175,6 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
             BSONObjBuilder bob;
             bob.append(pathToObject, objSpec);
             BSONObj match = bob.obj();
-            // BSONObj obj = objSpec.firstElement().wrap(pathToObject);
 
             std::unique_ptr<MatchExpression> matcher =
                 uassertStatusOK(MatchExpressionParser::parse(match, _expCtx));

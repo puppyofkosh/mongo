@@ -241,5 +241,4 @@ bool LogicalProjection::isFieldRetainedExactly(StringData path) const {
 
     return true;
 }
-
 }  // namespace mongo

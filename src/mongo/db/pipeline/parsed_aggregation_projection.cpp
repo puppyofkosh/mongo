@@ -41,6 +41,7 @@
 #include "mongo/db/pipeline/parsed_exclusion_projection.h"
 #include "mongo/db/pipeline/parsed_inclusion_projection.h"
 #include "mongo/db/query/logical_projection.h"
+#include "mongo/db/query/tree_projection.h"
 #include "mongo/stdx/unordered_set.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/str.h"
@@ -185,6 +186,8 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     ProjectionSpecValidator::uassertValid(spec, "$project");
 
     auto lp = LogicalProjection::parse({spec}, policies);
+
+    auto tp = TreeProjection::parse(*lp, policies);
 
     return create(expCtx, lp.get(), policies, matchExpression);
 }
