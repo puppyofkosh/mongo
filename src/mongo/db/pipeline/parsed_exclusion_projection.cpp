@@ -40,6 +40,51 @@ namespace mongo {
 
 namespace parsed_aggregation_projection {
 
+ParsedExclusionProjection::ParsedExclusionProjection(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx, TreeProjection* tp, ProjectionPolicies policies)
+    : ParsedAggregationProjection(expCtx, policies), _root(new ExclusionNode(policies)) {
+    convertTree(tp, _root.get());
+}
+
+void ParsedExclusionProjection::convertNode(TreeProjectionNode* tp,
+                                            ExclusionNode* ic,
+                                            bool isTopLevel) {
+    // Tracks whether or not we should apply the default _id projection policy.
+    bool idSpecified = false;
+
+    for (auto&& projValue : tp->getProjections()) {
+        idSpecified |= projValue.first == "_id"_sd;
+
+        if (projValue.second.rawExpression) {
+            MONGO_UNREACHABLE;
+        } else if (projValue.second.included) {
+            ic->addProjectionForPath(projValue.first);
+        } else if (projValue.second.rawValue) {
+            MONGO_UNREACHABLE;
+        }
+    }
+
+    // Use the default policy if no _id was specified and we're parsing the top level of the
+    // projection.
+    // If _id was not specified, then doing nothing will cause it to be included. If the default _id
+    // policy is kExcludeId, we add a new entry for _id to the ExclusionNode tree here.
+    if (isTopLevel && !idSpecified && _policies.idPolicy == ProjectionPolicies::DefaultIdPolicy::kExcludeId) {
+        _root->addProjectionForPath({FieldPath("_id")});
+    }
+
+    // Deal with nested projections
+    for (auto&& child : tp->getChildren()) {
+        ExclusionNode* icChild = ic->addOrGetChild(child.first);
+        convertNode(child.second.get(), icChild, false);
+    }
+
+    ic->setProcessingOrder(tp->getProcessingOrder());
+}
+
+void ParsedExclusionProjection::convertTree(TreeProjection* tp, ExclusionNode* root) {
+    convertNode(tp->root(), root, true);
+}
+    
 Document ParsedExclusionProjection::serializeTransformation(
     boost::optional<ExplainOptions::Verbosity> explain) const {
     return _root->serialize(explain);

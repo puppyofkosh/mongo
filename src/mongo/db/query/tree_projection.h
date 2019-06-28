@@ -47,8 +47,8 @@ class TreeProjection {
 public:
     enum class ProjectType { kInclusion, kExclusion };
 
-    TreeProjection(ProjectionPolicies policies)
-        : policies(policies), _root(new TreeProjectionNode(policies)) {}
+    TreeProjection(ProjectionPolicies p)
+        : policies(p), _root(new TreeProjectionNode(p)) {}
 
     /**
      * Parses 'spec' to determine whether it is an inclusion or exclusion projection. 'Computed'

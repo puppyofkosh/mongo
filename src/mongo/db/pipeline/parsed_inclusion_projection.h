@@ -91,6 +91,8 @@ protected:
  */
 class ParsedInclusionProjection : public ParsedAggregationProjection {
 public:
+
+    // TODO: Remove
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               ProjectionPolicies policies,
                               const MatchExpression* precedingMatchingExpression)
@@ -109,10 +111,11 @@ public:
         return *_root;
     }
 
-    /**
-     * Parses the projection specification given by 'spec', populating internal data structures.
-     */
-    void parse(const BSONObj& spec) final;
+    void parse(const BSONObj& b) override {
+        // TODO: Remove this
+        MONGO_UNREACHABLE;
+    }
+
 
     /**
      * Serialize the projection.
@@ -171,26 +174,6 @@ public:
     bool isSubsetOfProjection(const BSONObj& proj) const final;
 
 private:
-    /**
-     * Attempts to parse 'objSpec' as an expression like {$add: [...]}. Adds a computed field to
-     * '_root' and returns true if it was successfully parsed as an expression. Returns false if it
-     * was not an expression specification.
-     *
-     * Throws an error if it was determined to be an expression specification, but failed to parse
-     * as a valid expression.
-     */
-    bool parseObjectAsExpression(StringData pathToObject,
-                                 const BSONObj& objSpec,
-                                 const VariablesParseState& variablesParseState);
-
-    /**
-     * Traverses 'subObj' and parses each field. Adds any included or computed fields at this level
-     * to 'node'.
-     */
-    void parseSubObject(const BSONObj& subObj,
-                        const VariablesParseState& variablesParseState,
-                        InclusionNode* node);
-
     // For converting from TreeProjection to this.
     void convertTree(TreeProjection* tp, InclusionNode* root);
     void convertNode(TreeProjectionNode* tp, InclusionNode* ic, bool isTopLevel);
@@ -201,6 +184,7 @@ private:
     // The InclusionNode tree does most of the execution work once constructed.
     std::unique_ptr<InclusionNode> _root;
 
+    // TODO: Remove
     // Only used for 'find' projection features, namely the positional projection '$'.
     const MatchExpression* _precedingMatchExpression;
 };

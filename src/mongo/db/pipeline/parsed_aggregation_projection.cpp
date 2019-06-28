@@ -157,24 +157,6 @@ using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 }  // namespace
 
-std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    LogicalProjection* lp,
-    ProjectionPolicies policies,
-    const MatchExpression* matchExpression) {
-    // We can't use make_unique() here, since the branches have different types.
-    std::unique_ptr<ParsedAggregationProjection> parsedProject(
-        lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<ParsedAggregationProjection*>(
-                  new ParsedInclusionProjection(expCtx, policies, matchExpression))
-            : static_cast<ParsedAggregationProjection*>(
-                  new ParsedExclusionProjection(expCtx, policies)));
-
-    // Actually parse the specification.
-    parsedProject->parse(lp->getProjObj());
-    return parsedProject;
-}
-
 namespace {
 std::unique_ptr<ParsedAggregationProjection> createFromTreeProj(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -185,10 +167,10 @@ std::unique_ptr<ParsedAggregationProjection> createFromTreeProj(
         lp->type() == LogicalProjection::ProjectType::kInclusion
             ? static_cast<ParsedAggregationProjection*>(new ParsedInclusionProjection(expCtx, tp))
             : static_cast<ParsedAggregationProjection*>(
-                  new ParsedExclusionProjection(expCtx, tp->policies)));
+                  new ParsedExclusionProjection(expCtx, tp)));
 
     // Actually parse the specification.
-    parsedProject->parse(lp->getProjObj());
+    //parsedProject->parse(lp->getProjObj());
     return parsedProject;
 }
 }
