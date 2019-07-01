@@ -183,7 +183,8 @@ std::unique_ptr<ParsedAggregationProjection> createFromTreeProj(
     // We can't use make_unique() here, since the branches have different types.
     std::unique_ptr<ParsedAggregationProjection> parsedProject(
         lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<ParsedAggregationProjection*>(new ParsedInclusionProjection(expCtx, tp))
+            ? static_cast<ParsedAggregationProjection*>(
+                  new ParsedInclusionProjection(expCtx, tp->policies, nullptr))
             : static_cast<ParsedAggregationProjection*>(
                   new ParsedExclusionProjection(expCtx, tp->policies)));
 
