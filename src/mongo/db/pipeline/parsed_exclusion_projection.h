@@ -34,7 +34,6 @@
 
 #include "mongo/db/pipeline/parsed_aggregation_projection.h"
 #include "mongo/db/pipeline/parsed_aggregation_projection_node.h"
-#include "mongo/db/query/tree_projection.h"
 #include "mongo/stdx/unordered_map.h"
 #include "mongo/stdx/unordered_set.h"
 
@@ -101,18 +100,6 @@ public:
                ProjectionPolicies::ComputedFieldsPolicy::kBanComputedFields}),
           _root(new ExclusionNode(_policies)) {}
 
-    ParsedExclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                              TreeProjection* tp)
-        : ParsedExclusionProjection(
-              expCtx,
-              tp,
-              {tp->policies.idPolicy,
-               tp->policies.arrayRecursionPolicy,
-               ProjectionPolicies::ComputedFieldsPolicy::kBanComputedFields}) {}
-    ParsedExclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                              TreeProjection* tp,
-                              ProjectionPolicies policies);
-
     TransformerType getType() const final {
         return TransformerType::kExclusionProjection;
     }
@@ -155,9 +142,6 @@ private:
      */
     void parse(const BSONObj& spec, ExclusionNode* node, size_t depth);
 
-    // For converting from TreeProjection to this.
-    void convertTree(TreeProjection* tp, ExclusionNode* root);
-    void convertNode(TreeProjectionNode* tp, ExclusionNode* ic, bool isTopLevel);
 
     // The ExclusionNode tree does most of the execution work once constructed.
     std::unique_ptr<ExclusionNode> _root;

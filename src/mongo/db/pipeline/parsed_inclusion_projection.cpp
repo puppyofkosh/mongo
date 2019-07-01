@@ -70,10 +70,155 @@ void InclusionNode::reportDependencies(DepsTracker* deps) const {
     }
 }
 
+//
+// ParsedInclusionProjection
+//
+
+void ParsedInclusionProjection::parse(const BSONObj& spec) {
+    // It is illegal to specify an inclusion with no output fields.
+    bool atLeastOneFieldInOutput = false;
+
+    // Tracks whether or not we should apply the default _id projection policy.
+    bool idSpecified = false;
+
+    for (auto elem : spec) {
+        auto fieldName = elem.fieldNameStringData();
+        idSpecified = idSpecified || fieldName == "_id"_sd || fieldName.startsWith("_id."_sd);
+        if (fieldName == "_id") {
+            const bool idIsExcluded = (!elem.trueValue() && (elem.isNumber() || elem.isBoolean()));
+            if (idIsExcluded) {
+                // Ignoring "_id" here will cause it to be excluded from result documents.
+                _idExcluded = true;
+                continue;
+            }
+
+            // At least part of "_id" is included or a computed field. Fall through to below to
+            // parse what exactly "_id" was specified as.
+        }
+
+        atLeastOneFieldInOutput = true;
+        switch (elem.type()) {
+            case BSONType::Bool:
+            case BSONType::NumberInt:
+            case BSONType::NumberLong:
+            case BSONType::NumberDouble:
+            case BSONType::NumberDecimal: {
+                // This is an inclusion specification.
+                invariant(elem.trueValue());
+                _root->addProjectionForPath(FieldPath(elem.fieldName(), true));
+                break;
+            }
+            case BSONType::Object: {
+                // This is either an expression, or a nested specification.
+                if (parseObjectAsExpression(fieldName, elem.Obj(), _expCtx->variablesParseState)) {
+                    // It was an expression.
+                    break;
+                }
+
+                // The field name might be a dotted path. If so, we need to keep adding children
+                // to our tree until we create a child that represents that path.
+                auto remainingPath = FieldPath(elem.fieldName());
+                auto* child = _root.get();
+                while (remainingPath.getPathLength() > 1) {
+                    child = child->addOrGetChild(remainingPath.getFieldName(0).toString());
+                    remainingPath = remainingPath.tail();
+                }
+                // It is illegal to construct an empty FieldPath, so the above loop ends one
+                // iteration too soon. Add the last path here.
+                child = child->addOrGetChild(remainingPath.fullPath());
+
+                parseSubObject(elem.Obj(), _expCtx->variablesParseState, child);
+                break;
+            }
+            default: {
+                // This is a literal value.
+                _root->addExpressionForPath(
+                    FieldPath(elem.fieldName(), true),
+                    Expression::parseOperand(_expCtx, elem, _expCtx->variablesParseState));
+            }
+        }
+    }
+
+    if (!idSpecified) {
+        // _id wasn't specified, so apply the default _id projection policy here.
+        if (_policies.idPolicy == ProjectionPolicies::DefaultIdPolicy::kExcludeId) {
+            _idExcluded = true;
+        } else {
+            atLeastOneFieldInOutput = true;
+            _root->addProjectionForPath(FieldPath("_id"));
+        }
+    }
+
+    uassert(16403,
+            str::stream() << "$project requires at least one output field: " << spec.toString(),
+            atLeastOneFieldInOutput);
+}
+
 Document ParsedInclusionProjection::applyProjection(const Document& inputDoc) const {
     // All expressions will be evaluated in the context of the input document, before any
     // transformations have been applied.
     return _root->applyToDocument(inputDoc);
+}
+
+bool ParsedInclusionProjection::parseObjectAsExpression(
+    StringData pathToObject,
+    const BSONObj& objSpec,
+    const VariablesParseState& variablesParseState) {
+    if (objSpec.firstElementFieldName()[0] == '$') {
+        // This is an expression like {$add: [...]}. We have already verified that it has only one
+        // field.
+        invariant(objSpec.nFields() == 1);
+
+        // Treat it as a generic agg expression.
+        _root->addExpressionForPath(
+            FieldPath(pathToObject.toString(), true),
+            Expression::parseExpression(_expCtx, objSpec, variablesParseState));
+        return true;
+    }
+    return false;
+}
+
+void ParsedInclusionProjection::parseSubObject(const BSONObj& subObj,
+                                               const VariablesParseState& variablesParseState,
+                                               InclusionNode* node) {
+    for (auto elem : subObj) {
+        invariant(elem.fieldName()[0] != '$');
+        // Dotted paths in a sub-object have already been disallowed in
+        // ParsedAggregationProjection's parsing.
+        invariant(elem.fieldNameStringData().find('.') == std::string::npos);
+
+        switch (elem.type()) {
+            case BSONType::Bool:
+            case BSONType::NumberInt:
+            case BSONType::NumberLong:
+            case BSONType::NumberDouble:
+            case BSONType::NumberDecimal: {
+                // This is an inclusion specification.
+                invariant(elem.trueValue());
+                node->addProjectionForPath(FieldPath(elem.fieldName(), false));
+                break;
+            }
+            case BSONType::Object: {
+                // This is either an expression, or a nested specification.
+                auto fieldName = elem.fieldNameStringData().toString();
+                if (parseObjectAsExpression(
+                        FieldPath::getFullyQualifiedPath(node->getPath(), fieldName),
+                        elem.Obj(),
+                        variablesParseState)) {
+                    break;
+                }
+                auto* child = node->addOrGetChild(fieldName);
+                parseSubObject(elem.Obj(), variablesParseState, child);
+                break;
+            }
+            default: {
+                // This is a literal value.
+                node->addExpressionForPath(
+                    FieldPath(elem.fieldName(), false),
+                    Expression::parseOperand(_expCtx, elem, variablesParseState));
+            }
+        }
+    }
 }
 
 bool ParsedInclusionProjection::isSubsetOfProjection(const BSONObj& proj) const {

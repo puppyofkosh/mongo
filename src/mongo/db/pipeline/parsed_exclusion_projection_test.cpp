@@ -42,10 +42,7 @@
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/document_value_test_util.h"
 #include "mongo/db/pipeline/expression_context_for_test.h"
-#include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/db/pipeline/value.h"
-#include "mongo/db/query/logical_projection.h"
-#include "mongo/db/query/tree_projection.h"
 #include "mongo/unittest/death_test.h"
 #include "mongo/unittest/unittest.h"
 
@@ -53,34 +50,29 @@ namespace mongo {
 namespace parsed_aggregation_projection {
 namespace {
 
+using ProjectionPolicies = ParsedAggregationProjection::ProjectionPolicies;
+
 using std::vector;
 
-std::unique_ptr<TreeProjection> fromBson(BSONObj b, ProjectionPolicies policies) {
-    auto lp = LogicalProjection::parse({b}, policies);
-    auto tp = TreeProjection::parse(*lp, policies);
-    return tp;
-}
-
 // Helper to simplify the creation of a ParsedExclusionProjection with default policies.
-ParsedExclusionProjection makeExclusionProjectionWithDefaultPolicies(BSONObj b) {
+ParsedExclusionProjection makeExclusionProjectionWithDefaultPolicies() {
     const boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
-    ProjectionPolicies defaultPolicies;
-
-    return {expCtx, fromBson(b, defaultPolicies).get()};
+    ParsedAggregationProjection::ProjectionPolicies defaultPolicies;
+    return {expCtx, defaultPolicies};
 }
 
 // Helper to simplify the creation of a ParsedExclusionProjection which excludes _id by default.
-ParsedExclusionProjection makeExclusionProjectionWithDefaultIdExclusion(BSONObj b) {
+ParsedExclusionProjection makeExclusionProjectionWithDefaultIdExclusion() {
     const boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
-    ProjectionPolicies defaultExcludeId;
+    ParsedAggregationProjection::ProjectionPolicies defaultExcludeId;
     defaultExcludeId.idPolicy = ProjectionPolicies::DefaultIdPolicy::kExcludeId;
     return {expCtx, defaultExcludeId};
 }
 
 // Helper to simplify the creation of a ParsedExclusionProjection which does not recurse arrays.
-ParsedExclusionProjection makeExclusionProjectionWithNoArrayRecursion(BSONObj b) {
+ParsedExclusionProjection makeExclusionProjectionWithNoArrayRecursion() {
     const boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
-    ProjectionPolicies noArrayRecursion;
+    ParsedAggregationProjection::ProjectionPolicies noArrayRecursion;
     noArrayRecursion.arrayRecursionPolicy =
         ProjectionPolicies::ArrayRecursionPolicy::kDoNotRecurseNestedArrays;
     return {expCtx, noArrayRecursion};
@@ -94,29 +86,32 @@ DEATH_TEST(ExclusionProjectionExecutionTest,
            ShouldRejectComputedField,
            "Invariant failure fieldName[0] != '$'") {
     // Top-level expression.
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("a" << false << "b" << BSON("$literal" << 1)));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false << "b" << BSON("$literal" << 1)));
 }
 
 DEATH_TEST(ExclusionProjectionExecutionTest,
            ShouldFailWhenGivenIncludedNonIdField,
            "Invariant failure !elem.trueValue() || elem.fieldNameStringData() == \"_id\"_sd") {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a" << true));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << true));
 }
 
 DEATH_TEST(ExclusionProjectionExecutionTest,
            ShouldFailWhenGivenIncludedIdSubfield,
            "Invariant failure !elem.trueValue() || elem.fieldNameStringData() == \"_id\"_sd") {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("_id.id1" << true));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id.id1" << true));
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldAllowExplicitIdInclusionInExclusionSpec) {
-    auto exclusion =
-        makeExclusionProjectionWithDefaultPolicies(BSON("_id" << true << "a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id" << true << "a" << false));
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldSerializeToEquivalentProjection) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(
         fromjson("{a: 0, b: {c: NumberLong(0), d: 0.0}, 'x.y': false, _id: NumberInt(0)}"));
 
     // Converts numbers to bools, converts dotted paths to nested documents. Note order of excluded
@@ -145,8 +140,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldNotAddAnyDependencies) {
     // need to include the "a" in the dependencies of this projection, since it will just be ignored
     // later. If there are no later stages, then we will finish the dependency computation
     // cycle without full knowledge of which fields are needed, and thus include all the fields.
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("_id" << false << "a" << false << "b.c" << false << "x.y.z" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id" << false << "a" << false << "b.c" << false << "x.y.z" << false));
 
     DepsTracker deps;
     exclusion.addDependencies(&deps);
@@ -157,8 +152,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldNotAddAnyDependencies) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldReportExcludedFieldsAsModified) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("_id" << false << "a" << false << "b.c" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id" << false << "a" << false << "b.c" << false));
 
     auto modifiedPaths = exclusion.getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -170,8 +165,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldReportExcludedFieldsAsModified) {
 
 TEST(ExclusionProjectionExecutionTest,
      ShouldReportExcludedFieldsAsModifiedWhenSpecifiedAsNestedObj) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("a" << BSON("b" << false << "c" << BSON("d" << false))));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << BSON("b" << false << "c" << BSON("d" << false))));
 
     auto modifiedPaths = exclusion.getModifiedPaths();
     ASSERT(modifiedPaths.type == DocumentSource::GetModPathsReturn::Type::kFiniteSet);
@@ -185,7 +180,8 @@ TEST(ExclusionProjectionExecutionTest,
 //
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeTopLevelField) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false));
 
     // More than one field in document.
     auto result = exclusion.applyProjection(Document{{"a", 1}, {"b", 2}});
@@ -209,8 +205,9 @@ TEST(ExclusionProjectionExecutionTest, ShouldExcludeTopLevelField) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldCoerceNumericsToBools) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON(
-        "a" << Value(0) << "b" << Value(0LL) << "c" << Value(0.0) << "d" << Value(Decimal128(0))));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << Value(0) << "b" << Value(0LL) << "c" << Value(0.0) << "d"
+                             << Value(Decimal128(0))));
 
     auto result =
         exclusion.applyProjection(Document{{"_id", "ID"_sd}, {"a", 1}, {"b", 2}, {"c", 3}});
@@ -219,29 +216,32 @@ TEST(ExclusionProjectionExecutionTest, ShouldCoerceNumericsToBools) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldPreserveOrderOfExistingFields) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("second" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("second" << false));
     auto result = exclusion.applyProjection(Document{{"first", 0}, {"second", 1}, {"third", 2}});
     auto expectedResult = Document{{"first", 0}, {"third", 2}};
     ASSERT_DOCUMENT_EQ(result, expectedResult);
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldImplicitlyIncludeId) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false));
     auto result = exclusion.applyProjection(Document{{"a", 1}, {"b", 2}, {"_id", "ID"_sd}});
     auto expectedResult = Document{{"b", 2}, {"_id", "ID"_sd}};
     ASSERT_DOCUMENT_EQ(result, expectedResult);
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeIdIfExplicitlyExcluded) {
-    auto exclusion =
-        makeExclusionProjectionWithDefaultPolicies(BSON("a" << false << "_id" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false << "_id" << false));
     auto result = exclusion.applyProjection(Document{{"a", 1}, {"b", 2}, {"_id", "ID"_sd}});
     auto expectedResult = Document{{"b", 2}};
     ASSERT_DOCUMENT_EQ(result, expectedResult);
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeIdAndKeepAllOtherFields) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("_id" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id" << false));
     auto result = exclusion.applyProjection(Document{{"a", 1}, {"b", 2}, {"_id", "ID"_sd}});
     auto expectedResult = Document{{"a", 1}, {"b", 2}};
     ASSERT_DOCUMENT_EQ(result, expectedResult);
@@ -252,8 +252,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldExcludeIdAndKeepAllOtherFields) {
 //
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeSubFieldsOfId) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("_id.x" << false << "_id" << BSON("y" << false)));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id.x" << false << "_id" << BSON("y" << false)));
     auto result = exclusion.applyProjection(
         Document{{"_id", Document{{"x", 1}, {"y", 2}, {"z", 3}}}, {"a", 1}});
     auto expectedResult = Document{{"_id", Document{{"z", 3}}}, {"a", 1}};
@@ -261,7 +261,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldExcludeSubFieldsOfId) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeSimpleDottedFieldFromSubDoc) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a.b" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a.b" << false));
 
     // More than one field in sub document.
     auto result = exclusion.applyProjection(Document{{"a", Document{{"b", 1}, {"c", 2}}}});
@@ -285,7 +286,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldExcludeSimpleDottedFieldFromSubDoc)
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldNotCreateSubDocIfDottedExcludedFieldDoesNotExist) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("sub.target" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("sub.target" << false));
 
     // Should not add the path if it doesn't exist.
     auto result = exclusion.applyProjection(Document{});
@@ -299,7 +301,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldNotCreateSubDocIfDottedExcludedFiel
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldApplyDottedExclusionToEachElementInArray) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a.b" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a.b" << false));
 
     std::vector<Value> nestedValues = {
         Value(1),
@@ -321,9 +324,10 @@ TEST(ExclusionProjectionExecutionTest, ShouldApplyDottedExclusionToEachElementIn
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldAllowMixedNestedAndDottedFields) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(
-        BSON("a.b" << false << "a.c" << false << "a" << BSON("d" << false << "e" << false)));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
     // Exclude all of "a.b", "a.c", "a.d", and "a.e".
+    exclusion.parse(
+        BSON("a.b" << false << "a.c" << false << "a" << BSON("d" << false << "e" << false)));
     auto result = exclusion.applyProjection(
         Document{{"a", Document{{"b", 1}, {"c", 2}, {"d", 3}, {"e", 4}, {"f", 5}}}});
     auto expectedResult = Document{{"a", Document{{"f", 5}}}};
@@ -331,7 +335,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldAllowMixedNestedAndDottedFields) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldAlwaysKeepMetadataFromOriginalDoc) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false));
 
     MutableDocument inputDocBuilder(Document{{"_id", "ID"_sd}, {"a", 1}});
     inputDocBuilder.setRandMetaField(1.0);
@@ -350,7 +355,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldAlwaysKeepMetadataFromOriginalDoc) 
 //
 
 TEST(ExclusionProjectionExecutionTest, ShouldIncludeIdByDefault) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a" << false));
 
     auto result = exclusion.applyProjection(Document{{"_id", 2}, {"a", 3}});
     auto expectedResult = Document{{"_id", 2}};
@@ -359,7 +365,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldIncludeIdByDefault) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldExcludeIdWithExplicitPolicy) {
-    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion();
+    exclusion.parse(BSON("a" << false));
 
     auto result = exclusion.applyProjection(Document{{"_id", 2}, {"a", 3}});
     auto expectedResult = Document{};
@@ -368,7 +375,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldExcludeIdWithExplicitPolicy) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldOverrideIncludePolicyWithExplicitExcludeIdSpec) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("_id" << false << "a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id" << false << "a" << false));
 
     auto result = exclusion.applyProjection(Document{{"_id", 2}, {"a", 3}});
     auto expectedResult = Document{};
@@ -377,7 +385,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldOverrideIncludePolicyWithExplicitEx
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldOverrideExcludePolicyWithExplicitIncludeIdSpec) {
-    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion(BSON("_id" << true << "a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion();
+    exclusion.parse(BSON("_id" << true << "a" << false));
 
     auto result = exclusion.applyProjection(Document{{"_id", 2}, {"a", 3}, {"b", 4}});
     auto expectedResult = Document{{"_id", 2}, {"b", 4}};
@@ -386,7 +395,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldOverrideExcludePolicyWithExplicitIn
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldAllowExclusionOfIdSubfieldWithDefaultIncludePolicy) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("_id.id1" << false << "a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("_id.id1" << false << "a" << false));
 
     auto result = exclusion.applyProjection(
         Document{{"_id", Document{{"id1", 1}, {"id2", 2}}}, {"a", 3}, {"b", 4}});
@@ -396,7 +406,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldAllowExclusionOfIdSubfieldWithDefau
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldAllowExclusionOfIdSubfieldWithDefaultExcludePolicy) {
-    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion(BSON("_id.id1" << false << "a" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultIdExclusion();
+    exclusion.parse(BSON("_id.id1" << false << "a" << false));
 
     auto result = exclusion.applyProjection(
         Document{{"_id", Document{{"id1", 1}, {"id2", 2}}}, {"a", 3}, {"b", 4}});
@@ -410,7 +421,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldAllowExclusionOfIdSubfieldWithDefau
 //
 
 TEST(ExclusionProjectionExecutionTest, ShouldRecurseNestedArraysByDefault) {
-    auto exclusion = makeExclusionProjectionWithDefaultPolicies(BSON("a.b" << false));
+    auto exclusion = makeExclusionProjectionWithDefaultPolicies();
+    exclusion.parse(BSON("a.b" << false));
 
     // {a: [1, {b: 2, c: 3}, [{b: 4, c: 5}], {d: 6}]} => {a: [1, {c: 3}, [{c: 5}], {d: 6}]}
     auto result = exclusion.applyProjection(
@@ -430,7 +442,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldRecurseNestedArraysByDefault) {
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldNotRecurseNestedArraysForNoRecursePolicy) {
-    auto exclusion = makeExclusionProjectionWithNoArrayRecursion(BSON("a.b" << false));
+    auto exclusion = makeExclusionProjectionWithNoArrayRecursion();
+    exclusion.parse(BSON("a.b" << false));
 
     // {a: [1, {b: 2, c: 3}, [{b: 4, c: 5}], {d: 6}]} => {a: [1, {c: 3}, [{b: 4, c: 5}], {d:
     // 6}]}
@@ -452,7 +465,8 @@ TEST(ExclusionProjectionExecutionTest, ShouldNotRecurseNestedArraysForNoRecurseP
 }
 
 TEST(ExclusionProjectionExecutionTest, ShouldNotRetainNestedArraysIfNoRecursionNeeded) {
-    auto exclusion = makeExclusionProjectionWithNoArrayRecursion(BSON("a" << false));
+    auto exclusion = makeExclusionProjectionWithNoArrayRecursion();
+    exclusion.parse(BSON("a" << false));
 
     // {a: [1, {b: 2, c: 3}, [{b: 4, c: 5}], {d: 6}]} => {}
     const auto inputDoc =
