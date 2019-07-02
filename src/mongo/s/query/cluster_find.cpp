@@ -140,10 +140,10 @@ StatusWith<std::unique_ptr<QueryRequest>> transformQueryForShards(
     }
 
     // If there is a sort other than $natural, we send a sortKey meta-projection to the remote node.
-    BSONObj newProjection = qr.getProj();
+    BSONObj newProjection = qr.getRawProj();
     if (!qr.getSort().isEmpty() && !qr.getSort()["$natural"]) {
         BSONObjBuilder projectionBuilder;
-        projectionBuilder.appendElements(qr.getProj());
+        projectionBuilder.appendElements(qr.getRawProj());
         projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kSortKeyMetaProjection);
         newProjection = projectionBuilder.obj();
     }
@@ -151,7 +151,7 @@ StatusWith<std::unique_ptr<QueryRequest>> transformQueryForShards(
     if (appendGeoNearDistanceProjection) {
         invariant(qr.getSort().isEmpty());
         BSONObjBuilder projectionBuilder;
-        projectionBuilder.appendElements(qr.getProj());
+        projectionBuilder.appendElements(qr.getRawProj());
         projectionBuilder.append(AsyncResultsMerger::kSortKeyField, kGeoNearDistanceMetaProjection);
         newProjection = projectionBuilder.obj();
     }
@@ -406,12 +406,12 @@ CursorId ClusterFind::runQuery(OperationContext* opCtx,
     invariant(results);
 
     // Projection on the reserved sort key field is illegal in mongos.
-    if (query.getQueryRequest().getProj().hasField(AsyncResultsMerger::kSortKeyField)) {
+    if (query.getDesugaredProj().desugaredObj.hasField(AsyncResultsMerger::kSortKeyField)) {
         uasserted(ErrorCodes::BadValue,
                   str::stream() << "Projection contains illegal field '"
                                 << AsyncResultsMerger::kSortKeyField
                                 << "': "
-                                << query.getQueryRequest().getProj());
+                                << query.getDesugaredProj().desugaredObj);
     }
 
     auto const catalogCache = Grid::get(opCtx)->catalogCache();

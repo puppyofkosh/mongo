@@ -518,7 +518,7 @@ CanonicalQuery::QueryShapeString encode(const CanonicalQuery& cq) {
     StringBuilder keyBuilder;
     encodeKeyForMatch(cq.root(), &keyBuilder);
     encodeKeyForSort(cq.getQueryRequest().getSort(), &keyBuilder);
-    encodeKeyForProj(cq.getQueryRequest().getProj(), &keyBuilder);
+    encodeKeyForProj(cq.getDesugaredProj().desugaredObj, &keyBuilder);
     encodeCollation(cq.getCollator(), &keyBuilder);
 
     return keyBuilder.str();

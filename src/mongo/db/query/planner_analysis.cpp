@@ -373,8 +373,10 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
         // If the projection is simple, but not covered, use 'ProjectionNodeSimple'.
         if (solnRoot->fetched()) {
             addSortKeyGeneratorStageIfNeeded();
-            return std::make_unique<ProjectionNodeSimple>(
-                std::move(solnRoot), *query.root(), qr.getProj(), *query.getProj());
+            return std::make_unique<ProjectionNodeSimple>(std::move(solnRoot),
+                                                          *query.root(),
+                                                          query.getDesugaredProj().desugaredObj,
+                                                          *query.getProj());
         } else {
             // If we're here we're not fetched so we're covered. Let's see if we can get out of
             // using the default projType. If 'solnRoot' is an index scan we can use the faster
@@ -382,11 +384,12 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
             BSONObj coveredKeyObj = produceCoveredKeyObj(solnRoot.get());
             if (!coveredKeyObj.isEmpty()) {
                 addSortKeyGeneratorStageIfNeeded();
-                return std::make_unique<ProjectionNodeCovered>(std::move(solnRoot),
-                                                               *query.root(),
-                                                               qr.getProj(),
-                                                               *query.getProj(),
-                                                               std::move(coveredKeyObj));
+                return std::make_unique<ProjectionNodeCovered>(
+                    std::move(solnRoot),
+                    *query.root(),
+                    query.getDesugaredProj().desugaredObj,
+                    *query.getProj(),
+                    std::move(coveredKeyObj));
             }
         }
     }
@@ -394,11 +397,11 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
     addSortKeyGeneratorStageIfNeeded();
     if (query.getProj()->wantIndexKey()) {
         return std::make_unique<ProjectionNodeReturnKey>(
-            std::move(solnRoot), *query.root(), qr.getProj(), *query.getProj());
+            std::move(solnRoot), *query.root(), query.getDesugaredProj().desugaredObj, *query.getProj());
     }
 
     return std::make_unique<ProjectionNodeDefault>(
-        std::move(solnRoot), *query.root(), qr.getProj(), *query.getProj());
+        std::move(solnRoot), *query.root(), query.getDesugaredProj().desugaredObj, *query.getProj());
 }
 
 }  // namespace

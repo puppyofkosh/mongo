@@ -55,13 +55,13 @@ AllowedIndicesFilter::AllowedIndicesFilter(const BSONObjSet& indexKeyPatterns,
 
 AllowedIndexEntry::AllowedIndexEntry(const BSONObj& query,
                                      const BSONObj& sort,
-                                     const BSONObj& projection,
+                                     const DesugaredProjection& projection,
                                      const BSONObj& collation,
                                      const BSONObjSet& indexKeyPatterns,
                                      const stdx::unordered_set<std::string>& indexNames)
     : query(query.getOwned()),
       sort(sort.getOwned()),
-      projection(projection.getOwned()),
+      projection{projection.desugaredObj.getOwned()},
       collation(collation.getOwned()),
       indexKeyPatterns(SimpleBSONObjComparator::kInstance.makeBSONObjSet()),
       indexNames(indexNames) {
@@ -104,17 +104,20 @@ void QuerySettings::setAllowedIndices(const CanonicalQuery& canonicalQuery,
     const QueryRequest& qr = canonicalQuery.getQueryRequest();
     const BSONObj& query = qr.getFilter();
     const BSONObj& sort = qr.getSort();
-    const BSONObj& projection = qr.getProj();
     const auto key = canonicalQuery.encodeKey();
     const BSONObj collation =
         canonicalQuery.getCollator() ? canonicalQuery.getCollator()->getSpec().toBSON() : BSONObj();
 
     stdx::lock_guard<stdx::mutex> cacheLock(_mutex);
     _allowedIndexEntryMap.erase(key);
-    _allowedIndexEntryMap.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(key),
-        std::forward_as_tuple(query, sort, projection, collation, indexKeyPatterns, indexNames));
+    _allowedIndexEntryMap.emplace(std::piecewise_construct,
+                                  std::forward_as_tuple(key),
+                                  std::forward_as_tuple(query,
+                                                        sort,
+                                                        canonicalQuery.getDesugaredProj(),
+                                                        collation,
+                                                        indexKeyPatterns,
+                                                        indexNames));
 }
 
 void QuerySettings::removeAllowedIndices(const CanonicalQuery::QueryShapeString& key) {

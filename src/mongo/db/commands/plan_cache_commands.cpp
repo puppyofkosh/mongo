@@ -314,14 +314,14 @@ Status PlanCacheClear::clear(OperationContext* opCtx,
             invariant(result.code() == ErrorCodes::NoSuchKey);
             LOG(1) << ns << ": query shape doesn't exist in PlanCache - "
                    << redact(cq->getQueryObj()) << "(sort: " << cq->getQueryRequest().getSort()
-                   << "; projection: " << cq->getQueryRequest().getProj()
+                   << "; projection: " << cq->getDesugaredProj().desugaredObj
                    << "; collation: " << cq->getQueryRequest().getCollation() << ")";
             return Status::OK();
         }
 
         LOG(1) << ns << ": removed plan cache entry - " << redact(cq->getQueryObj())
                << "(sort: " << cq->getQueryRequest().getSort()
-               << "; projection: " << cq->getQueryRequest().getProj()
+               << "; projection: " << cq->getDesugaredProj().desugaredObj
                << "; collation: " << cq->getQueryRequest().getCollation() << ")";
 
         return Status::OK();

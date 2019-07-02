@@ -199,7 +199,7 @@ Status ListFilters::list(const QuerySettings& querySettings, BSONObjBuilder* bob
         BSONObjBuilder hintBob(hintsBuilder.subobjStart());
         hintBob.append("query", entry.query);
         hintBob.append("sort", entry.sort);
-        hintBob.append("projection", entry.projection);
+        hintBob.append("projection", entry.projection.desugaredObj);
         if (!entry.collation.isEmpty()) {
             hintBob.append("collation", entry.collation);
         }
@@ -306,7 +306,7 @@ Status ClearFilters::clear(OperationContext* opCtx,
         auto qr = stdx::make_unique<QueryRequest>(nss);
         qr->setFilter(entry.query);
         qr->setSort(entry.sort);
-        qr->setProj(entry.projection);
+        qr->setProj(entry.projection.desugaredObj);
         qr->setCollation(entry.collation);
         const boost::intrusive_ptr<ExpressionContext> expCtx;
         auto statusWithCQ =

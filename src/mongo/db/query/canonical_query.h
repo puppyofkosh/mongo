@@ -124,6 +124,11 @@ public:
     const LogicalProjection* getProj() const {
         return _proj.get();
     }
+
+    const DesugaredProjection& getDesugaredProj() const {
+        return _desugaredProj;
+    }
+
     const CollatorInterface* getCollator() const {
         return _collator.get();
     }
@@ -201,6 +206,7 @@ private:
     std::unique_ptr<MatchExpression> _root;
 
     std::unique_ptr<LogicalProjection> _proj;
+    DesugaredProjection _desugaredProj;
 
     std::unique_ptr<CollatorInterface> _collator;
 

@@ -153,7 +153,7 @@ public:
         _filter = filter.getOwned();
     }
 
-    const BSONObj& getProj() const {
+    const BSONObj& getRawProj() const {
         return _proj;
     }
 

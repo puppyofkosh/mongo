@@ -532,7 +532,7 @@ Status PlanCache::set(const CanonicalQuery& query,
     // Strip projections on $-prefixed fields, as these are added by internal callers of the query
     // system and are not considered part of the user projection.
     BSONObjBuilder projBuilder;
-    for (auto elem : qr.getProj()) {
+    for (auto elem : query.getDesugaredProj().desugaredObj) {
         if (elem.fieldName()[0] == '$') {
             continue;
         }

@@ -191,7 +191,7 @@ StatusWith<std::unique_ptr<CanonicalQuery>> CanonicalQuery::canonicalize(
     BSONObjBuilder builder;
     root->serialize(&builder);
     qr->setFilter(builder.obj());
-    qr->setProj(baseQuery.getQueryRequest().getProj());
+    qr->setProj(baseQuery.getQueryRequest().getRawProj());
     qr->setSort(baseQuery.getQueryRequest().getSort());
     qr->setCollation(baseQuery.getQueryRequest().getCollation());
     qr->setExplain(baseQuery.getQueryRequest().isExplain());
@@ -241,15 +241,16 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     }
 
     // Validate the projection if there is one.
-    if (!_qr->getProj().isEmpty()) {
+    if (!_qr->getRawProj().isEmpty()) {
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?
-        auto desugaredProj = projection_desugarer::desugarProjection(_qr->getProj(), _root.get());
+        auto desugaredProj = projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
 
         log() << "The desugared projection is " << desugaredProj.desugaredObj;
 
         // Be sure that this projection is used from here out.
-        _qr->setProj(desugaredProj.desugaredObj);
+        //_qr->setProj(desugaredProj.desugaredObj);
+        _desugaredProj = desugaredProj;
 
         // TODO: Eventually remove or replace this with a LogicalProjection.
         _proj = LogicalProjection::parse(
@@ -459,7 +460,7 @@ std::string CanonicalQuery::toString() const {
     // The expression tree puts an endl on for us.
     ss << "Tree: " << _root->debugString();
     ss << "Sort: " << _qr->getSort().toString() << '\n';
-    ss << "Proj: " << _qr->getProj().toString() << '\n';
+    ss << "Proj: " << _qr->getRawProj().toString() << '\n';
     if (!_qr->getCollation().isEmpty()) {
         ss << "Collation: " << _qr->getCollation().toString() << '\n';
     }
@@ -469,7 +470,7 @@ std::string CanonicalQuery::toString() const {
 std::string CanonicalQuery::toStringShort() const {
     str::stream ss;
     ss << "query: " << _qr->getFilter().toString() << " sort: " << _qr->getSort().toString()
-       << " projection: " << _qr->getProj().toString();
+       << " projection: " << _qr->getRawProj().toString();
 
     if (!_qr->getCollation().isEmpty()) {
         ss << " collation: " << _qr->getCollation().toString();

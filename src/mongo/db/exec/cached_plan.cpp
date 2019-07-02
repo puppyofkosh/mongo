@@ -308,7 +308,7 @@ void CachedPlanStage::updatePlanCache() {
                << " - "
                << "(query: " << redact(_canonicalQuery->getQueryObj())
                << "; sort: " << _canonicalQuery->getQueryRequest().getSort()
-               << "; projection: " << _canonicalQuery->getQueryRequest().getProj()
+               << "; projection: " << _canonicalQuery->getDesugaredProj().desugaredObj
                << ") is no longer in plan cache.";
     }
 }
