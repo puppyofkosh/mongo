@@ -310,6 +310,13 @@ public:
         return storage().getSearchHighlights();
     }
 
+    bool hasRecordId() const {
+        return storage().hasRecordId();
+    }
+    RecordId getRecordId() const {
+        return storage().getRecordId();
+    }
+
     /// members for Sorter
     struct SorterDeserializeSettings {};  // unused
     void serializeForSorter(BufBuilder& buf) const;
@@ -575,6 +582,10 @@ public:
 
     void setSearchHighlights(Value highlights) {
         storage().setSearchHighlights(highlights);
+    }
+
+    void setRecordId(RecordId id) {
+        storage().setRecordId(id);
     }
 
     /** Convert to a read-only document and release reference.

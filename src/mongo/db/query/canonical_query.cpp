@@ -246,6 +246,8 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         // TODO: Do we have to own this somewhere on the cq?
         auto desugaredProj = projection_desugarer::desugarProjection(_qr->getProj(), _root.get());
 
+        log() << "The desugared projection is " << desugaredProj.desugaredObj;
+
         // Be sure that this projection is used from here out.
         _qr->setProj(desugaredProj.desugaredObj);
 

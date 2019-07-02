@@ -1646,6 +1646,7 @@ private:
         SEARCH_HIGHLIGHTS,
         GEO_NEAR_DISTANCE,
         GEO_NEAR_POINT,
+        RECORD_ID,
     };
 
     ExpressionMeta(const boost::intrusive_ptr<ExpressionContext>& expCtx, MetaType metaType);

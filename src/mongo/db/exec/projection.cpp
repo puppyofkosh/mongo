@@ -233,6 +233,11 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
     if (lp.wantGeoNearPoint()) {
         md->setGeoNearPoint(Value(geoPoint(*member)));
     }
+
+    log() << "member has recordid " << member->hasRecordId();
+    if (member->hasRecordId()) {
+        md->setRecordId(member->recordId);
+    }
 }
 }
 
@@ -241,6 +246,7 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
         MutableDocument doc(Document(member->obj.value()));
         appendMetadata(member, &doc, _logicalProjection);
 
+        log() << "ian: applying projection";
         Document out = _projExec->applyTransformation(doc.freeze());
         transitionMemberToOwnedObj(out.toBson(), member);
     } else {

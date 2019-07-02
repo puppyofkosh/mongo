@@ -2525,6 +2525,8 @@ intrusive_ptr<Expression> ExpressionMeta::parse(
         return new ExpressionMeta(expCtx, MetaType::GEO_NEAR_DISTANCE);
     } else if (expr.valueStringData() == "geoNearPoint") {
         return new ExpressionMeta(expCtx, MetaType::GEO_NEAR_POINT);
+    } else if (expr.valueStringData() == "recordId") {
+        return new ExpressionMeta(expCtx, MetaType::RECORD_ID);
     } else {
         uasserted(17308, "Unsupported argument to $meta: " + expr.String());
     }
@@ -2554,11 +2556,15 @@ Value ExpressionMeta::serialize(bool explain) const {
         case MetaType::GEO_NEAR_POINT:
             return Value(DOC("$meta"
                              << "geoNearPoint"_sd));
+        case MetaType::RECORD_ID:
+            return Value(DOC("$meta"
+                             << "recordId"_sd));
     }
     MONGO_UNREACHABLE;
 }
 
 Value ExpressionMeta::evaluate(const Document& root) const {
+    std::cout << "ian: evaluating meta " << (int)_metaType;
     switch (_metaType) {
         case MetaType::TEXT_SCORE:
             return root.hasTextScore() ? Value(root.getTextScore()) : Value();
@@ -2572,6 +2578,14 @@ Value ExpressionMeta::evaluate(const Document& root) const {
             return root.hasGeoNearDistance() ? Value(root.getGeoNearDistance()) : Value();
         case MetaType::GEO_NEAR_POINT:
             return root.hasGeoNearPoint() ? Value(root.getGeoNearPoint()) : Value();
+        case MetaType::RECORD_ID:
+            std::cout << "ian: checking record id" << std::endl;
+            if (root.hasRecordId()) {
+                RecordId id = root.getRecordId();
+                invariant(id.isNormal());
+                return Value(static_cast<long long>(root.getRecordId().repr()));
+            }
+            return Value();
     }
     MONGO_UNREACHABLE;
 }

@@ -36,6 +36,7 @@
 
 #include "mongo/base/static_assert.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/db/record_id.h"
 #include "mongo/util/intrusive_counter.h"
 
 namespace mongo {
@@ -390,6 +391,16 @@ public:
         _searchHighlights = highlights;
     }
 
+    bool hasRecordId() const {
+        return static_cast<bool>(_id);
+    }
+    RecordId getRecordId() const {
+        return *_id;
+    }
+    void setRecordId(RecordId id) {
+        _id = id;
+    }
+
 private:
     /// Same as lastElement->next() or firstElement() if empty.
     const ValueElement* end() const {
@@ -476,6 +487,7 @@ private:
     Value _geoNearPoint;
     double _searchScore;
     Value _searchHighlights;
+    boost::optional<RecordId> _id;
     // When adding a field, make sure to update clone() and getMetadataApproximateSize() methods.
 
     // Defined in document.cpp
