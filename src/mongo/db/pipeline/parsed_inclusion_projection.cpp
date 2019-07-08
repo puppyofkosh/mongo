@@ -74,7 +74,7 @@ void InclusionNode::reportDependencies(DepsTracker* deps) const {
 // ParsedInclusionProjection
 //
 
-void ParsedInclusionProjection::parse(const BSONObj& spec) {
+void AnalysisInclusionProjection::parse(const BSONObj& spec) {
     // It is illegal to specify an inclusion with no output fields.
     bool atLeastOneFieldInOutput = false;
 
@@ -160,7 +160,7 @@ Document ParsedInclusionProjection::applyProjection(const Document& inputDoc) co
     return _root->applyToDocument(inputDoc);
 }
 
-bool ParsedInclusionProjection::parseObjectAsExpression(
+bool AnalysisInclusionProjection::parseObjectAsExpression(
     StringData pathToObject,
     const BSONObj& objSpec,
     const VariablesParseState& variablesParseState) {
@@ -178,9 +178,9 @@ bool ParsedInclusionProjection::parseObjectAsExpression(
     return false;
 }
 
-void ParsedInclusionProjection::parseSubObject(const BSONObj& subObj,
-                                               const VariablesParseState& variablesParseState,
-                                               InclusionNode* node) {
+void AnalysisInclusionProjection::parseSubObject(const BSONObj& subObj,
+                                                 const VariablesParseState& variablesParseState,
+                                                 InclusionNode* node) {
     for (auto elem : subObj) {
         invariant(elem.fieldName()[0] != '$');
         // Dotted paths in a sub-object have already been disallowed in
@@ -298,13 +298,5 @@ ParsedInclusionProjection::ParsedInclusionProjection(
     : ParsedAggregationProjection(expCtx, tp->policies), _root(new InclusionNode(tp->policies)) {
     convertTree(tp, _root.get());
 }
-
-
-Document ExecutableInclusionProjection::applyTransformation(const Document& inputDoc) {
-    // All expressions will be evaluated in the context of the input document, before any
-    // transformations have been applied.
-    return _root->applyToDocument(inputDoc);
-}
-
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

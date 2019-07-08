@@ -162,36 +162,18 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     LogicalProjection* lp,
     ProjectionPolicies policies,
     const MatchExpression* matchExpression) {
-    // We can't use make_unique() here, since the branches have different types.
-    std::unique_ptr<ParsedAggregationProjection> parsedProject(
+
+    std::unique_ptr<AnalysisProjection> analysisProject(
         lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<ParsedAggregationProjection*>(
-                  new ParsedInclusionProjection(expCtx, policies, matchExpression))
-            : static_cast<ParsedAggregationProjection*>(
-                  new ParsedExclusionProjection(expCtx, policies)));
+            ? static_cast<AnalysisProjection*>(
+                  new AnalysisInclusionProjection(expCtx, policies))
+            : static_cast<AnalysisProjection*>(
+                  new AnalysisExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
-    parsedProject->parse(lp->getProjObj());
-    return parsedProject;
-}
+    analysisProject->parse(lp->getProjObj());
 
-namespace {
-std::unique_ptr<ParsedAggregationProjection> createFromTreeProj(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    LogicalProjection* lp,
-    TreeProjection* tp) {
-    // We can't use make_unique() here, since the branches have different types.
-    std::unique_ptr<ParsedAggregationProjection> parsedProject(
-        lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<ParsedAggregationProjection*>(
-                  new ParsedInclusionProjection(expCtx, tp->policies, nullptr))
-            : static_cast<ParsedAggregationProjection*>(
-                  new ParsedExclusionProjection(expCtx, tp->policies)));
-
-    // Actually parse the specification.
-    parsedProject->parse(lp->getProjObj());
-    return parsedProject;
-}
+    return analysisProject->convertToExecutionTree();
 }
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(

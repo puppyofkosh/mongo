@@ -82,6 +82,7 @@ protected:
     }
 };
 
+
 /**
  * A ParsedExclusionProjection represents a parsed form of the raw BSON specification.
  *
@@ -91,6 +92,16 @@ protected:
  */
 class ParsedExclusionProjection : public ParsedAggregationProjection {
 public:
+    ParsedExclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                              ProjectionPolicies policies,
+                              std::unique_ptr<ExclusionNode> root)
+        : ParsedAggregationProjection(
+              expCtx,
+              {policies.idPolicy,
+               policies.arrayRecursionPolicy,
+               ProjectionPolicies::ComputedFieldsPolicy::kBanComputedFields}),
+          _root(std::move(root)) {}
+
     ParsedExclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               ProjectionPolicies policies)
         : ParsedAggregationProjection(
@@ -111,12 +122,6 @@ public:
     Document serializeTransformation(
         boost::optional<ExplainOptions::Verbosity> explain) const final;
 
-    /**
-     * Parses the projection specification given by 'spec', populating internal data structures.
-     */
-    void parse(const BSONObj& spec) final {
-        parse(spec, _root.get(), 0);
-    }
 
     /**
      * Exclude the fields specified.
@@ -134,6 +139,33 @@ public:
     }
 
 private:
+    // The ExclusionNode tree does most of the execution work once constructed.
+    std::unique_ptr<ExclusionNode> _root;
+};
+
+
+class AnalysisExclusionProjection : public AnalysisProjection {
+public:
+    AnalysisExclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                ProjectionPolicies policies)
+        : AnalysisProjection(expCtx,
+                             {policies.idPolicy,
+                              policies.arrayRecursionPolicy,
+                              ProjectionPolicies::ComputedFieldsPolicy::kBanComputedFields}),
+          _root(new ExclusionNode(_policies)) {}
+
+    /**
+     * Parses the projection specification given by 'spec', populating internal data structures.
+     */
+    void parse(const BSONObj& spec) final {
+        parse(spec, _root.get(), 0);
+    }
+
+    std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() override {
+        return std::make_unique<ParsedExclusionProjection>(_expCtx, _policies, std::move(_root));
+    }
+
+private:
     /**
      * Helper for parse() above.
      *
@@ -141,7 +173,6 @@ private:
      * and recurses on any sub-objects.
      */
     void parse(const BSONObj& spec, ExclusionNode* node, size_t depth);
-
 
     // The ExclusionNode tree does most of the execution work once constructed.
     std::unique_ptr<ExclusionNode> _root;

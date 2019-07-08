@@ -136,10 +136,8 @@ private:
     std::set<std::string, PathPrefixComparator> _seenPaths;
 };
 
-/**
- * A ParsedAggregationProjection is responsible for parsing and executing a $project. It
- * represents either an inclusion or exclusion projection. This is the common interface between the
- * two types of projections.
+/*
+  EXECUTION
  */
 class ParsedAggregationProjection : public TransformerInterface {
 public:
@@ -169,15 +167,6 @@ public:
         const MatchExpression* matchExpression);
 
     virtual ~ParsedAggregationProjection() = default;
-
-    /**
-     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has
-     * already
-     * been verified to not have any conflicting path specifications, and not to mix and match
-     * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
-     * track which variables are defined so that they can later be referenced at execution time.
-     */
-    virtual void parse(const BSONObj& spec) = 0;
 
     /**
      * Optimize any expressions contained within this projection.
@@ -212,5 +201,32 @@ protected:
 
     ProjectionPolicies _policies;
 };
+
+/*
+ * Parsing + analysis
+ */
+class AnalysisProjection {
+public:
+    AnalysisProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                       ProjectionPolicies policies)
+        : _expCtx(expCtx), _policies(policies){};
+
+    /**
+     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has
+     * already
+     * been verified to not have any conflicting path specifications, and not to mix and match
+     * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
+     * track which variables are defined so that they can later be referenced at execution time.
+     */
+    virtual void parse(const BSONObj& spec) = 0;
+
+    virtual std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() = 0;
+
+protected:
+    boost::intrusive_ptr<ExpressionContext> _expCtx;
+
+    ProjectionPolicies _policies;
+};
+
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

@@ -93,6 +93,14 @@ class ParsedInclusionProjection : public ParsedAggregationProjection {
 public:
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               ProjectionPolicies policies,
+                              bool idExcluded,
+                              std::unique_ptr<InclusionNode> root)
+        : ParsedAggregationProjection(expCtx, policies),
+          _idExcluded(idExcluded),
+          _root(std::move(root)) {}
+
+    ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                              ProjectionPolicies policies,
                               const MatchExpression* precedingMatchingExpression)
         : ParsedAggregationProjection(expCtx, policies), _root(new InclusionNode(policies)) {}
 
@@ -106,11 +114,6 @@ public:
     const InclusionNode& getRoot() const {
         return *_root;
     }
-
-    /**
-     * Parses the projection specification given by 'spec', populating internal data structures.
-     */
-    void parse(const BSONObj& spec) final;
 
     /**
      * Serialize the projection.
@@ -169,6 +172,34 @@ public:
     bool isSubsetOfProjection(const BSONObj& proj) const final;
 
 private:
+    // For converting from TreeProjection to this.
+    void convertTree(TreeProjection* tp, InclusionNode* root);
+    void convertNode(TreeProjectionNode* tp, InclusionNode* ic, bool isTopLevel);
+
+    // Not strictly necessary to track here, but makes serialization easier.
+    bool _idExcluded = false;
+
+    // The InclusionNode tree does most of the execution work once constructed.
+    std::unique_ptr<InclusionNode> _root;
+};
+
+class AnalysisInclusionProjection : public AnalysisProjection {
+public:
+    AnalysisInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                ProjectionPolicies policies)
+        : AnalysisProjection(expCtx, policies), _root(new InclusionNode(_policies)) {}
+
+    /**
+     * Parses the projection specification given by 'spec', populating internal data structures.
+     */
+    void parse(const BSONObj& spec) final;
+
+    std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() {
+        return std::make_unique<ParsedInclusionProjection>(
+            _expCtx, _policies, _idExcluded, std::move(_root));
+    }
+
+private:
     /**
      * Attempts to parse 'objSpec' as an expression like {$add: [...]}. Adds a computed field to
      * '_root' and returns true if it was successfully parsed as an expression. Returns false if it
@@ -189,74 +220,12 @@ private:
                         const VariablesParseState& variablesParseState,
                         InclusionNode* node);
 
-    // For converting from TreeProjection to this.
-    void convertTree(TreeProjection* tp, InclusionNode* root);
-    void convertNode(TreeProjectionNode* tp, InclusionNode* ic, bool isTopLevel);
+    // The InclusionNode tree does most of the execution work once constructed.
+    std::unique_ptr<InclusionNode> _root;
 
     // Not strictly necessary to track here, but makes serialization easier.
     bool _idExcluded = false;
-
-    // The InclusionNode tree does most of the execution work once constructed.
-    std::unique_ptr<InclusionNode> _root;
 };
 
-class ExecutableInclusionProjection : public TransformerInterface {
-public:
-    DepsTracker::State addDependencies(DepsTracker* deps) const final {
-        _root->reportDependencies(deps);
-        return DepsTracker::State::EXHAUSTIVE_FIELDS;
-    }
-
-    DocumentSource::GetModPathsReturn getModifiedPaths() const final {
-        std::set<std::string> preservedPaths;
-        _root->reportProjectedPaths(&preservedPaths);
-
-        std::set<std::string> computedPaths;
-        StringMap<std::string> renamedPaths;
-        _root->reportComputedPaths(&computedPaths, &renamedPaths);
-
-        return {DocumentSource::GetModPathsReturn::Type::kAllExcept,
-                std::move(preservedPaths),
-                std::move(renamedPaths)};
-    }
-
-    TransformerType getType() const final {
-        return TransformerType::kInclusionProjection;
-    }
-
-    /**
-     * Optimize any computed expressions.
-     */
-    void optimize() final {
-        MONGO_UNREACHABLE;
-    }
-
-    /**
-     * Apply this exclusion projection to 'inputDoc'.
-     *
-     * All inclusions are processed before all computed fields. Computed fields will be added
-     * afterwards in the order in which they were specified to the $project stage.
-     *
-     * Arrays will be traversed, with any dotted/nested exclusions or computed fields applied to
-     * each element in the array.
-     */
-    Document applyTransformation(const Document& inputDoc);
-
-    /*
-     * Checks whether the inclusion projection represented by the InclusionNode
-     * tree is a subset of the object passed in. Projections that have any
-     * computed or renamed fields are not considered a subset.
-     */
-    bool isSubsetOfProjection(const BSONObj& proj) const final {
-        MONGO_UNREACHABLE;
-    }
-
-private:
-    // Not strictly necessary to track here, but makes serialization easier.
-    bool _idExcluded = false;
-
-    // The InclusionNode tree does most of the execution work once constructed.
-    std::unique_ptr<InclusionNode> _root;
-};
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo
