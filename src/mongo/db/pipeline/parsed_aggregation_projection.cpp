@@ -206,9 +206,7 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
 
     auto lp = LogicalProjection::parse({spec}, policies);
 
-    auto tp = TreeProjection::parse(*lp, policies);
-
-    return createFromTreeProj(expCtx, lp.get(), tp.get());
+    return ParsedAggregationProjection::create(expCtx, lp.get(), policies, nullptr);
 }
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

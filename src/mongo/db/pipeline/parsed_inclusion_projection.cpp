@@ -299,5 +299,12 @@ ParsedInclusionProjection::ParsedInclusionProjection(
     convertTree(tp, _root.get());
 }
 
+
+Document ExecutableInclusionProjection::applyTransformation(const Document& inputDoc) {
+    // All expressions will be evaluated in the context of the input document, before any
+    // transformations have been applied.
+    return _root->applyToDocument(inputDoc);
+}
+
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

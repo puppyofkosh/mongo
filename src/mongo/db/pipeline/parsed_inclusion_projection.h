@@ -94,9 +94,7 @@ public:
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               ProjectionPolicies policies,
                               const MatchExpression* precedingMatchingExpression)
-        : ParsedAggregationProjection(expCtx, policies),
-          _root(new InclusionNode(policies)),
-          _precedingMatchExpression(precedingMatchingExpression) {}
+        : ParsedAggregationProjection(expCtx, policies), _root(new InclusionNode(policies)) {}
 
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               TreeProjection* tp);
@@ -200,9 +198,65 @@ private:
 
     // The InclusionNode tree does most of the execution work once constructed.
     std::unique_ptr<InclusionNode> _root;
+};
 
-    // Only used for 'find' projection features, namely the positional projection '$'.
-    const MatchExpression* _precedingMatchExpression;
+class ExecutableInclusionProjection : public TransformerInterface {
+public:
+    DepsTracker::State addDependencies(DepsTracker* deps) const final {
+        _root->reportDependencies(deps);
+        return DepsTracker::State::EXHAUSTIVE_FIELDS;
+    }
+
+    DocumentSource::GetModPathsReturn getModifiedPaths() const final {
+        std::set<std::string> preservedPaths;
+        _root->reportProjectedPaths(&preservedPaths);
+
+        std::set<std::string> computedPaths;
+        StringMap<std::string> renamedPaths;
+        _root->reportComputedPaths(&computedPaths, &renamedPaths);
+
+        return {DocumentSource::GetModPathsReturn::Type::kAllExcept,
+                std::move(preservedPaths),
+                std::move(renamedPaths)};
+    }
+
+    TransformerType getType() const final {
+        return TransformerType::kInclusionProjection;
+    }
+
+    /**
+     * Optimize any computed expressions.
+     */
+    void optimize() final {
+        MONGO_UNREACHABLE;
+    }
+
+    /**
+     * Apply this exclusion projection to 'inputDoc'.
+     *
+     * All inclusions are processed before all computed fields. Computed fields will be added
+     * afterwards in the order in which they were specified to the $project stage.
+     *
+     * Arrays will be traversed, with any dotted/nested exclusions or computed fields applied to
+     * each element in the array.
+     */
+    Document applyTransformation(const Document& inputDoc);
+
+    /*
+     * Checks whether the inclusion projection represented by the InclusionNode
+     * tree is a subset of the object passed in. Projections that have any
+     * computed or renamed fields are not considered a subset.
+     */
+    bool isSubsetOfProjection(const BSONObj& proj) const final {
+        MONGO_UNREACHABLE;
+    }
+
+private:
+    // Not strictly necessary to track here, but makes serialization easier.
+    bool _idExcluded = false;
+
+    // The InclusionNode tree does most of the execution work once constructed.
+    std::unique_ptr<InclusionNode> _root;
 };
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo
