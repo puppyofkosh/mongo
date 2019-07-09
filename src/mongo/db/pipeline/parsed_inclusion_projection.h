@@ -194,10 +194,72 @@ public:
      */
     void parse(const BSONObj& spec) final;
 
-    std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() {
+    std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() override {
         return std::make_unique<ParsedInclusionProjection>(
             _expCtx, _policies, _idExcluded, std::move(_root));
     }
+
+    // Methods used for analysis/planning.
+    bool requiresMatchDetails() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    bool requiresDocument() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    const std::vector<std::string>& sortKeyMetaFields() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    /**
+     * If requiresDocument() == false, what fields are required to compute
+     * the projection?
+     */
+    const std::vector<std::string>& getRequiredFields() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    bool wantTextScore() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    /**
+     * Does the projection want geoNear metadata?  If so any geoNear stage should include them.
+     */
+    bool wantGeoNearDistance() const override {
+        MONGO_UNREACHABLE
+    }
+
+    bool wantGeoNearPoint() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    bool wantIndexKey() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    bool wantSortKey() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    /**
+     * Returns true if the element at 'path' is preserved entirely after this projection is applied,
+     * and false otherwise. For example, the projection {a: 1} will preserve the element located at
+     * 'a.b', and the projection {'a.b': 0} will not preserve the element located at 'a'.
+     */
+    bool isFieldRetainedExactly(StringData path) const override {
+        MONGO_UNREACHABLE;
+    }
+
+    /**
+     * Returns true if the project contains any paths with multiple path pieces (e.g. returns true
+     * for {_id: 0, "a.b": 1} and returns false for {_id: 0, a: 1, b: 1}).
+     */
+    bool hasDottedFieldPath() const override {
+        MONGO_UNREACHABLE
+    }
+
 
 private:
     /**

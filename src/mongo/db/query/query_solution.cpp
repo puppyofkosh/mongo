@@ -877,7 +877,7 @@ void ProjectionNode::computeProperties() {
     for (auto&& sort : inputSorts) {
         bool sortCompatible = true;
         for (auto&& key : sort) {
-            if (!parsed.isFieldRetainedExactly(key.fieldNameStringData())) {
+            if (!parsed->isFieldRetainedExactly(key.fieldNameStringData())) {
                 sortCompatible = false;
                 break;
             }
