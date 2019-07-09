@@ -39,7 +39,6 @@
 #include "mongo/db/pipeline/field_path.h"
 #include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/db/pipeline/transformer_interface.h"
-#include "mongo/db/query/logical_projection.h"
 
 namespace mongo {
 
@@ -202,6 +201,32 @@ protected:
 
     ProjectionPolicies _policies;
 };
-}  // namespace parsed_aggregation_projection
 
+/*
+ * Parsing + analysis
+ */
+class AnalysisProjection {
+public:
+    AnalysisProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                       ProjectionPolicies policies)
+        : _expCtx(expCtx), _policies(policies){};
+
+    /**
+     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has
+     * already
+     * been verified to not have any conflicting path specifications, and not to mix and match
+     * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
+     * track which variables are defined so that they can later be referenced at execution time.
+     */
+    virtual void parse(const BSONObj& spec) = 0;
+
+    virtual std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() = 0;
+
+protected:
+    boost::intrusive_ptr<ExpressionContext> _expCtx;
+
+    ProjectionPolicies _policies;
+};
+
+}  // namespace parsed_aggregation_projection
 }  // namespace mongo

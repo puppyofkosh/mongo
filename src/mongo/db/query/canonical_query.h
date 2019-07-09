@@ -35,7 +35,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
-#include "mongo/db/pipeline/analysis_projection.h"
+#include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/db/query/collation/collator_interface.h"
 #include "mongo/db/query/logical_projection.h"
 #include "mongo/db/query/query_request.h"
@@ -121,7 +121,7 @@ public:
     const QueryRequest& getQueryRequest() const {
         return *_qr;
     }
-    const AnalysisProjection* getProj() const {
+    const LogicalProjection* getProj() const {
         return _proj.get();
     }
 
@@ -205,7 +205,7 @@ private:
     // _root points into _qr->getFilter()
     std::unique_ptr<MatchExpression> _root;
 
-    std::unique_ptr<AnalysisProjection> _proj;
+    std::unique_ptr<LogicalProjection> _proj;
     DesugaredProjection _desugaredProj;
 
     std::unique_ptr<CollatorInterface> _collator;

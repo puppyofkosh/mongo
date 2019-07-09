@@ -149,10 +149,6 @@ public:
         return *_parsedType;
     }
 
-    ProjectionPolicies getPolicies() {
-        return _policies;
-    }
-
 private:
     /**
      * Traverses '_rawObj' to determine the type of projection, populating '_parsedType' in the

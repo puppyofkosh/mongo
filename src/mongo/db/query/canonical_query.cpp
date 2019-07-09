@@ -244,8 +244,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     if (!_qr->getRawProj().isEmpty()) {
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?
-        auto desugaredProj =
-            projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
+        auto desugaredProj = projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
 
         log() << "The desugared projection is " << desugaredProj.desugaredObj;
 
@@ -253,18 +252,11 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         //_qr->setProj(desugaredProj.desugaredObj);
         _desugaredProj = desugaredProj;
 
-        // TODO: Eventually remove
-        auto lp = LogicalProjection::parse(
+        // TODO: Eventually remove or replace this with a LogicalProjection.
+        _proj = LogicalProjection::parse(
             desugaredProj,
             {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
              ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
-
-        boost::intrusive_ptr<ExpressionContext> expCtx = new ExpressionContext(opCtx, nullptr);
-        // TODO: Need to know the collation all the way here!
-
-        // TODO: Maybe we don't thread through an expression context here and have a dumber
-        // representation of Expression.
-        _proj = AnalysisProjection::create(expCtx, lp.get());
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {

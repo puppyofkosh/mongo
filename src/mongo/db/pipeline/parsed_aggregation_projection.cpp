@@ -165,8 +165,10 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
 
     std::unique_ptr<AnalysisProjection> analysisProject(
         lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<AnalysisProjection*>(new AnalysisInclusionProjection(expCtx, policies))
-            : static_cast<AnalysisProjection*>(new AnalysisExclusionProjection(expCtx, policies)));
+            ? static_cast<AnalysisProjection*>(
+                  new AnalysisInclusionProjection(expCtx, policies))
+            : static_cast<AnalysisProjection*>(
+                  new AnalysisExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
     analysisProject->parse(lp->getProjObj());
@@ -187,18 +189,6 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     auto lp = LogicalProjection::parse({spec}, policies);
 
     return ParsedAggregationProjection::create(expCtx, lp.get(), policies, nullptr);
-}
-
-std::unique_ptr<AnalysisProjection> AnalysisProjection::create(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    LogicalProjection* lp) {
-    std::unique_ptr<AnalysisProjection> analysisProject(
-        lp->type() == LogicalProjection::ProjectType::kInclusion
-        ? static_cast<AnalysisProjection*>(new AnalysisInclusionProjection(expCtx, lp->getPolicies()))
-        : static_cast<AnalysisProjection*>(new AnalysisExclusionProjection(expCtx, lp->getPolicies())));
-
-    analysisProject->parse(lp->getProjObj());
-    return analysisProject;
 }
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo
