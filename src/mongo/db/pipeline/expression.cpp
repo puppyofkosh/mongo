@@ -4022,6 +4022,21 @@ const char* ExpressionIsArray::getOpName() const {
 /* ----------------------- ExpressionSlice ---------------------------- */
 
 Value ExpressionSlice::evaluate(const Document& root) const {
+
+    Value toApplyTo = Value(root);
+    for (auto && posOrIndex : _path) {
+        std::cout << "value so far is " << toApplyTo;
+        if (posOrIndex.position) {
+            std::cout << "position is " << *posOrIndex.position << std::endl;
+            toApplyTo = toApplyTo[*posOrIndex.position];
+        } else {
+            invariant(posOrIndex.index);
+            std::cout << "idx is " << *posOrIndex.index << std::endl;
+            toApplyTo = toApplyTo[*posOrIndex.index];
+        }
+    }
+    std::cout << "value is " << toApplyTo << std::endl;
+
     const size_t n = _children.size();
 
     Value arrayVal = _children[0]->evaluate(root);

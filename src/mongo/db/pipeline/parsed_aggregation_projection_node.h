@@ -31,6 +31,8 @@
 
 #include "mongo/db/pipeline/parsed_aggregation_projection.h"
 
+#include "mongo/db/pipeline/position_or_index.h"
+
 namespace mongo {
 namespace parsed_aggregation_projection {
 
@@ -91,7 +93,9 @@ public:
     /**
      * Recursively evaluates all expressions in the projection, writing the results to 'outputDoc'.
      */
-    void applyExpressions(const Document& root, MutableDocument* outputDoc) const;
+    void applyExpressions(const Document& root,
+                          MutableDocument* outputDoc,
+                          std::vector<PositionOrIndex>* currentPath) const;
 
     /**
      * Reports dependencies on any fields that are required by this projection.
@@ -175,7 +179,9 @@ private:
 
     // Helpers for the 'applyProjections' and 'applyExpressions' methods. Applies the transformation
     // recursively to each element of any arrays, and ensures primitives are handled appropriately.
-    Value applyExpressionsToValue(const Document& root, Value inputVal) const;
+    Value applyExpressionsToValue(const Document& root,
+                                  Value inputVal,
+                                  std::vector<PositionOrIndex>* currentPath) const;
     Value applyProjectionsToValue(Value inputVal) const;
 
     // Adds a new ProjectionNode as a child. 'field' cannot be dotted.
