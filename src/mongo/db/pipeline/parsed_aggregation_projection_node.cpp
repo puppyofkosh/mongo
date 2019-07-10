@@ -98,8 +98,7 @@ Document ProjectionNode::applyToDocument(const Document& inputDoc) const {
     // Defer to the derived class to initialize the output document, then apply.
     MutableDocument outputDoc{initializeOutputDocument(inputDoc)};
     applyProjections(inputDoc, &outputDoc);
-    std::vector<PositionOrIndex> path;
-    applyExpressions(inputDoc, &outputDoc, &path);
+    applyExpressions(inputDoc, &outputDoc);
 
     // Make sure that we always pass through any metadata present in the input doc.
     outputDoc.copyMetaDataFrom(inputDoc);
@@ -163,54 +162,29 @@ void ProjectionNode::outputProjectedField(StringData field, Value val, MutableDo
     doc->setField(field, val);
 }
 
-void ProjectionNode::applyExpressions(const Document& root,
-                                      MutableDocument* outputDoc,
-                                      std::vector<PositionOrIndex>* currentPath) const {
+void ProjectionNode::applyExpressions(const Document& root, MutableDocument* outputDoc) const {
     for (auto&& field : _orderToProcessAdditionsAndChildren) {
-        currentPath->push_back(PositionOrIndex{field, boost::none});
-
         auto childIt = _children.find(field);
         if (childIt != _children.end()) {
             outputDoc->setField(
-                field, childIt->second->applyExpressionsToValue(root, outputDoc->peek()[field], currentPath));
+                field, childIt->second->applyExpressionsToValue(root, outputDoc->peek()[field]));
         } else {
             auto expressionIt = _expressions.find(field);
             invariant(expressionIt != _expressions.end());
-
-            std::cout << "evaluating expression path is " << std::endl;
-            std::string path = "";
-            for (auto&& s : *currentPath) {
-                path += s.position ? *s.position : std::to_string(*s.index);
-                path += ".";
-            }
-            path.pop_back();
-            std::cout << std::endl;
-
-            std::cout << "path is " << path << std::endl;
-            ExpressionSlice* slice = dynamic_cast<ExpressionSlice*>(expressionIt->second.get());
-            if (slice) {
-                slice->setPath(*currentPath);
-            }
-            
             outputDoc->setField(field, expressionIt->second->evaluate(root));
         }
-        currentPath->pop_back();
     }
 }
 
-Value ProjectionNode::applyExpressionsToValue(const Document& root,
-                                              Value inputValue,
-                                              std::vector<PositionOrIndex>* currentPath) const {
+Value ProjectionNode::applyExpressionsToValue(const Document& root, Value inputValue) const {
     if (inputValue.getType() == BSONType::Object) {
         MutableDocument outputDoc(inputValue.getDocument());
-        applyExpressions(root, &outputDoc, currentPath);
+        applyExpressions(root, &outputDoc);
         return outputDoc.freezeToValue();
     } else if (inputValue.getType() == BSONType::Array) {
         std::vector<Value> values = inputValue.getArray();
-        for (size_t i = 0; i < values.size(); ++i) {
-            currentPath->push_back({boost::none, i});
-            values[i] = applyExpressionsToValue(root, values[i], currentPath);
-            currentPath->pop_back();
+        for (auto& value : values) {
+            value = applyExpressionsToValue(root, value);
         }
         return Value(std::move(values));
     } else {
@@ -219,7 +193,7 @@ Value ProjectionNode::applyExpressionsToValue(const Document& root,
             // document of all the computed values. This case represents applying a projection like
             // {"a.b": {$literal: 1}} to the document {a: 1}. This should yield {a: {b: 1}}.
             MutableDocument outputDoc;
-            applyExpressions(root, &outputDoc, currentPath);
+            applyExpressions(root, &outputDoc);
             return outputDoc.freezeToValue();
         }
         // We didn't have any expressions, so just skip this value.

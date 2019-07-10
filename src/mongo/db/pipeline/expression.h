@@ -47,7 +47,6 @@
 #include "mongo/db/pipeline/field_path.h"
 #include "mongo/db/pipeline/value.h"
 #include "mongo/db/pipeline/variables.h"
-#include "mongo/db/pipeline/position_or_index.h"
 #include "mongo/db/query/datetime/date_time_support.h"
 #include "mongo/db/server_options.h"
 #include "mongo/stdx/functional.h"
@@ -2048,7 +2047,6 @@ public:
 
 
 class ExpressionSlice final : public ExpressionRangedArity<ExpressionSlice, 2, 3> {
-    std::vector<PositionOrIndex> _path;
 public:
     explicit ExpressionSlice(const boost::intrusive_ptr<ExpressionContext>& expCtx)
         : ExpressionRangedArity<ExpressionSlice, 2, 3>(expCtx) {}
@@ -2058,10 +2056,6 @@ public:
 
     void acceptVisitor(ExpressionVisitor* visitor) final {
         return visitor->visit(this);
-    }
-
-    void setPath(const std::vector<PositionOrIndex>& path) {
-        _path = path;
     }
 };
 
