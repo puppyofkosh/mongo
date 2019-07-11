@@ -115,6 +115,7 @@ public:
 
 private:
     Status transform(WorkingSetMember* member) const final;
+    Document doProjectionTransformation(Document input) const;
 
     // Fully-general heavy execution object.
     // ProjectionExec _exec;
@@ -124,6 +125,8 @@ private:
     // TODO: We may have to thread this through some other way.
     // TODO: Make sure the opCtx on here isn't stale.
     boost::intrusive_ptr<ExpressionContext> _expCtx;
+
+    const MatchExpression* _originalMatchExpression;
 };
 
 class ProjectionStageReturnKey final : public ProjectionStage {

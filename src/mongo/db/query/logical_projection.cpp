@@ -176,7 +176,8 @@ void LogicalProjection::parseNestedObject(const BSONObj& thisLevelSpec, const Fi
             _parsedType = ProjectType::kInclusion;
 
             if (fieldName == "$_internalFindPositional") {
-                _requiresMatchDetails = true;
+                MONGO_UNREACHABLE;
+                //_requiresMatchDetails = true;
             } else if (fieldName == "$meta") {
                 uassert(ErrorCodes::BadValue,  // TODO: badValue
                         "field for $meta should be string",

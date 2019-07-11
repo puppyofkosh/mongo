@@ -140,13 +140,23 @@ public:
         auto parser = std::make_unique<LogicalProjection>(spec.desugaredObj, policies);
         parser->parse();
         invariant(parser->_parsedType);
+        parser->_positionalProjectionPath = spec.positionalProjection;
+
+        std::cout << "ian: lp parsing " << spec.desugaredObj << std::endl;
+        std::cout << "ian: logical projection: path is "
+            << (spec.positionalProjection ? *spec.positionalProjection : "") << std::endl;
+        parser->_requiresMatchDetails |= static_cast<bool>(spec.positionalProjection);
 
         return parser;
     }
 
-    ProjectType type() {
+    ProjectType type() const {
         invariant(_parsedType);
         return *_parsedType;
+    }
+
+    const boost::optional<std::string>& getPositionalProjection() const {
+        return _positionalProjectionPath;
     }
 
 private:
@@ -216,6 +226,8 @@ private:
 
     // All of the fields which had sortKey metadata requested about them.
     std::vector<std::string> _sortKeyMetaFields;
+
+    boost::optional<std::string> _positionalProjectionPath;
 };
 
 }  // namespace mongo

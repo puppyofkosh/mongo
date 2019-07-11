@@ -107,6 +107,43 @@ boost::optional<BSONObj> convertToAggSlice(BSONElement elt) {
     return boost::none;
 }
 
+bool isSlice(BSONElement elt) {
+    if (elt.type() == BSONType::Object) {
+        BSONObj obj = elt.embeddedObject();
+
+        BSONElement firstElem = obj.firstElement();
+        if (firstElem.fieldNameStringData() == "$slice") {
+
+            // TODO: Do some validation of the $slice here (ensure that its arguments are either a
+            // number or an array of the right things)
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// 0 = exclusion
+// 1 = inclusion
+// because this is a terrible poc
+
+// I did not think this through so it's probably wrong in a subtle way. Good enough for the POC
+// though!
+bool determineProjectionType(const BSONObj& originalFindProjection) {
+    for (auto&& elem : originalFindProjection) {
+        if (!elem.trueValue() && elem.fieldNameStringData() != "_id") {
+            return 0;
+        }
+
+        if (elem.trueValue() && !isSlice(elem)) {
+            return 1;
+        }
+    }
+
+    // Exclusion is default.
+    return 0;
+}
+
 }  // namespace
 
 // TODO: Eventually this should probably do two passes: the first checks whether there are even any
@@ -115,14 +152,24 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
     BSONObjBuilder bob;
 
     bool foundPositional = false;
+    boost::optional<std::string> positionalProj;
     for (auto&& elem : originalProjection) {
         if (!isPositionalOperator(elem.fieldNameStringData())) {
 
             // If it's not positional is it $slice?
-            auto convertedSlice = convertToAggSlice(elem);
-            if (convertedSlice) {
-                bob.append(elem.fieldNameStringData(), *convertedSlice);
-                continue;
+            if (isSlice(elem)) {
+                // First determine the type of the projection.
+                bool type = determineProjectionType(originalProjection);
+                if (type) {
+                    // Inclusion projection: Change the r-hand side to a "1" so we include the
+                    // whole thing. We'll do the slicing during post-processing.
+                    bob.append(elem.fieldNameStringData(), 1);
+                } else {
+                    // Exclusion projection. We remove this field altogether so that it doesn't get
+                    // excluded.
+
+                    continue;
+                }
             }
 
             if (elem.type() == BSONType::Object) {
@@ -157,19 +204,15 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
         // In order to be consistent with existing behavior, we actually just find the place before
         // the '.' (even though you'd think it should be before the ".$").
         StringData beforePositional = str::before(elem.fieldNameStringData(), ".$");
+        positionalProj = beforePositional.toString();
 
-        {
-            BSONObjBuilder subObj(bob.subobjStart(beforePositional));
-            BSONObjBuilder elemMatch(subObj.subobjStart("$_internalFindPositional"));
-
-            elemMatch.append("field", beforePositional);
-
-            BSONObjBuilder match(subObj.subobjStart("match"));
-            me->serialize(&match);
-        }
+        // Just convert it to inclusion projection.
+        bob.appendNumber(beforePositional, 1);
     }
 
-    return {bob.obj()};
+    std::cout << "projection desugared with projection " << (positionalProj ? *positionalProj : "")
+              << std::endl;
+    return {bob.obj(), positionalProj};
 }
 }  // namespace projection_desugarer
 }  // namespace mongo

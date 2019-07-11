@@ -37,6 +37,8 @@ namespace mongo {
 
 struct DesugaredProjection {
     BSONObj desugaredObj;
+
+    boost::optional<std::string> positionalProjection;
 };
 
 namespace projection_desugarer {

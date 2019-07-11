@@ -74,9 +74,17 @@ void InclusionNode::reportDependencies(DepsTracker* deps) const {
 // ParsedInclusionProjection
 //
 
-void AnalysisInclusionProjection::parse(const BSONObj& spec) {
+void AnalysisInclusionProjection::parse(const LogicalProjection& lp) {
+    std::cout << "ian: analysisprojection::parse" << std::endl;
     // It is illegal to specify an inclusion with no output fields.
     bool atLeastOneFieldInOutput = false;
+
+    // WHY IS THIS NOT SET?
+    if (lp.getPositionalProjection()) {
+        std::cout << "ian: setting positional projection on root" << std::endl;
+        _root->setPositionalProjection(lp.getPositionalProjection());
+    }
+    const BSONObj& spec = lp.getProjObj();
 
     // Tracks whether or not we should apply the default _id projection policy.
     bool idSpecified = false;

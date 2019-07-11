@@ -215,10 +215,11 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
     : ProjectionStage(
           opCtx, logicalProjection.getProjObj(), ws, std::move(child), "PROJECTION_DEFAULT"),
       _logicalProjection(logicalProjection),
-      _expCtx(new ExpressionContext(opCtx, collator)) {
+      _expCtx(new ExpressionContext(opCtx, collator)),
+      _originalMatchExpression(&fullExpression) {
 
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
-        _expCtx, logicalProjection.getProjObj(), ProjectionPolicies{}, &fullExpression);
+        _expCtx, &logicalProjection, ProjectionPolicies{}, &fullExpression);
 }
 
 namespace {
@@ -241,13 +242,59 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
 }
 }
 
+Document ProjectionStageDefault::doProjectionTransformation(Document input) const {
+    Document out = _projExec->applyTransformation(input);
+
+    auto positionalProjectionPath = _logicalProjection.getPositionalProjection();
+    if (positionalProjectionPath) {
+        std::cout << "ian: applying positional projection w path " << *positionalProjectionPath
+                  << std::endl;
+
+        // Apply the match expression
+        MatchDetails details;
+        details.requestElemMatchKey();
+
+        invariant(_originalMatchExpression);
+        invariant(_originalMatchExpression->matchesBSON(input.toBson(), &details));
+
+        uassert(ErrorCodes::BadValue,
+                "positional operator '.$' requires correspoding field in query specifier",
+                details.hasElemMatchKey());
+
+        boost::optional<size_t> optIndex = str::parseUnsignedBase10Integer(details.elemMatchKey());
+        invariant(optIndex);
+
+        // Find the first array in the document, and trim it to just have the element from optIndex.
+        MutableDocument outputDoc(out);
+        FieldPath fp(*positionalProjectionPath);
+        for (size_t i = 0; i < fp.getPathLength(); ++i) {
+            StringData fieldName = fp.getFieldName(i);
+            Value v = outputDoc.peek().getField(fieldName);
+            if (v.getType() == BSONType::Array) {
+                log() << "ian: found array at component " << fieldName;
+                std::vector<Value> arr = v.getArray();
+
+                uassert(
+                    ErrorCodes::BadValue, "positional operator mismatch", *optIndex < arr.size());
+
+                outputDoc.setField(fieldName, Value(std::vector<Value>{arr[*optIndex]}));
+                break;
+            }
+        }
+
+        out = outputDoc.freeze();
+    }
+
+    return out;
+}
+
 Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
     if (member->hasObj()) {
         MutableDocument doc(Document(member->obj.value()));
         appendMetadata(member, &doc, _logicalProjection);
 
-        log() << "ian: applying projection";
-        Document out = _projExec->applyTransformation(doc.freeze());
+        log() << "ian: applying projection" << std::endl;
+        Document out = doProjectionTransformation(doc.freeze());
         transitionMemberToOwnedObj(out.toBson(), member);
     } else {
         // only inclusion projections can be covered.
@@ -282,7 +329,7 @@ Status ProjectionStageDefault::transform(WorkingSetMember* member) const {
         appendMetadata(member, &md, _logicalProjection);
 
         Document doc(md.freeze());
-        Document out = _projExec->applyTransformation(doc);
+        Document out = doProjectionTransformation(doc);
         transitionMemberToOwnedObj(out.toBson(), member);
     }
 

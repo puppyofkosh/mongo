@@ -159,7 +159,7 @@ using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    LogicalProjection* lp,
+    const LogicalProjection* lp,
     ProjectionPolicies policies,
     const MatchExpression* matchExpression) {
 
@@ -171,7 +171,7 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
                   new AnalysisExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
-    analysisProject->parse(lp->getProjObj());
+    analysisProject->parse(*lp);
 
     return analysisProject->convertToExecutionTree();
 }

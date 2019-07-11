@@ -149,6 +149,11 @@ protected:
     // Writes the given value to the output doc, replacing the existing value of 'field' if present.
     virtual void outputProjectedField(StringData field, Value val, MutableDocument* outDoc) const;
 
+    virtual void applyProjectionSpecificLogic(const Document& root,
+                                              MutableDocument* outputDoc) const {
+        // Default does nothing
+    }
+
     // TODO use StringMap once SERVER-23700 is resolved.
     stdx::unordered_map<std::string, std::unique_ptr<ProjectionNode>> _children;
     stdx::unordered_map<size_t, std::unique_ptr<ProjectionNode>> _arrayBranches;
