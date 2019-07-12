@@ -79,11 +79,6 @@ void AnalysisInclusionProjection::parse(const LogicalProjection& lp) {
     // It is illegal to specify an inclusion with no output fields.
     bool atLeastOneFieldInOutput = false;
 
-    // WHY IS THIS NOT SET?
-    if (lp.getPositionalProjection()) {
-        std::cout << "ian: setting positional projection on root" << std::endl;
-        _root->setPositionalProjection(lp.getPositionalProjection());
-    }
     const BSONObj& spec = lp.getProjObj();
 
     // Tracks whether or not we should apply the default _id projection policy.

@@ -99,7 +99,6 @@ Document ProjectionNode::applyToDocument(const Document& inputDoc) const {
     MutableDocument outputDoc{initializeOutputDocument(inputDoc)};
     applyProjections(inputDoc, &outputDoc);
     applyExpressions(inputDoc, &outputDoc);
-    //applyProjectionSpecificLogic(inputDoc, &outputDoc);
 
     // Make sure that we always pass through any metadata present in the input doc.
     outputDoc.copyMetaDataFrom(inputDoc);

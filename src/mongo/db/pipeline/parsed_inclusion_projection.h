@@ -60,11 +60,6 @@ public:
     InclusionNode* addOrGetChild(const std::string& field);
 
     void reportDependencies(DepsTracker* deps) const final;
-
-    void setPositionalProjection(const boost::optional<std::string>& s) {
-        _positionalProjectionPath = s;
-    }
-
 protected:
     // For inclusions, we can apply an optimization here by simply appending to the output document
     // via MutableDocument::addField, rather than always checking for existing fields via setField.
@@ -84,33 +79,6 @@ protected:
     Value transformSkippedValueForOutput(const Value& value) const final {
         return Value();
     }
-
-    void applyProjectionSpecificLogic(const Document& root,
-                                      MutableDocument* outputDoc) const final {
-        // Walk the output document using _positionalProjectionPath until we find an array.
-        std::cout << "ian: applying special logic" << std::endl;
-        if (!_positionalProjectionPath) {
-            return;
-        }
-
-        std::cout << "ian: positional projection" << std::endl;
-        FieldPath fp(*_positionalProjectionPath);
-        for (size_t i = 0; i < fp.getPathLength(); ++i) {
-            StringData fieldName = fp.getFieldName(i);
-            Value v = outputDoc->peek().getField(fieldName);
-            if (v.getType() == BSONType::Array) {
-                std::vector<Value> arr = v.getArray();
-
-                // For now just do the first thing.
-                if (arr.size() > 0) {
-                    outputDoc->setField(fieldName, Value(std::vector<Value>{arr[0]}));
-                }
-            }
-        }
-    }
-
-private:
-    boost::optional<std::string> _positionalProjectionPath;
 };
 
 /**
