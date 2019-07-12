@@ -240,6 +240,59 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
         md->setRecordId(member->recordId);
     }
 }
+
+void doSlicing(MutableDocument* outputDoc, const SliceArgs& args, size_t indexIntoPath) {
+    if (indexIntoPath + 1 == args.path.getPathLength()) {
+
+        std::string fieldName = args.path.getFieldName(indexIntoPath).toString();
+
+        Document d(outputDoc->peek());
+        Value v = d.getField(fieldName);
+
+        if (v.getType() != BSONType::Array) {
+            // Nothing to slice
+            return;
+        }
+
+        std::vector<Value> arr = v.getArray();
+        // Not supporting {$slice: <anything less than 0>}
+        invariant(args.limit > 0);
+        if (static_cast<size_t>(args.limit) < arr.size()) {
+            arr.resize(args.limit);
+        }
+
+        outputDoc->setField(fieldName, Value(arr));
+
+        return;
+    }
+
+    std::string fieldName = args.path.getFieldName(indexIntoPath).toString();
+    Value f = outputDoc->peek().getField(fieldName);
+
+    if (f.getType() == BSONType::Object) {
+        Document subDoc(f.getDocument());
+        MutableDocument mutSubDoc(subDoc);
+
+        doSlicing(&mutSubDoc, args, indexIntoPath + 1);
+
+        outputDoc->setField(fieldName, Value(mutSubDoc.freeze()));
+    } else if (f.getType() == BSONType::Array) {
+        const std::vector<Value> arr = f.getArray();
+        std::vector<Value> results;
+        for (auto&& elem : arr) {
+            if (elem.getType() != BSONType::Object) {
+                results.push_back(elem);
+                continue;
+            }
+
+            Document subDoc = elem.getDocument();
+            MutableDocument md(subDoc);
+            doSlicing(&md, args, indexIntoPath + 1);
+            results.push_back(Value(md.freeze()));
+        }
+        outputDoc->setField(fieldName, Value(results));
+    }
+}
 }
 
 Document ProjectionStageDefault::doProjectionTransformation(Document input) const {
@@ -268,19 +321,29 @@ Document ProjectionStageDefault::doProjectionTransformation(Document input) cons
         MutableDocument outputDoc(out);
         FieldPath fp(*positionalProjectionPath);
         for (size_t i = 0; i < fp.getPathLength(); ++i) {
-            StringData fieldName = fp.getFieldName(i);
-            Value v = outputDoc.peek().getField(fieldName);
+            FieldPath subPath = fp.getSubpath(i);
+            Value v = outputDoc.peek().getNestedField(subPath);
             if (v.getType() == BSONType::Array) {
-                log() << "ian: found array at component " << fieldName;
+                log() << "ian: found array at component " << subPath.fullPath();
                 std::vector<Value> arr = v.getArray();
 
                 uassert(
                     ErrorCodes::BadValue, "positional operator mismatch", *optIndex < arr.size());
 
-                outputDoc.setField(fieldName, Value(std::vector<Value>{arr[*optIndex]}));
+                outputDoc.setNestedField(subPath, Value(std::vector<Value>{arr[*optIndex]}));
                 break;
             }
         }
+
+        out = outputDoc.freeze();
+    }
+
+    auto sliceArgs = _logicalProjection.getSliceArgs();
+    if (sliceArgs) {
+        MutableDocument outputDoc(out);
+        std::cout << "ian: applying slice to path " << sliceArgs->path.fullPath() << std::endl;
+
+        doSlicing(&outputDoc, *sliceArgs, 0);
 
         out = outputDoc.freeze();
     }

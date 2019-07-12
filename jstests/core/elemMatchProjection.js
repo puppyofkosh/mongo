@@ -113,6 +113,7 @@
             .x.length,
         "single object match with elemMatch and negative slice");
 
+    print("ian: res is " + tojson(coll.find({'group': 12, 'x.y.a': 1}, {'x.y.$': 1}).toArray()[0]));
     assert.eq(1,
               coll.find({'group': 12, 'x.y.a': 1}, {'x.y.$': 1}).toArray()[0].x.y.length,
               "single object match with two level dot notation");

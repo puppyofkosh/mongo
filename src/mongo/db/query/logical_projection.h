@@ -141,10 +141,9 @@ public:
         parser->parse();
         invariant(parser->_parsedType);
         parser->_positionalProjectionPath = spec.positionalProjection;
+        parser->_sliceArgs = spec.sliceArgs;
 
         std::cout << "ian: lp parsing " << spec.desugaredObj << std::endl;
-        std::cout << "ian: logical projection: path is "
-            << (spec.positionalProjection ? *spec.positionalProjection : "") << std::endl;
         parser->_requiresMatchDetails |= static_cast<bool>(spec.positionalProjection);
 
         return parser;
@@ -157,6 +156,10 @@ public:
 
     const boost::optional<std::string>& getPositionalProjection() const {
         return _positionalProjectionPath;
+    }
+
+    const boost::optional<SliceArgs>& getSliceArgs() const {
+        return _sliceArgs;
     }
 
 private:
@@ -228,6 +231,7 @@ private:
     std::vector<std::string> _sortKeyMetaFields;
 
     boost::optional<std::string> _positionalProjectionPath;
+    boost::optional<SliceArgs> _sliceArgs;
 };
 
 }  // namespace mongo

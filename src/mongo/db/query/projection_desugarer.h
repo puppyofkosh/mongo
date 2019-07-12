@@ -35,10 +35,16 @@
 
 namespace mongo {
 
+struct SliceArgs {
+    FieldPath path;
+    int limit;
+};
+
 struct DesugaredProjection {
     BSONObj desugaredObj;
 
     boost::optional<std::string> positionalProjection;
+    boost::optional<SliceArgs> sliceArgs;
 };
 
 namespace projection_desugarer {

@@ -153,11 +153,19 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
 
     bool foundPositional = false;
     boost::optional<std::string> positionalProj;
+    boost::optional<SliceArgs> sliceArgs;
     for (auto&& elem : originalProjection) {
         if (!isPositionalOperator(elem.fieldNameStringData())) {
 
             // If it's not positional is it $slice?
             if (isSlice(elem)) {
+                // Determine the arguments of the slice. For POC only supporting number.
+                // TODO: Eventually support multiple $slices
+                uassert(ErrorCodes::InternalErrorNotSupported,
+                        "not yet supported doing slice with skip limit",
+                        elem.embeddedObject().firstElement().isNumber());
+                sliceArgs = SliceArgs{elem.fieldNameStringData(), elem.embeddedObject().firstElement().numberInt()};
+
                 // First determine the type of the projection.
                 bool type = determineProjectionType(originalProjection);
                 if (type) {
@@ -167,9 +175,10 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
                 } else {
                     // Exclusion projection. We remove this field altogether so that it doesn't get
                     // excluded.
-
-                    continue;
                 }
+
+                // We don't want to append the original element.
+                continue;
             }
 
             if (elem.type() == BSONType::Object) {
@@ -212,7 +221,7 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
 
     std::cout << "projection desugared with projection " << (positionalProj ? *positionalProj : "")
               << std::endl;
-    return {bob.obj(), positionalProj};
+    return {bob.obj(), positionalProj, sliceArgs};
 }
 }  // namespace projection_desugarer
 }  // namespace mongo
