@@ -40,6 +40,7 @@
 #include "mongo/db/pipeline/parsed_aggregation_projection.h"
 #include "mongo/db/query/canonical_query_encoder.h"
 #include "mongo/db/query/collation/collator_factory_interface.h"
+#include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/query/indexability.h"
 #include "mongo/db/query/logical_projection.h"
 #include "mongo/db/query/projection_desugarer.h"
@@ -47,6 +48,8 @@
 #include "mongo/util/log.h"
 
 namespace mongo {
+namespace fpast = find_projection_ast;
+
 namespace {
 
 /**
@@ -242,9 +245,13 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
     // Validate the projection if there is one.
     if (!_qr->getRawProj().isEmpty()) {
+        auto syntaxTree = fpast::FindProjectionAST::fromBson(_qr->getRawProj(), _root.get());
+        std::cout << "The syntax tree is " << syntaxTree.toString() << std::endl;
+
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?
-        auto desugaredProj = projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
+        auto desugaredProj =
+            projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
 
         log() << "The desugared projection is " << desugaredProj.desugaredObj;
 
