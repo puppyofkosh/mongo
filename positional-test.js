@@ -1,4 +1,6 @@
 (function() {
+    assert.commandWorked(db.adminCommand({setParameter: 1, traceExceptions: true}));
+
     const coll = db.c;
     coll.drop();
     assert.commandWorked(coll.insert({a: [{b: 1}, {b: 2}]}));

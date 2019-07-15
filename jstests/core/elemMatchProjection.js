@@ -100,9 +100,11 @@
                   .x.length,
               "single object match with elemMatch");
 
-    // Disallowing usage of $slice and positional projection together as the results don't make sense.
+    // Disallowing usage of $slice and positional projection together as the results don't make
+    // sense.
     // assert.eq(1,
-    //           coll.find({'group': 2, 'x': {'$elemMatch': {'a': 1, 'b': 2}}}, {'x.$': {'$slice': 1}})
+    //           coll.find({'group': 2, 'x': {'$elemMatch': {'a': 1, 'b': 2}}}, {'x.$': {'$slice':
+    //           1}})
     //               .toArray()[0]
     //               .x.length,
     //           "single object match with elemMatch and positive slice");

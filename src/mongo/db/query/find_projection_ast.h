@@ -38,6 +38,8 @@ namespace mongo {
 namespace find_projection_ast {
 
 enum class NodeType {
+    INTERNAL,
+
     INCLUSION,             // r-hand side is truthy value
     INCLUSION_POSITIONAL,  // r-hand side is truthy value, and positional projection is used
     EXCLUSION,
@@ -52,16 +54,56 @@ enum class NodeType {
     // Includes all other expressions.
     EXPRESSION_OTHER,
 };
+enum class ProjectType { kInclusion, kExclusion };
 
 
 class ProjectionASTNode {
 public:
+    using Children = std::vector<std::pair<std::string, std::unique_ptr<ProjectionASTNode>>>;
+
     virtual FieldPath getPath() const = 0;
     virtual NodeType getType() const = 0;
     virtual std::string toString() const = 0;
 };
 
-class ProjectionASTNodeInclusion : public ProjectionASTNode {
+class ProjectionASTNodeBitter : public ProjectionASTNode {};
+
+// An internal node which has children.
+class ProjectionASTNodeInternal : public ProjectionASTNodeBitter {
+public:
+    ProjectionASTNodeInternal(Children c) : children(std::move(c)) {}
+
+    FieldPath getPath() const override {
+        MONGO_UNREACHABLE;
+    }
+
+    NodeType getType() const override {
+        return NodeType::INTERNAL;
+    }
+
+    std::string toString() const override {
+        auto stream = str::stream();
+        stream << "{";
+        for (auto&& child : children) {
+            stream << child.first << ": " << child.second->toString() << ", ";
+        }
+        stream << "}";
+        return stream;
+    }
+
+    ProjectionASTNode* getChild(StringData field) const {
+        for (auto&& c : children) {
+            if (c.first == field)
+                return c.second.get();
+        }
+        return nullptr;
+    }
+
+    // Public for convenience
+    Children children;
+};
+
+class ProjectionASTNodeInclusion : public ProjectionASTNodeBitter {
 public:
     ProjectionASTNodeInclusion(FieldPath fp) : _fp(fp) {}
 
@@ -83,7 +125,7 @@ private:
 
 class ProjectionASTNodePositional : public ProjectionASTNode {
 public:
-    ProjectionASTNodePositional(std::string key) : _originalKey(key), _fp(str::before(key, ".$")) {}
+    ProjectionASTNodePositional(FieldPath path) : _fp(path) {}
 
     FieldPath getPath() const override {
         return _fp;
@@ -98,11 +140,10 @@ public:
     }
 
 private:
-    std::string _originalKey;
     FieldPath _fp;
 };
 
-class ProjectionASTNodeExclusion : public ProjectionASTNode {
+class ProjectionASTNodeExclusion : public ProjectionASTNodeBitter {
 public:
     ProjectionASTNodeExclusion(FieldPath fp) : _fp(fp) {}
 
@@ -145,7 +186,7 @@ private:
     int _limit;
 };
 
-class ProjectionASTNodeElemMatch : public ProjectionASTNode {
+class ProjectionASTNodeElemMatch : public ProjectionASTNodeBitter {
 public:
     ProjectionASTNodeElemMatch(FieldPath fp, BSONObj matchExpr) : _fp(fp), _matchExpr(matchExpr) {}
 
@@ -166,29 +207,7 @@ private:
     BSONObj _matchExpr;
 };
 
-class ProjectionASTNodeMeta : public ProjectionASTNode {
-public:
-    ProjectionASTNodeMeta(FieldPath fp, std::string metaType) : _fp(fp), _metaType(metaType) {}
-
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
-        return NodeType::EXPRESSION_META;
-    }
-
-    std::string toString() const override {
-        return str::stream() << _fp.fullPath() << ": $meta";
-    }
-
-private:
-    FieldPath _fp;
-    // TODO: maybe make this an enum.
-    std::string _metaType;
-};
-
-class ProjectionASTNodeOtherExpression : public ProjectionASTNode {
+class ProjectionASTNodeOtherExpression : public ProjectionASTNodeBitter {
 public:
     ProjectionASTNodeOtherExpression(FieldPath fp, BSONObj obj) : _fp(fp), _obj(obj.getOwned()) {}
 
@@ -211,9 +230,7 @@ private:
 
 // Syntax "tree" (list) for find projection.
 struct FindProjectionAST {
-    enum class ProjectType { kInclusion, kExclusion };
-
-    const std::vector<std::unique_ptr<ProjectionASTNode>> node;
+    ProjectionASTNodeInternal root;
 
     // To keep the BSONElements alive
     const BSONObj originalObject;
@@ -223,13 +240,21 @@ struct FindProjectionAST {
     static FindProjectionAST fromBson(const BSONObj& b, const MatchExpression* const query);
 
     std::string toString() {
-        auto stream = str::stream();
-        for (auto && n : node) {
-            stream << n->toString() << "|";
-        }
-        return stream;
+        return root.toString();
     }
 };
+
+struct FindProjectionASTBitter {
+    const std::vector<std::unique_ptr<ProjectionASTNodeBitter>> nodes;
+    const BSONObj originalObject;
+    const ProjectType type;
+
+    // TODO: Some extra stuff to carry along with the projection.
+    // positional info
+    // $slice info
+};
+
+FindProjectionASTBitter desugar(FindProjectionAST ast);
 
 // TODO: FindProjectionSweet/BitterAST
 }

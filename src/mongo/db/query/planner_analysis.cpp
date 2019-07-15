@@ -396,12 +396,16 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
 
     addSortKeyGeneratorStageIfNeeded();
     if (query.getProj()->wantIndexKey()) {
-        return std::make_unique<ProjectionNodeReturnKey>(
-            std::move(solnRoot), *query.root(), query.getDesugaredProj().desugaredObj, *query.getProj());
+        return std::make_unique<ProjectionNodeReturnKey>(std::move(solnRoot),
+                                                         *query.root(),
+                                                         query.getDesugaredProj().desugaredObj,
+                                                         *query.getProj());
     }
 
-    return std::make_unique<ProjectionNodeDefault>(
-        std::move(solnRoot), *query.root(), query.getDesugaredProj().desugaredObj, *query.getProj());
+    return std::make_unique<ProjectionNodeDefault>(std::move(solnRoot),
+                                                   *query.root(),
+                                                   query.getDesugaredProj().desugaredObj,
+                                                   *query.getProj());
 }
 
 }  // namespace

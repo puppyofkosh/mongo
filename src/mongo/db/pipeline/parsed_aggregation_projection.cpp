@@ -165,10 +165,8 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
 
     std::unique_ptr<AnalysisProjection> analysisProject(
         lp->type() == LogicalProjection::ProjectType::kInclusion
-            ? static_cast<AnalysisProjection*>(
-                  new AnalysisInclusionProjection(expCtx, policies))
-            : static_cast<AnalysisProjection*>(
-                  new AnalysisExclusionProjection(expCtx, policies)));
+            ? static_cast<AnalysisProjection*>(new AnalysisInclusionProjection(expCtx, policies))
+            : static_cast<AnalysisProjection*>(new AnalysisExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
     analysisProject->parse(*lp);

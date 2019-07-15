@@ -59,9 +59,54 @@ bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData m
 }
 
 namespace find_projection_ast {
+namespace {
+void addNodeAtPath(ProjectionASTNodeInternal* root,
+                   const FieldPath& path,
+                   const FieldPath& originalPath,
+                   std::unique_ptr<find_projection_ast::ProjectionASTNode> newChild) {
+    invariant(root);
+    invariant(path.getPathLength() > 0);
+    const auto nextComponent = path.getFieldName(0);
+
+    ProjectionASTNode* child = root->getChild(nextComponent);
+
+    if (path.getPathLength() == 1) {
+        if (child) {
+            uasserted(ErrorCodes::BadValue,
+                      str::stream() << "path collision at " << originalPath.fullPath());
+        }
+
+        root->children.push_back(std::make_pair(nextComponent.toString(), std::move(newChild)));
+        return;
+    }
+
+    if (!child) {
+        // TODO: Figure out child ordering issue.
+        auto newInternalChild =
+            std::make_unique<ProjectionASTNodeInternal>(ProjectionASTNode::Children{});
+        auto rawInternalChild = newInternalChild.get();
+        root->children.push_back(
+            std::make_pair(nextComponent.toString(), std::move(newInternalChild)));
+        addNodeAtPath(rawInternalChild, path.tail(), originalPath, std::move(newChild));
+        return;
+    }
+
+    // Either find or create an internal node.
+    if (child->getType() != NodeType::INTERNAL) {
+        uasserted(ErrorCodes::BadValue,
+                  str::stream() << "collision at " << originalPath.fullPath()
+                                << " remaining portion "
+                                << path.fullPath());
+    }
+
+    ProjectionASTNodeInternal* childInternal = static_cast<ProjectionASTNodeInternal*>(child);
+    addNodeAtPath(childInternal, path.tail(), originalPath, std::move(newChild));
+}
+}
+
 FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                                               const MatchExpression* const query) {
-    std::vector<std::unique_ptr<ProjectionASTNode>> node;
+    ProjectionASTNodeInternal root(ProjectionASTNode::Children{});
 
     // TODO:
 
@@ -69,16 +114,20 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
     bool hasElemMatch = false;
     boost::optional<ProjectType> type;
     for (auto&& elem : b) {
-
         if (elem.type() == BSONType::Object) {
+            FieldPath path(elem.fieldNameStringData());
+
             BSONObj obj = elem.embeddedObject();
             BSONElement e2 = obj.firstElement();
 
             if (e2.fieldNameStringData() == "$slice") {
                 if (e2.isNumber()) {
                     // This is A-OK.
-                    node.push_back(std::make_unique<ProjectionASTNodeSlice>(
-                        elem.fieldNameStringData(), e2.numberInt(), 0));
+                    addNodeAtPath(&root,
+                                  path,
+                                  path,
+                                  std::make_unique<ProjectionASTNodeSlice>(
+                                      elem.fieldNameStringData(), e2.numberInt(), 0));
                 } else if (e2.type() == Array) {
                     BSONObj arr = e2.embeddedObject();
                     if (2 != arr.nFields()) {
@@ -93,8 +142,11 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                     if (limit <= 0) {
                         uasserted(ErrorCodes::BadValue, "$slice limit must be positive");
                     }
-                    node.push_back(std::make_unique<ProjectionASTNodeSlice>(
-                        elem.fieldNameStringData(), skip, limit));
+                    addNodeAtPath(&root,
+                                  path,
+                                  path,
+                                  std::make_unique<ProjectionASTNodeSlice>(
+                                      elem.fieldNameStringData(), skip, limit));
                 } else {
                     uasserted(ErrorCodes::BadValue,
                               "$slice only supports numbers and [skip, limit] arrays");
@@ -122,19 +174,35 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
 
                 // Not parsing the match expression itself because it would require an
                 // expressionContext + operationContext.
-                node.push_back(std::make_unique<ProjectionASTNodeElemMatch>(
-                    elem.fieldNameStringData(), elemMatchObj));
+
+                addNodeAtPath(&root,
+                              path,
+                              path,
+                              std::make_unique<ProjectionASTNodeElemMatch>(
+                                  elem.fieldNameStringData(), elemMatchObj));
                 hasElemMatch = true;
+            } else {
+                // Some other expression which will get parsed later. Ideally we'd parse it into
+                // some kind of "expression syntax tree" here.
+                addNodeAtPath(&root,
+                              path,
+                              path,
+                              std::make_unique<ProjectionASTNodeOtherExpression>(
+                                  elem.fieldNameStringData(), obj));
             }
 
         } else if (elem.trueValue()) {
             if (!isPositionalOperator(elem.fieldName())) {
-                node.push_back(
+                FieldPath path(elem.fieldNameStringData());
+                addNodeAtPath(
+                    &root,
+                    path,
+                    path,
                     std::make_unique<ProjectionASTNodeInclusion>(elem.fieldNameStringData()));
             } else {
-                // TODO continue
-                node.push_back(std::make_unique<ProjectionASTNodePositional>(
-                    elem.fieldNameStringData().toString()));
+                FieldPath path(str::before(elem.fieldNameStringData(), ".$"));
+                addNodeAtPath(
+                    &root, path, path, std::make_unique<ProjectionASTNodePositional>(path));
 
                 if (hasPositional) {
                     uasserted(ErrorCodes::BadValue,
@@ -171,8 +239,12 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
             type = ProjectType::kInclusion;
         } else {
             invariant(!elem.trueValue());
-            node.push_back(std::make_unique<ProjectionASTNodeExclusion>(
-                elem.fieldNameStringData().toString()));
+            FieldPath path(elem.fieldNameStringData());
+            addNodeAtPath(&root,
+                          path,
+                          path,
+                          std::make_unique<ProjectionASTNodeExclusion>(
+                              elem.fieldNameStringData().toString()));
 
             if (elem.fieldNameStringData() != "_id") {
                 uassert(ErrorCodes::BadValue,
@@ -183,7 +255,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
         }
     }
 
-    return FindProjectionAST{std::move(node), b, type ? *type : ProjectType::kExclusion};
+    return FindProjectionAST{std::move(root), b, type ? *type : ProjectType::kExclusion};
 }
 }
 }

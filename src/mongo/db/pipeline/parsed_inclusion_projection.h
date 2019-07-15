@@ -60,6 +60,7 @@ public:
     InclusionNode* addOrGetChild(const std::string& field);
 
     void reportDependencies(DepsTracker* deps) const final;
+
 protected:
     // For inclusions, we can apply an optimization here by simply appending to the output document
     // via MutableDocument::addField, rather than always checking for existing fields via setField.

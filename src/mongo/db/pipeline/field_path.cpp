@@ -78,7 +78,7 @@ FieldPath::FieldPath(std::string inputPath, bool allowDollarPrefixedFieldName)
 void FieldPath::uassertValidFieldName(StringData fieldName, bool allowDollarPrefixedFieldName) {
     uassert(15998, "FieldPath field names may not be empty strings.", !fieldName.empty());
     uassert(16410,
-            "FieldPath field names may not start with '$'.",
+            str::stream() << "FieldPath field names may not start with '$': " << fieldName,
             !(!allowDollarPrefixedFieldName && fieldName[0] == '$'));
     uassert(
         16411, "FieldPath field names may not contain '\0'.", fieldName.find('\0') == string::npos);

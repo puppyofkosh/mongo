@@ -164,7 +164,8 @@ DesugaredProjection desugarProjection(const BSONObj& originalProjection, MatchEx
                 uassert(ErrorCodes::InternalErrorNotSupported,
                         "not yet supported doing slice with skip limit",
                         elem.embeddedObject().firstElement().isNumber());
-                sliceArgs = SliceArgs{elem.fieldNameStringData(), elem.embeddedObject().firstElement().numberInt()};
+                sliceArgs = SliceArgs{elem.fieldNameStringData(),
+                                      elem.embeddedObject().firstElement().numberInt()};
 
                 // First determine the type of the projection.
                 bool type = determineProjectionType(originalProjection);
