@@ -184,9 +184,11 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     // If there was an error, uassert with a $project-specific message.
     ProjectionSpecValidator::uassertValid(spec, "$project");
 
-    auto lp = LogicalProjection::parse({spec}, policies);
+    // TODO: This is important. Need to be able to make a projection ast from agg projection.
+    MONGO_UNREACHABLE;
+    // auto lp = LogicalProjection::parse({spec}, policies);
 
-    return ParsedAggregationProjection::create(expCtx, lp.get(), policies, nullptr);
+    // return ParsedAggregationProjection::create(expCtx, lp.get(), policies, nullptr);
 }
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

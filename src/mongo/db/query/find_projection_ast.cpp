@@ -124,7 +124,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                     addNodeAtPath(&root,
                                   path,
                                   path,
-                                  std::make_unique<ProjectionASTNodeSlice>(e2.numberInt(), 0));
+                                  std::make_unique<ProjectionASTNodeSlice>(0, e2.numberInt()));
                 } else if (e2.type() == Array) {
                     BSONObj arr = e2.embeddedObject();
                     if (2 != arr.nFields()) {
@@ -291,18 +291,18 @@ void desugarHelper(const FindProjectionAST& originalAST,
 
             *positionalInfo = PositionalInfo{childPath};
         } else if (node->type() == NodeType::EXPRESSION_SLICE) {
+            auto* sliceNode = static_cast<ProjectionASTNodeSlice*>(node);
+            // Update the sliceInfo
+            sliceInfo->push_back(SliceInfo{childPath, sliceNode->skip, sliceNode->limit});
+
             // If this is an exclusion projection, then we don't add any nodes.
             if (originalAST.type == ProjectType::kExclusion) {
                 continue;
             }
 
-            auto* sliceNode = static_cast<ProjectionASTNodeSlice*>(node);
-
-            // If it's an inclusion projection, replace the node with an inclusion and update the
-            // slice info.
+            // If it's an inclusion projection, replace the node with an inclusion.
             newNode->children.push_back(
                 std::make_pair(field, std::make_unique<ProjectionASTNodeInclusion>()));
-            sliceInfo->push_back(SliceInfo{childPath, sliceNode->skip, sliceNode->limit});
         } else if (node->type() == NodeType::EXPRESSION_ELEMMATCH) {
             // I don't feel like doing this case for skunkworks.
             MONGO_UNREACHABLE;

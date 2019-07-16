@@ -69,6 +69,15 @@ public:
     virtual bool commonToAggAndFind() const {
         return false;
     }
+
+    virtual void toBson(BSONObjBuilder* bob, const std::string& fieldName) const {
+        MONGO_UNREACHABLE;
+    };
+
+    virtual std::unique_ptr<ProjectionASTNode> clone() const {
+        std::cout << "this type is " << typeid(*this).name() << std::endl;
+        MONGO_UNREACHABLE;
+    }
 };
 
 // For nodes which are common to both agg and find.
@@ -86,6 +95,15 @@ template <class ChildType>
 class ProjectionASTNodeInternal : public ProjectionASTNodeCommon {
 public:
     ProjectionASTNodeInternal(Children<ChildType> c) : children(std::move(c)) {}
+    ProjectionASTNodeInternal(const ProjectionASTNodeInternal& other) {
+        for (auto&& c : other.children) {
+            std::unique_ptr<ChildType> castedChild(
+                static_cast<ChildType*>(c.second->clone().release()));
+            children.push_back(std::make_pair(c.first, std::move(castedChild)));
+        }
+    }
+    ProjectionASTNodeInternal(ProjectionASTNodeInternal&& other)
+        : children(std::move(other.children)) {}
 
     NodeType type() const override {
         return NodeType::INTERNAL;
@@ -120,6 +138,27 @@ public:
         MONGO_UNREACHABLE
     }
 
+    // TODO: This is a crutch used for getting us through an intermediate state. Get rid of it
+    // eventually.
+    void toBson(BSONObjBuilder* bob, const std::string& fieldName) const override {
+        BSONObjBuilder sub(bob->subobjStart(fieldName));
+        for (auto&& child : children) {
+            child.second->toBson(&sub, child.first);
+        }
+    }
+
+    std::unique_ptr<ProjectionASTNode> clone() const override {
+        Children<ChildType> newChildren;
+        for (auto&& c : children) {
+            std::unique_ptr<ChildType> castedChild(
+                static_cast<ChildType*>(c.second->clone().release()));
+
+            newChildren.push_back(std::make_pair(c.first, std::move(castedChild)));
+        }
+
+        return std::make_unique<ProjectionASTNodeInternal>(std::move(newChildren));
+    }
+
     // Public for convenience
     Children<ChildType> children;
 };
@@ -135,6 +174,14 @@ public:
 
     std::string toString() const override {
         return "1";
+    }
+
+    void toBson(BSONObjBuilder* bob, const std::string& fieldName) const override {
+        bob->append(fieldName, 1.0);
+    }
+
+    std::unique_ptr<ProjectionASTNode> clone() const override {
+        return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeInclusion());
     }
 };
 
@@ -157,6 +204,15 @@ public:
 
     std::string toString() const override {
         return "0";
+    }
+
+
+    void toBson(BSONObjBuilder* bob, const std::string& fieldName) const override {
+        bob->append(fieldName, 0.0);
+    }
+
+    std::unique_ptr<ProjectionASTNode> clone() const override {
+        return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeExclusion());
     }
 };
 
@@ -188,6 +244,14 @@ public:
         return str::stream() << "{$elemMatch: " << _matchExpr << "}";
     }
 
+    void toBson(BSONObjBuilder* bob, const std::string& fieldName) const override {
+        MONGO_UNREACHABLE;  // Not supporting for this patch
+    }
+
+    std::unique_ptr<ProjectionASTNode> clone() const override {
+        MONGO_UNREACHABLE;
+    }
+
 private:
     BSONObj _matchExpr;
 };
@@ -202,6 +266,14 @@ public:
 
     std::string toString() const override {
         return str::stream() << _obj;
+    }
+
+    void toBson(BSONObjBuilder* bob, const std::string& fieldName) const override {
+        bob->append(fieldName, _obj);
+    }
+
+    std::unique_ptr<ProjectionASTNode> clone() const override {
+        return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeOtherExpression(_obj));
     }
 
 private:
@@ -232,11 +304,11 @@ struct PositionalInfo {
 
 struct ProjectionASTCommon {
     ProjectionASTNodeInternal<ProjectionASTNodeCommon> root;
-    const ProjectType type;
+    ProjectType type;
 
     // Information for post-processing the find expressions.
-    const std::vector<SliceInfo> sliceInfo;
-    const boost::optional<PositionalInfo> positionalInfo;
+    std::vector<SliceInfo> sliceInfo;
+    boost::optional<PositionalInfo> positionalInfo;
 
     std::string toString() {
         auto stream = str::stream();
@@ -248,6 +320,15 @@ struct ProjectionASTCommon {
         }
 
         return stream;
+    }
+
+    BSONObj toBson() {
+        BSONObjBuilder bob;
+        for (auto&& child : root.children) {
+            child.second->toBson(&bob, child.first);
+        }
+
+        return bob.obj();
     }
 };
 

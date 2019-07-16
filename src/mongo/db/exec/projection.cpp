@@ -40,12 +40,15 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/pipeline/parsed_inclusion_projection.h"
+#include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/record_id.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 #include "mongo/util/str.h"
 
 namespace mongo {
+
+namespace fpast = find_projection_ast;
 
 static const char* kIdField = "_id";
 
@@ -241,7 +244,7 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
     }
 }
 
-void doSlicing(MutableDocument* outputDoc, const SliceArgs& args, size_t indexIntoPath) {
+void doSlicing(MutableDocument* outputDoc, const fpast::SliceInfo& args, size_t indexIntoPath) {
     if (indexIntoPath + 1 == args.path.getPathLength()) {
 
         std::string fieldName = args.path.getFieldName(indexIntoPath).toString();
@@ -300,8 +303,8 @@ Document ProjectionStageDefault::doProjectionTransformation(Document input) cons
 
     auto positionalProjectionPath = _logicalProjection.getPositionalProjection();
     if (positionalProjectionPath) {
-        std::cout << "ian: applying positional projection w path " << *positionalProjectionPath
-                  << std::endl;
+        std::cout << "ian: applying positional projection w path "
+                  << positionalProjectionPath->path.fullPath() << std::endl;
 
         // Apply the match expression
         MatchDetails details;
@@ -319,7 +322,7 @@ Document ProjectionStageDefault::doProjectionTransformation(Document input) cons
 
         // Find the first array in the document, and trim it to just have the element from optIndex.
         MutableDocument outputDoc(out);
-        FieldPath fp(*positionalProjectionPath);
+        FieldPath fp(positionalProjectionPath->path);
         for (size_t i = 0; i < fp.getPathLength(); ++i) {
             FieldPath subPath = fp.getSubpath(i);
             Value v = outputDoc.peek().getNestedField(subPath);

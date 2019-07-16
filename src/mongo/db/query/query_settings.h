@@ -83,7 +83,7 @@ class AllowedIndexEntry {
 public:
     AllowedIndexEntry(const BSONObj& query,
                       const BSONObj& sort,
-                      const DesugaredProjection& projection,
+                      const DesugaredProj2& projection,
                       const BSONObj& collation,
                       const BSONObjSet& indexKeyPatterns,
                       const stdx::unordered_set<std::string>& indexNames);
@@ -92,7 +92,7 @@ public:
     // storing hint overrides for.
     BSONObj query;
     BSONObj sort;
-    DesugaredProjection projection;
+    DesugaredProj2 projection;
     BSONObj collation;
 
     // These are the index key patterns and names that

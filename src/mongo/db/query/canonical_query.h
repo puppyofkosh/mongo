@@ -44,6 +44,10 @@ namespace mongo {
 
 class OperationContext;
 
+struct DesugaredProj2 {
+    BSONObj desugaredObj;
+};
+
 class CanonicalQuery {
 public:
     // A type that encodes the notion of query shape. Essentialy a query's match, projection and
@@ -125,7 +129,7 @@ public:
         return _proj.get();
     }
 
-    const DesugaredProjection& getDesugaredProj() const {
+    const DesugaredProj2& getDesugaredProj() const {
         return _desugaredProj;
     }
 
@@ -206,7 +210,7 @@ private:
     std::unique_ptr<MatchExpression> _root;
 
     std::unique_ptr<LogicalProjection> _proj;
-    DesugaredProjection _desugaredProj;
+    DesugaredProj2 _desugaredProj;
 
     std::unique_ptr<CollatorInterface> _collator;
 

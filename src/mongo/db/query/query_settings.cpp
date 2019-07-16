@@ -55,7 +55,7 @@ AllowedIndicesFilter::AllowedIndicesFilter(const BSONObjSet& indexKeyPatterns,
 
 AllowedIndexEntry::AllowedIndexEntry(const BSONObj& query,
                                      const BSONObj& sort,
-                                     const DesugaredProjection& projection,
+                                     const DesugaredProj2& projection,
                                      const BSONObj& collation,
                                      const BSONObjSet& indexKeyPatterns,
                                      const stdx::unordered_set<std::string>& indexNames)

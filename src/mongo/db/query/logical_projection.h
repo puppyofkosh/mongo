@@ -33,6 +33,7 @@
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/pipeline/projection_policies.h"
 
+#include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/query/projection_desugarer.h"
 #include "mongo/util/str.h"
 
@@ -47,8 +48,10 @@ class LogicalProjection {
 public:
     enum class ProjectType { kInclusion, kExclusion };
 
-    LogicalProjection(const BSONObj& spec, ProjectionPolicies policies)
-        : _rawObj(spec), _policies(policies) {}
+    LogicalProjection(const BSONObj& spec,
+                      ProjectionPolicies policies,
+                      find_projection_ast::ProjectionASTCommon ast)
+        : _rawObj(spec), _policies(policies), _ast(std::move(ast)) {}
 
     /**
      * Returns true if the projection requires match details from the query, and false
@@ -130,36 +133,33 @@ public:
         return _hasDottedFieldPath;
     }
 
-    /**
-     * Parses 'spec' to determine whether it is an inclusion or exclusion projection. 'Computed'
-     * fields (ones which are defined by an expression or a literal) are treated as inclusion
-     * projections for in this context of the $project stage.
-     */
-    static std::unique_ptr<LogicalProjection> parse(const DesugaredProjection& spec,
-                                                    ProjectionPolicies policies) {
-        auto parser = std::make_unique<LogicalProjection>(spec.desugaredObj, policies);
+    static std::unique_ptr<LogicalProjection> fromAst(find_projection_ast::ProjectionASTCommon spec,
+                                                      ProjectionPolicies policies) {
+
+        BSONObj bson = spec.toBson();
+        auto parser = std::make_unique<LogicalProjection>(bson, policies, std::move(spec));
         parser->parse();
         invariant(parser->_parsedType);
-        parser->_positionalProjectionPath = spec.positionalProjection;
-        parser->_sliceArgs = spec.sliceArgs;
 
-        std::cout << "ian: lp parsing " << spec.desugaredObj << std::endl;
-        parser->_requiresMatchDetails |= static_cast<bool>(spec.positionalProjection);
-
+        parser->_requiresMatchDetails |= static_cast<bool>(parser->_ast.positionalInfo);
         return parser;
     }
+
 
     ProjectType type() const {
         invariant(_parsedType);
         return *_parsedType;
     }
 
-    const boost::optional<std::string>& getPositionalProjection() const {
-        return _positionalProjectionPath;
+    const boost::optional<find_projection_ast::PositionalInfo> getPositionalProjection() const {
+        return _ast.positionalInfo;
     }
 
-    const boost::optional<SliceArgs>& getSliceArgs() const {
-        return _sliceArgs;
+    const boost::optional<find_projection_ast::SliceInfo> getSliceArgs() const {
+        if (_ast.sliceInfo.empty()) {
+            return boost::none;
+        }
+        return _ast.sliceInfo.front();
     }
 
 private:
@@ -230,8 +230,7 @@ private:
     // All of the fields which had sortKey metadata requested about them.
     std::vector<std::string> _sortKeyMetaFields;
 
-    boost::optional<std::string> _positionalProjectionPath;
-    boost::optional<SliceArgs> _sliceArgs;
+    find_projection_ast::ProjectionASTCommon _ast;
 };
 
 }  // namespace mongo

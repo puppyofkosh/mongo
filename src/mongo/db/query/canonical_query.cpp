@@ -252,21 +252,11 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
         auto firstTransformed = fpast::desugar(std::move(syntaxTree));
         std::cout << "The transformed tree is " << firstTransformed.toString() << std::endl;
+        std::cout << "The transformed tree as bson is " << firstTransformed.toBson() << std::endl;
+        _desugaredProj = {firstTransformed.toBson()};
 
-        // Desugar the projection.
-        // TODO: Do we have to own this somewhere on the cq?
-        auto desugaredProj =
-            projection_desugarer::desugarProjection(_qr->getRawProj(), _root.get());
-
-        log() << "The desugared projection is " << desugaredProj.desugaredObj;
-
-        // Be sure that this projection is used from here out.
-        //_qr->setProj(desugaredProj.desugaredObj);
-        _desugaredProj = desugaredProj;
-
-        // TODO: Eventually remove or replace this with a LogicalProjection.
-        _proj = LogicalProjection::parse(
-            desugaredProj,
+        _proj = LogicalProjection::fromAst(
+            std::move(firstTransformed),
             {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
              ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
     }

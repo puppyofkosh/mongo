@@ -62,6 +62,7 @@
 #include "mongo/db/query/canonical_query_encoder.h"
 #include "mongo/db/query/collation/collator_factory_interface.h"
 #include "mongo/db/query/explain.h"
+#include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/query/index_bounds_builder.h"
 #include "mongo/db/query/internal_plans.h"
 #include "mongo/db/query/plan_cache.h"
@@ -790,14 +791,18 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
                                                   bool allowPositional,
                                                   WorkingSet* ws,
                                                   unique_ptr<PlanStage> root) {
+
+    namespace fpast = find_projection_ast;
+
     invariant(!proj.isEmpty());
 
-    auto desugaredProj = projection_desugarer::desugarProjection(proj, nullptr);
+    auto syntaxTree = fpast::FindProjectionAST::fromBson(proj, nullptr);
+    auto firstTransformed = fpast::desugar(std::move(syntaxTree));
 
-    auto lp =
-        LogicalProjection::parse(desugaredProj,
-                                 {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
-                                  ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
+    auto lp = LogicalProjection::fromAst(
+        std::move(firstTransformed),
+        {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
+         ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
 
     // ProjectionExec requires the MatchDetails from the query expression when the projection
     // uses the positional operator. Since the query may no longer match the newly-updated
