@@ -34,7 +34,6 @@
 #include "mongo/db/pipeline/projection_policies.h"
 
 #include "mongo/db/query/find_projection_ast.h"
-#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/util/str.h"
 
 namespace mongo {

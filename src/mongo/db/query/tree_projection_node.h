@@ -32,7 +32,6 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/pipeline/projection_policies.h"
-#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/util/str.h"
 
 namespace mongo {

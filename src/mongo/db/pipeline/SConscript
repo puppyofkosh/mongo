@@ -556,7 +556,6 @@ env.Library(
         'find_expressions',
         '$BUILD_DIR/mongo/db/matcher/expressions',
         '$BUILD_DIR/mongo/db/query/logical_projection',
-        '$BUILD_DIR/mongo/db/query/tree_projection',
     ]
 )
 

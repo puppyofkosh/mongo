@@ -43,7 +43,6 @@
 #include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/query/indexability.h"
 #include "mongo/db/query/logical_projection.h"
-#include "mongo/db/query/projection_desugarer.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/util/log.h"
 

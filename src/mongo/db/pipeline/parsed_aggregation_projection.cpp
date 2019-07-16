@@ -41,7 +41,6 @@
 #include "mongo/db/pipeline/parsed_exclusion_projection.h"
 #include "mongo/db/pipeline/parsed_inclusion_projection.h"
 #include "mongo/db/query/logical_projection.h"
-#include "mongo/db/query/tree_projection.h"
 #include "mongo/stdx/unordered_set.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/str.h"

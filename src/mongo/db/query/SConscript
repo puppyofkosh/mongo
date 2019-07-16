@@ -114,24 +114,11 @@ env.Library(
     source=[
         "find_projection_ast.cpp",
         "logical_projection.cpp",
-        "projection_desugarer.cpp"
     ],
     LIBDEPS=[
         "$BUILD_DIR/mongo/base",
         "query_request",
         "$BUILD_DIR/mongo/db/pipeline/field_path",
-    ],
-)
-
-env.Library(
-    target="tree_projection",
-    source=[
-        "tree_projection.cpp",
-        "tree_projection_node.cpp"
-    ],
-    LIBDEPS=[
-        "$BUILD_DIR/mongo/base",
-        "logical_projection"
     ],
 )
 
