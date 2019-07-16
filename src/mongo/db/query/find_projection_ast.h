@@ -56,28 +56,38 @@ enum class NodeType {
 };
 enum class ProjectType { kInclusion, kExclusion };
 
+template <class T>
+using Children = std::vector<std::pair<std::string, std::unique_ptr<T>>>;
 
+// Any node which can appear in a find() projection.
 class ProjectionASTNode {
 public:
-    using Children = std::vector<std::pair<std::string, std::unique_ptr<ProjectionASTNode>>>;
-
-    virtual FieldPath getPath() const = 0;
-    virtual NodeType getType() const = 0;
+    virtual NodeType type() const = 0;
     virtual std::string toString() const = 0;
+
+    // Returns whether this node is meaningful in both the find and agg projection languages.
+    virtual bool commonToAggAndFind() const {
+        return false;
+    }
 };
 
-class ProjectionASTNodeBitter : public ProjectionASTNode {};
+// For nodes which are common to both agg and find.
+// For nodes only in find() (such as positional projection and find $slice just use
+// ProjectionASTNode)
+class ProjectionASTNodeCommon : public ProjectionASTNode {
+public:
+    bool commonToAggAndFind() const override {
+        return true;
+    }
+};
 
 // An internal node which has children.
-class ProjectionASTNodeInternal : public ProjectionASTNodeBitter {
+template <class ChildType>
+class ProjectionASTNodeInternal : public ProjectionASTNodeCommon {
 public:
-    ProjectionASTNodeInternal(Children c) : children(std::move(c)) {}
+    ProjectionASTNodeInternal(Children<ChildType> c) : children(std::move(c)) {}
 
-    FieldPath getPath() const override {
-        MONGO_UNREACHABLE;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::INTERNAL;
     }
 
@@ -85,6 +95,11 @@ public:
         auto stream = str::stream();
         stream << "{";
         for (auto&& child : children) {
+
+            if (!child.second) {
+                std::cout << "bad node at " << child.first << std::endl;
+            }
+
             stream << child.first << ": " << child.second->toString() << ", ";
         }
         stream << "}";
@@ -99,142 +114,103 @@ public:
         return nullptr;
     }
 
-    // Public for convenience
-    Children children;
-};
-
-class ProjectionASTNodeInclusion : public ProjectionASTNodeBitter {
-public:
-    ProjectionASTNodeInclusion(FieldPath fp) : _fp(fp) {}
-
-    FieldPath getPath() const override {
-        return _fp;
+    // We could implement this by doing an AND on the children or something, but just don't call
+    // it.
+    bool commonToAggAndFind() const override {
+        MONGO_UNREACHABLE
     }
 
-    NodeType getType() const override {
+    // Public for convenience
+    Children<ChildType> children;
+};
+
+using ProjectionASTNodeInternalBase = ProjectionASTNodeInternal<ProjectionASTNode>;
+using ProjectionASTNodeInternalCommon = ProjectionASTNodeInternal<ProjectionASTNodeCommon>;
+
+class ProjectionASTNodeInclusion : public ProjectionASTNodeCommon {
+public:
+    NodeType type() const override {
         return NodeType::INCLUSION;
     }
 
     std::string toString() const override {
-        return _fp.fullPath() + ": 1";
+        return "1";
     }
-
-private:
-    FieldPath _fp;
 };
 
 class ProjectionASTNodePositional : public ProjectionASTNode {
 public:
-    ProjectionASTNodePositional(FieldPath path) : _fp(path) {}
-
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::INCLUSION_POSITIONAL;
     }
 
     std::string toString() const override {
-        return _fp.fullPath() + ".$: 1";
+        return "{$_positional: 1}";
     }
-
-private:
-    FieldPath _fp;
 };
 
-class ProjectionASTNodeExclusion : public ProjectionASTNodeBitter {
+class ProjectionASTNodeExclusion : public ProjectionASTNodeCommon {
 public:
-    ProjectionASTNodeExclusion(FieldPath fp) : _fp(fp) {}
-
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::EXCLUSION;
     }
 
     std::string toString() const override {
-        return _fp.fullPath() + ": 0";
+        return "0";
     }
-
-private:
-    FieldPath _fp;
 };
 
 class ProjectionASTNodeSlice : public ProjectionASTNode {
 public:
-    ProjectionASTNodeSlice(FieldPath fp, int skip, int limit)
-        : _fp(fp), _skip(skip), _limit(limit) {}
+    ProjectionASTNodeSlice(int skip, int limit) : skip(skip), limit(limit) {}
 
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::EXPRESSION_SLICE;
     }
 
     std::string toString() const override {
-        return str::stream() << _fp.fullPath() << ": $slice [" << _skip << ", " << _limit << "]";
+        return str::stream() << "{$slice: [" << skip << ", " << limit << "]}";
     }
 
-private:
-    FieldPath _fp;
-    int _skip;
-    int _limit;
+    int skip;
+    int limit;
 };
 
-class ProjectionASTNodeElemMatch : public ProjectionASTNodeBitter {
+class ProjectionASTNodeElemMatch : public ProjectionASTNodeCommon {
 public:
-    ProjectionASTNodeElemMatch(FieldPath fp, BSONObj matchExpr) : _fp(fp), _matchExpr(matchExpr) {}
+    ProjectionASTNodeElemMatch(BSONObj matchExpr) : _matchExpr(matchExpr.getOwned()) {}
 
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::EXPRESSION_ELEMMATCH;
     }
 
     std::string toString() const override {
-        return str::stream() << _fp.fullPath() << ": " << _matchExpr;
+        return str::stream() << "{$elemMatch: " << _matchExpr << "}";
     }
 
 private:
-    FieldPath _fp;
     BSONObj _matchExpr;
 };
 
-class ProjectionASTNodeOtherExpression : public ProjectionASTNodeBitter {
+class ProjectionASTNodeOtherExpression : public ProjectionASTNodeCommon {
 public:
-    ProjectionASTNodeOtherExpression(FieldPath fp, BSONObj obj) : _fp(fp), _obj(obj.getOwned()) {}
+    ProjectionASTNodeOtherExpression(BSONObj obj) : _obj(obj.getOwned()) {}
 
-    FieldPath getPath() const override {
-        return _fp;
-    }
-
-    NodeType getType() const override {
+    NodeType type() const override {
         return NodeType::EXPRESSION_OTHER;
     }
 
     std::string toString() const override {
-        return str::stream() << _fp.fullPath() << ": " << _obj;
+        return str::stream() << _obj;
     }
 
 private:
-    FieldPath _fp;
     BSONObj _obj;
 };
 
 // Syntax "tree" (list) for find projection.
 struct FindProjectionAST {
-    ProjectionASTNodeInternal root;
-
-    // To keep the BSONElements alive
-    const BSONObj originalObject;
-
+    ProjectionASTNodeInternal<ProjectionASTNode> root;
     const ProjectType type;
 
     static FindProjectionAST fromBson(const BSONObj& b, const MatchExpression* const query);
@@ -244,18 +220,37 @@ struct FindProjectionAST {
     }
 };
 
-struct FindProjectionASTBitter {
-    const std::vector<std::unique_ptr<ProjectionASTNodeBitter>> nodes;
-    const BSONObj originalObject;
-    const ProjectType type;
-
-    // TODO: Some extra stuff to carry along with the projection.
-    // positional info
-    // $slice info
+struct SliceInfo {
+    FieldPath path;  // path to slice
+    int skip;
+    int limit;
 };
 
-FindProjectionASTBitter desugar(FindProjectionAST ast);
+struct PositionalInfo {
+    FieldPath path;
+};
 
-// TODO: FindProjectionSweet/BitterAST
+struct ProjectionASTCommon {
+    ProjectionASTNodeInternal<ProjectionASTNodeCommon> root;
+    const ProjectType type;
+
+    // Information for post-processing the find expressions.
+    const std::vector<SliceInfo> sliceInfo;
+    const boost::optional<PositionalInfo> positionalInfo;
+
+    std::string toString() {
+        auto stream = str::stream();
+        stream << root.toString() << " [positional info: "
+               << (positionalInfo ? positionalInfo->path.fullPath() : "<none>") << "]";
+
+        for (auto&& s : sliceInfo) {
+            stream << "[slice: " << s.path.fullPath() << ": [" << s.skip << ", " << s.limit << "]]";
+        }
+
+        return stream;
+    }
+};
+
+ProjectionASTCommon desugar(FindProjectionAST ast);
 }
 }

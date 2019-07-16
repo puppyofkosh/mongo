@@ -245,8 +245,13 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
     // Validate the projection if there is one.
     if (!_qr->getRawProj().isEmpty()) {
+        std::cout << "original projection is " << _qr->getRawProj() << std::endl;
+
         auto syntaxTree = fpast::FindProjectionAST::fromBson(_qr->getRawProj(), _root.get());
         std::cout << "The syntax tree is " << syntaxTree.toString() << std::endl;
+
+        auto firstTransformed = fpast::desugar(std::move(syntaxTree));
+        std::cout << "The transformed tree is " << firstTransformed.toString() << std::endl;
 
         // Desugar the projection.
         // TODO: Do we have to own this somewhere on the cq?

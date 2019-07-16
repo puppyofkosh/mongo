@@ -60,7 +60,7 @@ bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData m
 
 namespace find_projection_ast {
 namespace {
-void addNodeAtPath(ProjectionASTNodeInternal* root,
+void addNodeAtPath(ProjectionASTNodeInternalBase* root,
                    const FieldPath& path,
                    const FieldPath& originalPath,
                    std::unique_ptr<find_projection_ast::ProjectionASTNode> newChild) {
@@ -82,8 +82,8 @@ void addNodeAtPath(ProjectionASTNodeInternal* root,
 
     if (!child) {
         // TODO: Figure out child ordering issue.
-        auto newInternalChild =
-            std::make_unique<ProjectionASTNodeInternal>(ProjectionASTNode::Children{});
+        auto newInternalChild = std::make_unique<ProjectionASTNodeInternal<ProjectionASTNode>>(
+            Children<ProjectionASTNode>{});
         auto rawInternalChild = newInternalChild.get();
         root->children.push_back(
             std::make_pair(nextComponent.toString(), std::move(newInternalChild)));
@@ -92,23 +92,21 @@ void addNodeAtPath(ProjectionASTNodeInternal* root,
     }
 
     // Either find or create an internal node.
-    if (child->getType() != NodeType::INTERNAL) {
+    if (child->type() != NodeType::INTERNAL) {
         uasserted(ErrorCodes::BadValue,
                   str::stream() << "collision at " << originalPath.fullPath()
                                 << " remaining portion "
                                 << path.fullPath());
     }
 
-    ProjectionASTNodeInternal* childInternal = static_cast<ProjectionASTNodeInternal*>(child);
+    auto* childInternal = static_cast<ProjectionASTNodeInternal<ProjectionASTNode>*>(child);
     addNodeAtPath(childInternal, path.tail(), originalPath, std::move(newChild));
 }
 }
 
 FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                                               const MatchExpression* const query) {
-    ProjectionASTNodeInternal root(ProjectionASTNode::Children{});
-
-    // TODO:
+    ProjectionASTNodeInternal root(Children<ProjectionASTNode>{});
 
     bool hasPositional = false;
     bool hasElemMatch = false;
@@ -126,8 +124,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                     addNodeAtPath(&root,
                                   path,
                                   path,
-                                  std::make_unique<ProjectionASTNodeSlice>(
-                                      elem.fieldNameStringData(), e2.numberInt(), 0));
+                                  std::make_unique<ProjectionASTNodeSlice>(e2.numberInt(), 0));
                 } else if (e2.type() == Array) {
                     BSONObj arr = e2.embeddedObject();
                     if (2 != arr.nFields()) {
@@ -142,11 +139,8 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                     if (limit <= 0) {
                         uasserted(ErrorCodes::BadValue, "$slice limit must be positive");
                     }
-                    addNodeAtPath(&root,
-                                  path,
-                                  path,
-                                  std::make_unique<ProjectionASTNodeSlice>(
-                                      elem.fieldNameStringData(), skip, limit));
+                    addNodeAtPath(
+                        &root, path, path, std::make_unique<ProjectionASTNodeSlice>(skip, limit));
                 } else {
                     uasserted(ErrorCodes::BadValue,
                               "$slice only supports numbers and [skip, limit] arrays");
@@ -175,34 +169,23 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                 // Not parsing the match expression itself because it would require an
                 // expressionContext + operationContext.
 
-                addNodeAtPath(&root,
-                              path,
-                              path,
-                              std::make_unique<ProjectionASTNodeElemMatch>(
-                                  elem.fieldNameStringData(), elemMatchObj));
+                addNodeAtPath(
+                    &root, path, path, std::make_unique<ProjectionASTNodeElemMatch>(elemMatchObj));
                 hasElemMatch = true;
             } else {
                 // Some other expression which will get parsed later. Ideally we'd parse it into
                 // some kind of "expression syntax tree" here.
-                addNodeAtPath(&root,
-                              path,
-                              path,
-                              std::make_unique<ProjectionASTNodeOtherExpression>(
-                                  elem.fieldNameStringData(), obj));
+                addNodeAtPath(
+                    &root, path, path, std::make_unique<ProjectionASTNodeOtherExpression>(obj));
             }
 
         } else if (elem.trueValue()) {
             if (!isPositionalOperator(elem.fieldName())) {
                 FieldPath path(elem.fieldNameStringData());
-                addNodeAtPath(
-                    &root,
-                    path,
-                    path,
-                    std::make_unique<ProjectionASTNodeInclusion>(elem.fieldNameStringData()));
+                addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodeInclusion>());
             } else {
                 FieldPath path(str::before(elem.fieldNameStringData(), ".$"));
-                addNodeAtPath(
-                    &root, path, path, std::make_unique<ProjectionASTNodePositional>(path));
+                addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodePositional>());
 
                 if (hasPositional) {
                     uasserted(ErrorCodes::BadValue,
@@ -240,11 +223,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
         } else {
             invariant(!elem.trueValue());
             FieldPath path(elem.fieldNameStringData());
-            addNodeAtPath(&root,
-                          path,
-                          path,
-                          std::make_unique<ProjectionASTNodeExclusion>(
-                              elem.fieldNameStringData().toString()));
+            addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodeExclusion>());
 
             if (elem.fieldNameStringData() != "_id") {
                 uassert(ErrorCodes::BadValue,
@@ -255,7 +234,92 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
         }
     }
 
-    return FindProjectionAST{std::move(root), b, type ? *type : ProjectType::kExclusion};
+    return FindProjectionAST{std::move(root), type ? *type : ProjectType::kExclusion};
+}
+
+namespace {
+std::unique_ptr<ProjectionASTNodeCommon> internalBaseToCommon(
+    std::unique_ptr<ProjectionASTNode> b) {
+    invariant(b->type() == NodeType::INTERNAL || b->commonToAggAndFind());
+
+    return std::unique_ptr<ProjectionASTNodeCommon>(
+        static_cast<ProjectionASTNodeCommon*>(b.release()));
+}
+}
+
+void desugarHelper(const FindProjectionAST& originalAST,
+                   std::vector<SliceInfo>* sliceInfo,
+                   boost::optional<PositionalInfo>* positionalInfo,
+                   std::string pathSoFar,
+                   ProjectionASTNodeInternalBase* originalNode,
+                   ProjectionASTNodeInternalCommon* newNode) {
+    invariant(sliceInfo);
+    invariant(positionalInfo);
+
+    for (auto&& child : originalNode->children) {
+        const auto& field = child.first;
+        auto* node = child.second.get();
+
+        std::string childPath = pathSoFar.empty() ? field : pathSoFar + "." + field;
+
+        if (node->type() == NodeType::INTERNAL) {
+            auto newChild = std::make_unique<ProjectionASTNodeInternalCommon>(
+                Children<ProjectionASTNodeCommon>{});
+
+            desugarHelper(originalAST,
+                          sliceInfo,
+                          positionalInfo,
+                          childPath,
+                          static_cast<ProjectionASTNodeInternalBase*>(node),
+                          newChild.get());
+
+            if (!newChild->children.empty()) {
+                newNode->children.push_back(std::make_pair(field, std::move(newChild)));
+            }
+
+        } else if (node->commonToAggAndFind()) {
+            // Common case. Keep the node and move on.
+            newNode->children.push_back(
+                std::make_pair(field, internalBaseToCommon(std::move(child.second))));
+        } else if (node->type() == NodeType::INCLUSION_POSITIONAL) {
+            invariant(originalAST.type == ProjectType::kInclusion);
+            invariant(!*positionalInfo);
+
+            // Replace the positional projection with an inclusion, and update the positional info.
+            newNode->children.push_back(
+                std::make_pair(field, std::make_unique<ProjectionASTNodeInclusion>()));
+
+            *positionalInfo = PositionalInfo{childPath};
+        } else if (node->type() == NodeType::EXPRESSION_SLICE) {
+            // If this is an exclusion projection, then we don't add any nodes.
+            if (originalAST.type == ProjectType::kExclusion) {
+                continue;
+            }
+
+            auto* sliceNode = static_cast<ProjectionASTNodeSlice*>(node);
+
+            // If it's an inclusion projection, replace the node with an inclusion and update the
+            // slice info.
+            newNode->children.push_back(
+                std::make_pair(field, std::make_unique<ProjectionASTNodeInclusion>()));
+            sliceInfo->push_back(SliceInfo{childPath, sliceNode->skip, sliceNode->limit});
+        } else if (node->type() == NodeType::EXPRESSION_ELEMMATCH) {
+            // I don't feel like doing this case for skunkworks.
+            MONGO_UNREACHABLE;
+        } else {
+            MONGO_UNREACHABLE;
+        }
+    }
+}
+
+ProjectionASTCommon desugar(FindProjectionAST ast) {
+    std::vector<SliceInfo> sliceInfo;
+    boost::optional<PositionalInfo> posInfo;
+    ProjectionASTNodeInternal<ProjectionASTNodeCommon> root({});
+
+    desugarHelper(ast, &sliceInfo, &posInfo, "", &ast.root, &root);
+
+    return ProjectionASTCommon{std::move(root), ast.type, std::move(sliceInfo), std::move(posInfo)};
 }
 }
 }
