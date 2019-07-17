@@ -113,7 +113,6 @@ env.Library(
     target="logical_projection",
     source=[
         "find_projection_ast.cpp",
-        "logical_projection.cpp",
     ],
     LIBDEPS=[
         "$BUILD_DIR/mongo/base",
