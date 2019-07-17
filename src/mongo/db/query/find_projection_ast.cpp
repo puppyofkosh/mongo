@@ -56,6 +56,14 @@ bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData m
     }
     return false;
 }
+
+bool isPrefixOf(StringData first, StringData second) {
+    if (first.size() >= second.size()) {
+        return false;
+    }
+
+    return second.startsWith(first) && second[first.size()] == '.';
+}
 }
 
 namespace {
@@ -188,6 +196,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                               path,
                               path,
                               std::make_unique<ProjectionASTNodeOtherExpression>(obj, expr));
+                type = ProjectType::kInclusion;
             }
 
         } else if (elem.trueValue()) {
@@ -331,11 +340,69 @@ std::vector<std::string> ProjectionASTCommon::getRequiredFields() const {
     invariant(_type == ProjectType::kInclusion);
 
     DepsTracker depsTracker;
-//    root.reportDependencies(&depsTracker);
+    _root.reportDependencies(&depsTracker, "");
 
-// TODO: Dependency analysis
-    MONGO_UNREACHABLE;
+    return std::vector<std::string>(depsTracker.fields.begin(), depsTracker.fields.end());
 }
+bool ProjectionASTCommon::isFieldRetainedExactly(StringData path) const {
+    FieldPath fp(path);
+
+    // TODO: Write this for real.
+
+    const ProjectionASTNodeCommon* node = &_root;
+    if (_type == ProjectType::kExclusion) {
+
+        // Follow the path until we either reach a dead end, or run out of path.
+        size_t i = 0;
+        for (; i < fp.getPathLength(); ++i) {
+            if (node->type() != NodeType::INTERNAL) {
+                // Hit a dead end.
+                break;
+            }
+
+            StringData part = fp.getFieldName(i);
+            auto* internalNode = static_cast<const ProjectionASTNodeInternalCommon*>(node);
+            const ProjectionASTNodeCommon* newNode = nullptr;
+            for (auto&& c : internalNode->children) {
+                if (c.first == part) {
+                    newNode = c.second.get();
+                }
+            }
+            if (newNode) {
+                node = newNode;
+                break;
+            }
+
+            // We reached a dead end at an internal node, which means this path is not excluded.
+            return true;
+        }
+
+        if (i == fp.getPathLength()) {
+            // We ran out of path. If we're still at an internal node, this field is included.
+            return node->type() == NodeType::INTERNAL;
+        }
+
+        // We ran out of tree. This means a subpath of the requested path is excluded.
+        return false;
+    }
+
+    // Inclusion case.
+    // TODO: Special logic for _id.
+
+    // TODO: This can be done by walking the tree, but I did this instead because it was quicker to
+    // write.
+    bool fieldIsIncluded = false;
+    for (auto&& included : getRequiredFields()) {
+        if (path == included || isPrefixOf(included, path)) {
+            fieldIsIncluded = true;
+        } else if (isPrefixOf(path, included)) {
+            fieldIsIncluded = false;
+        }
+    }
+
+    return fieldIsIncluded;
+}
+
 
 ProjectionASTCommon desugarFindProjection(FindProjectionAST ast) {
     std::vector<SliceInfo> sliceInfo;

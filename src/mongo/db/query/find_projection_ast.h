@@ -75,6 +75,10 @@ public:
         std::cout << "this type is " << typeid(*this).name() << std::endl;
         MONGO_UNREACHABLE;
     }
+
+    virtual void reportDependencies(DepsTracker* d, const std::string& path) const {
+        MONGO_UNREACHABLE;
+    }
 };
 
 // For nodes which are common to both agg and find.
@@ -156,6 +160,12 @@ public:
         return std::make_unique<ProjectionASTNodeInternal>(std::move(newChildren));
     }
 
+    void reportDependencies(DepsTracker* d, const std::string& path) const override {
+        for (auto&& c : children) {
+            c.second->reportDependencies(d, FieldPath::getFullyQualifiedPath(path, c.first));
+        }
+    }
+
     // Public for convenience
     Children<ChildType> children;
 };
@@ -179,6 +189,10 @@ public:
 
     std::unique_ptr<ProjectionASTNode> clone() const override {
         return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeInclusion());
+    }
+
+    void reportDependencies(DepsTracker* d, const std::string& path) const override {
+        d->fields.insert(path);
     }
 };
 
@@ -210,6 +224,10 @@ public:
 
     std::unique_ptr<ProjectionASTNode> clone() const override {
         return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeExclusion());
+    }
+
+    void reportDependencies(DepsTracker* d, const std::string& path) const override {
+        // May be called if there's an _id: 0 in an inclusion projection.
     }
 };
 
@@ -277,6 +295,11 @@ public:
 
     Expression* expression() const {
         return _expression.get();
+    }
+
+
+    void reportDependencies(DepsTracker* d, const std::string& path) const override {
+        _expression->addDependencies(d);
     }
 
 private:
@@ -428,12 +451,15 @@ struct ProjectionASTCommon {
      * and false otherwise. For example, the projection {a: 1} will preserve the element located at
      * 'a.b', and the projection {'a.b': 0} will not preserve the element located at 'a'.
      */
-    bool isFieldRetainedExactly(StringData path) const {
-        MONGO_UNREACHABLE;
-    }
+    bool isFieldRetainedExactly(StringData path) const;
 
     bool hasDottedFieldPath() const {
-        MONGO_UNREACHABLE;
+        for (auto&& c : _root.children) {
+            if (c.second->type() == NodeType::INTERNAL) {
+                return true;
+            }
+        }
+        return false;
     }
 
     const boost::optional<PositionalInfo> getPositionalProjection() const {

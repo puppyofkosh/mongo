@@ -355,9 +355,12 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
 
     // If the projection requires the entire document we add a fetch stage if not present. Otherwise
     // we add a fetch stage if we are not covered and not returnKey.
-    if ((query.getProj()->requiresDocument() && !solnRoot->fetched()) ||
-        (!isCoveredOrAlreadyFetched(query.getProj()->getRequiredFields(), *solnRoot) &&
-         !query.getProj()->wantIndexKey())) {
+
+
+    if (!solnRoot->fetched() &&
+        ((query.getProj()->requiresDocument() && !solnRoot->fetched()) ||
+         (!isCoveredOrAlreadyFetched(query.getProj()->getRequiredFields(), *solnRoot) &&
+          !query.getProj()->wantIndexKey()))) {
         auto fetch = std::make_unique<FetchNode>();
         fetch->children.push_back(solnRoot.release());
         solnRoot = std::move(fetch);
