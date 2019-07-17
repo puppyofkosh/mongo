@@ -158,12 +158,12 @@ using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const LogicalProjection* lp,
+    const ProjectionASTCommon* lp,
     ProjectionPolicies policies,
     const MatchExpression* matchExpression) {
 
     std::unique_ptr<AnalysisProjection> analysisProject(
-        lp->type() == LogicalProjection::ProjectType::kInclusion
+        lp->type() == ProjectType::kInclusion
             ? static_cast<AnalysisProjection*>(new AnalysisInclusionProjection(expCtx, policies))
             : static_cast<AnalysisProjection*>(new AnalysisExclusionProjection(expCtx, policies)));
 

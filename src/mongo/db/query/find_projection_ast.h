@@ -37,8 +37,6 @@
 
 namespace mongo {
 
-namespace find_projection_ast {
-
 enum class NodeType {
     INTERNAL,
 
@@ -49,9 +47,6 @@ enum class NodeType {
     // There are few enough of these that they each get their own node.
     EXPRESSION_SLICE,
     EXPRESSION_ELEMMATCH,
-
-    // TODO: Remove
-    EXPRESSION_META,
 
     // Includes all other expressions.
     EXPRESSION_OTHER,
@@ -280,6 +275,10 @@ public:
             new ProjectionASTNodeOtherExpression(_obj, _expression));
     }
 
+    Expression* expression() const {
+        return _expression.get();
+    }
+
 private:
     BSONObj _obj;
     boost::intrusive_ptr<Expression> _expression;
@@ -300,6 +299,10 @@ struct FindProjectionAST {
     }
 };
 
+
+void walkProjectionAST(const std::function<void(const ProjectionASTNodeCommon*)>& fn,
+                       const ProjectionASTNodeCommon* root);
+
 struct SliceInfo {
     FieldPath path;  // path to slice
     int skip;
@@ -311,35 +314,164 @@ struct PositionalInfo {
 };
 
 struct ProjectionASTCommon {
-    ProjectionASTNodeInternal<ProjectionASTNodeCommon> root;
-    ProjectType type;
+    ProjectionASTCommon(ProjectionASTNodeInternal<ProjectionASTNodeCommon> root,
+                        ProjectType type,
+                        std::vector<SliceInfo> sliceInfo,
+                        boost::optional<PositionalInfo> positionalInfo)
+        : _root(std::move(root)),
+          _type(type),
+          _sliceInfo(std::move(sliceInfo)),
+          _positionalInfo(std::move(positionalInfo)) {}
 
-    // Information for post-processing the find expressions.
-    std::vector<SliceInfo> sliceInfo;
-    boost::optional<PositionalInfo> positionalInfo;
+    ProjectionASTCommon(ProjectionASTCommon&& o) = default;
+    ProjectionASTCommon& operator=(ProjectionASTCommon&& o) = default;
 
-    std::string toString() {
+    ProjectionASTCommon(const ProjectionASTCommon& o) = default;
+
+    std::string toString() const {
         auto stream = str::stream();
-        stream << root.toString() << " [positional info: "
-               << (positionalInfo ? positionalInfo->path.fullPath() : "<none>") << "]";
+        stream << _root.toString() << " [positional info: "
+               << (_positionalInfo ? _positionalInfo->path.fullPath() : "<none>") << "]";
 
-        for (auto&& s : sliceInfo) {
+        for (auto&& s : _sliceInfo) {
             stream << "[slice: " << s.path.fullPath() << ": [" << s.skip << ", " << s.limit << "]]";
         }
 
         return stream;
     }
 
-    BSONObj toBson() {
+    BSONObj toBson() const {
         BSONObjBuilder bob;
-        for (auto&& child : root.children) {
+        for (auto&& child : _root.children) {
             child.second->toBson(&bob, child.first);
         }
 
         return bob.obj();
     }
+
+    /////////////////////////////////
+    // Logical projection interface.
+    /////////////////////////////////
+
+    /**
+     * Returns true if the projection requires match details from the query, and false
+     * otherwise. This is only relevant for find() projection, because of the positional projection
+     * operator.
+     */
+    bool requiresMatchDetails() const {
+        return static_cast<bool>(_positionalInfo);
+    }
+
+    /**
+     * Is the full document required to compute this projection?
+     */
+    bool requiresDocument() const {
+        // TODO: There is a special case here for index key projection that I'm ignoring.
+        return _type == ProjectType::kExclusion || hasExpression();
+    }
+
+    std::vector<std::string> sortKeyMetaFields() const {
+        // TODO: This requires $meta to be able to handle sortKey
+        return {};
+    }
+
+    bool needsSortKey() const {
+        return !sortKeyMetaFields().empty();
+    }
+
+    /**
+     * If requiresDocument() == false, what fields are required to compute
+     * the projection?
+     */
+    std::vector<std::string> getRequiredFields() const;
+
+    bool wantTextScore() const {
+        bool res = false;
+        auto fn = [&res](const ProjectionASTNodeCommon* node) {
+            if (node->type() == NodeType::EXPRESSION_OTHER) {
+                auto* exprNode = static_cast<const ProjectionASTNodeOtherExpression*>(node);
+                Expression* expr = exprNode->expression();
+                ExpressionMeta* meta = dynamic_cast<ExpressionMeta*>(expr);
+
+                if (meta && meta->metaType() == ExpressionMeta::MetaType::TEXT_SCORE) {
+                    res = true;
+                }
+            }
+        };
+
+        walkProjectionAST(fn, &_root);
+        return res;
+    }
+
+    bool wantGeoNearDistance() const {
+        // TODO: similar to wantTextScore()
+        return false;
+    }
+
+    bool wantGeoNearPoint() const {
+        // TODO: similar to wantTextScore()
+        return false;
+    }
+
+    bool wantIndexKey() const {
+        // TODO: similar to wantTextScore()
+        return false;
+    }
+
+    bool wantSortKey() const {
+        // TODO: similar to wantTextScore()
+        return false;
+    }
+
+    /**
+     * Returns true if the element at 'path' is preserved entirely after this projection is applied,
+     * and false otherwise. For example, the projection {a: 1} will preserve the element located at
+     * 'a.b', and the projection {'a.b': 0} will not preserve the element located at 'a'.
+     */
+    bool isFieldRetainedExactly(StringData path) const {
+        MONGO_UNREACHABLE;
+    }
+
+    bool hasDottedFieldPath() const {
+        MONGO_UNREACHABLE;
+    }
+
+    const boost::optional<PositionalInfo> getPositionalProjection() const {
+        return _positionalInfo;
+    }
+
+    const boost::optional<SliceInfo> getSliceArgs() const {
+        if (_sliceInfo.empty()) {
+            return boost::none;
+        }
+        return _sliceInfo.front();
+    }
+
+    ProjectType type() const {
+        return _type;
+    }
+
+private:
+    bool hasExpression() const {
+        bool res = false;
+        auto fn = [&res](const ProjectionASTNodeCommon* node) {
+            if (node->type() == NodeType::EXPRESSION_OTHER) {
+                res = true;
+            }
+        };
+
+        walkProjectionAST(fn, &_root);
+        return res;
+    }
+
+    ProjectionASTNodeInternal<ProjectionASTNodeCommon> _root;
+    ProjectType _type;
+
+    // Information for post-processing the find expressions.
+    std::vector<SliceInfo> _sliceInfo;
+    boost::optional<PositionalInfo> _positionalInfo;
 };
 
-ProjectionASTCommon desugar(FindProjectionAST ast);
-}
+
+ProjectionASTCommon desugarFindProjection(FindProjectionAST ast);
 }

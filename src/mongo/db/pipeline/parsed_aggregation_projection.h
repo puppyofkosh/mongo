@@ -162,7 +162,7 @@ public:
      */
     static std::unique_ptr<ParsedAggregationProjection> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
-        const LogicalProjection* lp,
+        const ProjectionASTCommon* lp,
         ProjectionPolicies policies,
         const MatchExpression* matchExpression);
 
@@ -218,7 +218,7 @@ public:
      * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
      * track which variables are defined so that they can later be referenced at execution time.
      */
-    virtual void parse(const LogicalProjection& spec) = 0;
+    virtual void parse(const ProjectionASTCommon& spec) = 0;
 
     virtual std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() = 0;
 

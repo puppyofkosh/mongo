@@ -38,6 +38,7 @@
 #include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/db/query/collation/collator_interface.h"
 #include "mongo/db/query/logical_projection.h"
+#include "mongo/db/query/find_projection_ast.h"
 #include "mongo/db/query/query_request.h"
 
 namespace mongo {
@@ -125,8 +126,8 @@ public:
     const QueryRequest& getQueryRequest() const {
         return *_qr;
     }
-    const LogicalProjection* getProj() const {
-        return _proj.get();
+    const ProjectionASTCommon* getProj() const {
+        return _proj.get_ptr();
     }
 
     const DesugaredProj2& getDesugaredProj() const {
@@ -209,7 +210,7 @@ private:
     // _root points into _qr->getFilter()
     std::unique_ptr<MatchExpression> _root;
 
-    std::unique_ptr<LogicalProjection> _proj;
+    boost::optional<ProjectionASTCommon> _proj;
     DesugaredProj2 _desugaredProj;
 
     std::unique_ptr<CollatorInterface> _collator;

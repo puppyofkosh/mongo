@@ -1623,6 +1623,16 @@ private:
 
 class ExpressionMeta final : public Expression {
 public:
+    enum MetaType {
+        TEXT_SCORE,
+        RAND_VAL,
+        SEARCH_SCORE,
+        SEARCH_HIGHLIGHTS,
+        GEO_NEAR_DISTANCE,
+        GEO_NEAR_POINT,
+        RECORD_ID,
+    };
+
     Value serialize(bool explain) const final;
     Value evaluate(const Document& root) const final;
 
@@ -1635,20 +1645,14 @@ public:
         return visitor->visit(this);
     }
 
+    MetaType metaType() const {
+        return _metaType;
+    }
+
 protected:
     void _doAddDependencies(DepsTracker* deps) const final;
 
 private:
-    enum MetaType {
-        TEXT_SCORE,
-        RAND_VAL,
-        SEARCH_SCORE,
-        SEARCH_HIGHLIGHTS,
-        GEO_NEAR_DISTANCE,
-        GEO_NEAR_POINT,
-        RECORD_ID,
-    };
-
     ExpressionMeta(const boost::intrusive_ptr<ExpressionContext>& expCtx, MetaType metaType);
 
     MetaType _metaType;

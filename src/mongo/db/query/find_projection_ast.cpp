@@ -58,12 +58,11 @@ bool hasPositionalOperatorMatch(const MatchExpression* const query, StringData m
 }
 }
 
-namespace find_projection_ast {
 namespace {
 void addNodeAtPath(ProjectionASTNodeInternalBase* root,
                    const FieldPath& path,
                    const FieldPath& originalPath,
-                   std::unique_ptr<find_projection_ast::ProjectionASTNode> newChild) {
+                   std::unique_ptr<ProjectionASTNode> newChild) {
     invariant(root);
     invariant(path.getPathLength() > 0);
     const auto nextComponent = path.getFieldName(0);
@@ -132,6 +131,7 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                                   path,
                                   path,
                                   std::make_unique<ProjectionASTNodeSlice>(0, e2.numberInt()));
+
                 } else if (e2.type() == Array) {
                     BSONObj arr = e2.embeddedObject();
                     if (2 != arr.nFields()) {
@@ -323,7 +323,21 @@ void desugarHelper(const FindProjectionAST& originalAST,
     }
 }
 
-ProjectionASTCommon desugar(FindProjectionAST ast) {
+/**
+ * If requiresDocument() == false, what fields are required to compute
+ * the projection?
+ */
+std::vector<std::string> ProjectionASTCommon::getRequiredFields() const {
+    invariant(_type == ProjectType::kInclusion);
+
+    DepsTracker depsTracker;
+//    root.reportDependencies(&depsTracker);
+
+// TODO: Dependency analysis
+    MONGO_UNREACHABLE;
+}
+
+ProjectionASTCommon desugarFindProjection(FindProjectionAST ast) {
     std::vector<SliceInfo> sliceInfo;
     boost::optional<PositionalInfo> posInfo;
     ProjectionASTNodeInternal<ProjectionASTNodeCommon> root({});
@@ -332,5 +346,17 @@ ProjectionASTCommon desugar(FindProjectionAST ast) {
 
     return ProjectionASTCommon(std::move(root), ast.type, std::move(sliceInfo), std::move(posInfo));
 }
+
+void walkProjectionAST(const std::function<void(const ProjectionASTNodeCommon*)>& fn,
+                       const ProjectionASTNodeCommon* root) {
+    // TODO: add some way of bailing out early (maybe have fn return a bool).
+
+    fn(root);
+    if (root->type() == NodeType::INTERNAL) {
+        auto* internalNode = static_cast<const ProjectionASTNodeInternalCommon*>(root);
+        for (auto&& c : internalNode->children) {
+            fn(c.second.get());
+        }
+    }
 }
 }

@@ -47,7 +47,6 @@
 #include "mongo/util/log.h"
 
 namespace mongo {
-namespace fpast = find_projection_ast;
 
 namespace {
 
@@ -246,18 +245,13 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     if (!_qr->getRawProj().isEmpty()) {
         std::cout << "original projection is " << _qr->getRawProj() << std::endl;
 
-        auto syntaxTree = fpast::FindProjectionAST::fromBson(_qr->getRawProj(), _root.get());
+        auto syntaxTree = FindProjectionAST::fromBson(_qr->getRawProj(), _root.get());
         std::cout << "The syntax tree is " << syntaxTree.toString() << std::endl;
 
-        auto firstTransformed = fpast::desugar(std::move(syntaxTree));
-        std::cout << "The transformed tree is " << firstTransformed.toString() << std::endl;
-        std::cout << "The transformed tree as bson is " << firstTransformed.toBson() << std::endl;
-        _desugaredProj = {firstTransformed.toBson()};
-
-        _proj = LogicalProjection::fromAst(
-            std::move(firstTransformed),
-            {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
-             ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
+        _proj.emplace(desugarFindProjection(std::move(syntaxTree)));
+        std::cout << "The transformed tree is " << _proj->toString() << std::endl;
+        std::cout << "The transformed tree as bson is " << _proj->toBson() << std::endl;
+        _desugaredProj = {_proj->toBson()};
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {

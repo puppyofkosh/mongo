@@ -49,7 +49,7 @@ public:
 
     LogicalProjection(const BSONObj& spec,
                       ProjectionPolicies policies,
-                      find_projection_ast::ProjectionASTCommon ast)
+                      ProjectionASTCommon ast)
         : _rawObj(spec), _policies(policies), _ast(std::move(ast)) {}
 
     /**
@@ -132,16 +132,17 @@ public:
         return _hasDottedFieldPath;
     }
 
-    static std::unique_ptr<LogicalProjection> fromAst(find_projection_ast::ProjectionASTCommon spec,
+    static std::unique_ptr<LogicalProjection> fromAst(ProjectionASTCommon spec,
                                                       ProjectionPolicies policies) {
 
-        BSONObj bson = spec.toBson();
-        auto parser = std::make_unique<LogicalProjection>(bson, policies, std::move(spec));
-        parser->parse();
-        invariant(parser->_parsedType);
+        MONGO_UNREACHABLE;
+        // BSONObj bson = spec.toBson();
+        // auto parser = std::make_unique<LogicalProjection>(bson, policies, std::move(spec));
+        // parser->parse();
+        // invariant(parser->_parsedType);
 
-        parser->_requiresMatchDetails |= static_cast<bool>(parser->_ast.positionalInfo);
-        return parser;
+        // parser->_requiresMatchDetails |= static_cast<bool>(parser->_ast.positionalInfo);
+        // return parser;
     }
 
 
@@ -150,15 +151,17 @@ public:
         return *_parsedType;
     }
 
-    const boost::optional<find_projection_ast::PositionalInfo> getPositionalProjection() const {
-        return _ast.positionalInfo;
+    const boost::optional<PositionalInfo> getPositionalProjection() const {
+        MONGO_UNREACHABLE;
+        // return _ast.positionalInfo;
     }
 
-    const boost::optional<find_projection_ast::SliceInfo> getSliceArgs() const {
-        if (_ast.sliceInfo.empty()) {
-            return boost::none;
-        }
-        return _ast.sliceInfo.front();
+    const boost::optional<SliceInfo> getSliceArgs() const {
+        MONGO_UNREACHABLE;
+        // if (_ast.sliceInfo.empty()) {
+        //     return boost::none;
+        // }
+        // return _ast.sliceInfo.front();
     }
 
 private:
@@ -229,7 +232,7 @@ private:
     // All of the fields which had sortKey metadata requested about them.
     std::vector<std::string> _sortKeyMetaFields;
 
-    find_projection_ast::ProjectionASTCommon _ast;
+    ProjectionASTCommon _ast;
 };
 
 }  // namespace mongo

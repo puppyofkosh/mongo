@@ -157,8 +157,8 @@ public:
     /**
      * Parses the projection specification given by 'spec', populating internal data structures.
      */
-    void parse(const LogicalProjection& lp) final {
-        parse(lp.getProjObj(), _root.get(), 0);
+    void parse(const ProjectionASTCommon& lp) final {
+        parse(lp.toBson(), _root.get(), 0);
     }
 
     std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() override {

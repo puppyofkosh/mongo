@@ -184,7 +184,7 @@ public:
     /**
      * Parses the projection specification given by 'spec', populating internal data structures.
      */
-    void parse(const LogicalProjection& spec) final;
+    void parse(const ProjectionASTCommon& spec) final;
 
     std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() {
         return std::make_unique<ParsedInclusionProjection>(

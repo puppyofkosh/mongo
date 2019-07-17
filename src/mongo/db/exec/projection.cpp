@@ -48,8 +48,6 @@
 
 namespace mongo {
 
-namespace fpast = find_projection_ast;
-
 static const char* kIdField = "_id";
 
 namespace {
@@ -170,12 +168,12 @@ std::unique_ptr<PlanStageStats> ProjectionStage::getStats() {
 }
 
 ProjectionStageReturnKey::ProjectionStageReturnKey(OperationContext* opCtx,
-                                                   const LogicalProjection& lp,
+                                                   const ProjectionASTCommon& lp,
                                                    WorkingSet* ws,
                                                    std::unique_ptr<PlanStage> child,
                                                    const MatchExpression& fullExpression,
                                                    const CollatorInterface* collator)
-    : ProjectionStage(opCtx, lp.getProjObj(), ws, std::move(child), "PROJECTION_RETURN_KEY"),
+    : ProjectionStage(opCtx, lp.toBson(), ws, std::move(child), "PROJECTION_RETURN_KEY"),
       _logicalProjection(lp) {}
 
 StatusWith<BSONObj> ProjectionStageReturnKey::computeReturnKeyProjection(
@@ -210,13 +208,13 @@ Status ProjectionStageReturnKey::transform(WorkingSetMember* member) const {
 }
 
 ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
-                                               const LogicalProjection& logicalProjection,
+                                               const ProjectionASTCommon& logicalProjection,
                                                WorkingSet* ws,
                                                std::unique_ptr<PlanStage> child,
                                                const MatchExpression& fullExpression,
                                                const CollatorInterface* collator)
     : ProjectionStage(
-          opCtx, logicalProjection.getProjObj(), ws, std::move(child), "PROJECTION_DEFAULT"),
+          opCtx, logicalProjection.toBson(), ws, std::move(child), "PROJECTION_DEFAULT"),
       _logicalProjection(logicalProjection),
       _expCtx(new ExpressionContext(opCtx, collator)),
       _originalMatchExpression(&fullExpression) {
@@ -226,7 +224,7 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
 }
 
 namespace {
-void appendMetadata(WorkingSetMember* member, MutableDocument* md, const LogicalProjection& lp) {
+void appendMetadata(WorkingSetMember* member, MutableDocument* md, const ProjectionASTCommon& lp) {
     invariant(member);
     invariant(md);
 
@@ -244,7 +242,7 @@ void appendMetadata(WorkingSetMember* member, MutableDocument* md, const Logical
     }
 }
 
-void doSlicing(MutableDocument* outputDoc, const fpast::SliceInfo& args, size_t indexIntoPath) {
+void doSlicing(MutableDocument* outputDoc, const SliceInfo& args, size_t indexIntoPath) {
     if (indexIntoPath + 1 == args.path.getPathLength()) {
 
         std::string fieldName = args.path.getFieldName(indexIntoPath).toString();

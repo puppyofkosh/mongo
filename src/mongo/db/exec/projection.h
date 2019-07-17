@@ -103,7 +103,7 @@ public:
      * ProjectionNodeDefault should use this for construction.
      */
     ProjectionStageDefault(OperationContext* opCtx,
-                           const LogicalProjection& logicalProjection,
+                           const ProjectionASTCommon& logicalProjection,
                            WorkingSet* ws,
                            std::unique_ptr<PlanStage> child,
                            const MatchExpression& fullExpression,
@@ -119,7 +119,7 @@ private:
 
     // Fully-general heavy execution object.
     // ProjectionExec _exec;
-    LogicalProjection _logicalProjection;
+    ProjectionASTCommon _logicalProjection;
     std::unique_ptr<parsed_aggregation_projection::ParsedAggregationProjection> _projExec;
 
     // TODO: We may have to thread this through some other way.
@@ -132,7 +132,7 @@ private:
 class ProjectionStageReturnKey final : public ProjectionStage {
 public:
     ProjectionStageReturnKey(OperationContext* opCtx,
-                             const LogicalProjection& projObj,
+                             const ProjectionASTCommon& projObj,
                              WorkingSet* ws,
                              std::unique_ptr<PlanStage> child,
                              const MatchExpression& fullExpression,
@@ -148,7 +148,7 @@ private:
 
     Status transform(WorkingSetMember* member) const final;
 
-    LogicalProjection _logicalProjection;
+    ProjectionASTCommon _logicalProjection;
 };
 
 /**

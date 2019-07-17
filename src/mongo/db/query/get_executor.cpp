@@ -429,7 +429,7 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
                                                            canonicalQuery->getCollator());
             } else {
                 root = make_unique<ProjectionStageSimple>(
-                    opCtx, canonicalQuery->getProj()->getProjObj(), ws, std::move(root));
+                    opCtx, canonicalQuery->getProj()->toBson(), ws, std::move(root));
             }
         }
 
@@ -791,34 +791,27 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* opCtx,
                                                   WorkingSet* ws,
                                                   unique_ptr<PlanStage> root) {
 
-    namespace fpast = find_projection_ast;
-
     invariant(!proj.isEmpty());
 
-    auto syntaxTree = fpast::FindProjectionAST::fromBson(proj, nullptr);
-    auto firstTransformed = fpast::desugar(std::move(syntaxTree));
-
-    auto lp = LogicalProjection::fromAst(
-        std::move(firstTransformed),
-        {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
-         ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays});
+    auto syntaxTree = FindProjectionAST::fromBson(proj, nullptr);
+    auto lp = desugarFindProjection(std::move(syntaxTree));
 
     // ProjectionExec requires the MatchDetails from the query expression when the projection
     // uses the positional operator. Since the query may no longer match the newly-updated
     // document, we forbid this case.
-    if (!allowPositional && lp->requiresMatchDetails()) {
+    if (!allowPositional && lp.requiresMatchDetails()) {
         return {ErrorCodes::BadValue,
                 "cannot use a positional projection and return the new document"};
     }
 
     // $meta sortKey is not allowed to be projected in findAndModify commands.
-    if (lp->wantSortKey()) {
+    if (lp.wantSortKey()) {
         return {ErrorCodes::BadValue,
                 "Cannot use a $meta sortKey projection in findAndModify commands."};
     }
 
     return {make_unique<ProjectionStageDefault>(opCtx,
-                                                *lp.get(),
+                                                std::move(lp),
                                                 ws,
                                                 std::unique_ptr<PlanStage>(root.release()),
                                                 *cq->root(),
