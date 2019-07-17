@@ -18,13 +18,17 @@
     assert.eq(res[0].a, [{b: [1]}, {b: [2]}]);
 
     coll.drop();
-    assert.commandWorked(coll.insert({a: [{b: {c: [1, 2]}}, {b: [{c: [2, 3]}, {c: [3, 4]}]}]}));
+    assert.commandWorked(
+        coll.insert({a: [{b: {c: [1, 2]}}, {b: [{c: [2, 3]}, {c: [3, 4]}]}], d: 1}));
     res = coll.find({}, {d: 1, "a.b.c": {$slice: 1}}).toArray();
     assert.eq(res[0].a, [{b: {c: [1]}}, {b: [{c: [2]}, {c: [3]}]}]);
 
     // Same with exclusion projection
     res = coll.find({}, {d: 0, "a.b.c": {$slice: 1}}).toArray();
     assert.eq(res[0].a, [{b: {c: [1]}}, {b: [{c: [2]}, {c: [3]}]}]);
+
+    res = coll.find({}, {f: {$add: ["$d", 2]}}).toArray();
+    assert.eq(res[0].f, 3);
 
     let err = assert.throws(() => coll.find({}, {"a.b": 1, "a.b.c": 1}).itcount());
     assert.commandFailedWithCode(err, ErrorCodes.BadValue);

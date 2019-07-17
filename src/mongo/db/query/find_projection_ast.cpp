@@ -106,6 +106,13 @@ void addNodeAtPath(ProjectionASTNodeInternalBase* root,
 
 FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                                               const MatchExpression* const query) {
+
+    // TODO: Support agg syntax with nesting.
+
+    // It's unfortunate that we need this. It's not stored in the class since the expressions will
+    // keep this alive as long as necessary.
+    boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(nullptr, nullptr));
+
     ProjectionASTNodeInternal root(Children<ProjectionASTNode>{});
 
     bool hasPositional = false;
@@ -175,8 +182,12 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
             } else {
                 // Some other expression which will get parsed later. Ideally we'd parse it into
                 // some kind of "expression syntax tree" here.
-                addNodeAtPath(
-                    &root, path, path, std::make_unique<ProjectionASTNodeOtherExpression>(obj));
+                std::cout << "attempting to parse " << obj << std::endl;
+                auto expr = Expression::parseExpression(expCtx, obj, expCtx->variablesParseState);
+                addNodeAtPath(&root,
+                              path,
+                              path,
+                              std::make_unique<ProjectionASTNodeOtherExpression>(obj, expr));
             }
 
         } else if (elem.trueValue()) {
@@ -319,7 +330,7 @@ ProjectionASTCommon desugar(FindProjectionAST ast) {
 
     desugarHelper(ast, &sliceInfo, &posInfo, "", &ast.root, &root);
 
-    return ProjectionASTCommon{std::move(root), ast.type, std::move(sliceInfo), std::move(posInfo)};
+    return ProjectionASTCommon(std::move(root), ast.type, std::move(sliceInfo), std::move(posInfo));
 }
 }
 }

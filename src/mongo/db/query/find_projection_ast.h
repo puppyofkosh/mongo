@@ -31,6 +31,8 @@
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
+#include "mongo/db/pipeline/dependencies.h"
+#include "mongo/db/pipeline/expression.h"
 #include "mongo/util/str.h"
 
 namespace mongo {
@@ -258,7 +260,8 @@ private:
 
 class ProjectionASTNodeOtherExpression : public ProjectionASTNodeCommon {
 public:
-    ProjectionASTNodeOtherExpression(BSONObj obj) : _obj(obj.getOwned()) {}
+    ProjectionASTNodeOtherExpression(BSONObj obj, const boost::intrusive_ptr<Expression>& e)
+        : _obj(obj.getOwned()), _expression(e) {}
 
     NodeType type() const override {
         return NodeType::EXPRESSION_OTHER;
@@ -273,17 +276,22 @@ public:
     }
 
     std::unique_ptr<ProjectionASTNode> clone() const override {
-        return std::unique_ptr<ProjectionASTNode>(new ProjectionASTNodeOtherExpression(_obj));
+        return std::unique_ptr<ProjectionASTNode>(
+            new ProjectionASTNodeOtherExpression(_obj, _expression));
     }
 
 private:
     BSONObj _obj;
+    boost::intrusive_ptr<Expression> _expression;
 };
 
 // Syntax "tree" (list) for find projection.
 struct FindProjectionAST {
     ProjectionASTNodeInternal<ProjectionASTNode> root;
     const ProjectType type;
+
+    // It's bad that we need this.
+    boost::intrusive_ptr<ExpressionContext> expCtx;
 
     static FindProjectionAST fromBson(const BSONObj& b, const MatchExpression* const query);
 
