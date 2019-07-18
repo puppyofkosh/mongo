@@ -107,6 +107,8 @@ public:
      */
     void parse(const BSONObj& spec) final;
 
+    void fromAST(const ProjectionASTCommon& ast);
+
     /**
      * Serialize the projection.
      */
@@ -183,6 +185,10 @@ private:
     void parseSubObject(const BSONObj& subObj,
                         const VariablesParseState& variablesParseState,
                         InclusionNode* node);
+
+    void convertASTNodeToExecutionNode(const ProjectionASTNodeInternalCommon* astNode,
+                                       InclusionNode* execNode,
+                                       bool isRoot);
 
     // Not strictly necessary to track here, but makes serialization easier.
     bool _idExcluded = false;

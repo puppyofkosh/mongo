@@ -64,7 +64,8 @@ load("jstests/libs/analyze_plan.js");
     assert.commandFailedWithCode(err, ErrorCodes.BadValue);
 
     // Unlike other projections, sortKey meta-projection can co-exist with returnKey.
-    printjson(coll.find({}, {c: {$meta: 'sortKey'}}).hint({a: 1}).sort({a: -1}).returnKey().explain());
+    printjson(
+        coll.find({}, {c: {$meta: 'sortKey'}}).hint({a: 1}).sort({a: -1}).returnKey().explain());
 
     results =
         coll.find({}, {c: {$meta: 'sortKey'}}).hint({a: 1}).sort({a: -1}).returnKey().toArray();

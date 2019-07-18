@@ -114,5 +114,30 @@ void ParsedExclusionProjection::parse(const BSONObj& spec, ExclusionNode* node, 
     }
 }
 
+namespace {
+void convertASTNodeToExecutionNode(const ProjectionASTNodeInternalCommon* astNode,
+                                   ExclusionNode* execNode,
+                                   bool isRoot) {
+
+    for (auto&& child : astNode->children) {
+        if (child.second->type() == NodeType::EXCLUSION) {
+            execNode->addProjectionForPath(child.first);
+        } else if (child.second->type() == NodeType::INTERNAL) {
+            const auto* astChild =
+                static_cast<const ProjectionASTNodeInternalCommon*>(child.second.get());
+            ExclusionNode* execChild = execNode->addOrGetChild(child.first);
+            convertASTNodeToExecutionNode(astChild, execChild, false);
+        } else {
+            MONGO_UNREACHABLE;
+        }
+    }
+}
+}
+
+void ParsedExclusionProjection::fromAST(const ProjectionASTCommon& ast) {
+    convertASTNodeToExecutionNode(ast.root(), _root.get(), true);
+}
+
+
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

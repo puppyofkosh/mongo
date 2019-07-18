@@ -231,5 +231,48 @@ bool ParsedInclusionProjection::isSubsetOfProjection(const BSONObj& proj) const 
     return computedPaths.empty() && renamedPaths.empty();
 }
 
+void ParsedInclusionProjection::convertASTNodeToExecutionNode(
+    const ProjectionASTNodeInternalCommon* astNode, InclusionNode* execNode, bool isRoot) {
+
+    bool idExcluded = false;
+    for (auto&& child : astNode->children) {
+        if (child.second->type() == NodeType::INCLUSION) {
+            execNode->addProjectionForPath(child.first);
+        } else if (child.second->type() == NodeType::EXPRESSION_OTHER) {
+            // Reparse the expression using the current expression context.
+            const auto* exprNode =
+                static_cast<const ProjectionASTNodeOtherExpression*>(child.second.get());
+
+            auto expr = Expression::parseExpression(
+                _expCtx, exprNode->originalObj(), _expCtx->variablesParseState);
+            execNode->addExpressionForPath(child.first, expr);
+        } else if (child.second->type() == NodeType::EXCLUSION) {
+            // TODO: Maybe remove this and do this at the AST step?
+            invariant(child.first == "_id");
+            invariant(isRoot);
+            idExcluded = true;
+        } else if (child.second->type() == NodeType::INTERNAL) {
+            const auto* astChild =
+                static_cast<const ProjectionASTNodeInternalCommon*>(child.second.get());
+            InclusionNode* execChild = execNode->addOrGetChild(child.first);
+            convertASTNodeToExecutionNode(astChild, execChild, false);
+        } else {
+            MONGO_UNREACHABLE;
+        }
+    }
+
+    if (isRoot && !idExcluded) {
+        // Project _id in.
+        if (_policies.idPolicy != ProjectionPolicies::DefaultIdPolicy::kExcludeId) {
+            execNode->addProjectionForPath("_id");
+        }
+    }
+}
+
+void ParsedInclusionProjection::fromAST(const ProjectionASTCommon& ast) {
+    // TODO: set _orderToProcessAdditionsAndChildren
+    convertASTNodeToExecutionNode(ast.root(), _root.get(), true);
+}
+
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

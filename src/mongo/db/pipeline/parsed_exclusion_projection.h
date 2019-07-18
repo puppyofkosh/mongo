@@ -118,6 +118,8 @@ public:
         parse(spec, _root.get(), 0);
     }
 
+    void fromAST(const ProjectionASTCommon& ast) override;
+
     /**
      * Exclude the fields specified.
      */

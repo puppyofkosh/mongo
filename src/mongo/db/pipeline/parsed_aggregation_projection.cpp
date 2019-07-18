@@ -158,7 +158,6 @@ std::string makeBannedComputedFieldsErrorMessage(BSONObj projSpec) {
                          << projSpec.toString();
 }
 
-
 }  // namespace
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
@@ -181,7 +180,8 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
                   new ParsedExclusionProjection(expCtx, policies)));
 
     // Actually parse the specification.
-    parsedProject->parse(spec);
+    parsedProject->fromAST(ast);
+    // parsedProject->parse(spec);
     return parsedProject;
 }
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(

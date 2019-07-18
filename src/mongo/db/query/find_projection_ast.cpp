@@ -374,7 +374,7 @@ std::function<void(const ProjectionASTNodeCommon* node, const std::string&)> fin
     };
     return metaExpressionCbMaker(fn);
 }
-    
+
 bool ProjectionASTCommon::wantTextScore() const {
     const ExpressionMeta* node = nullptr;
     auto fn = findMetaExpression(ExpressionMeta::MetaType::TEXT_SCORE, &node);

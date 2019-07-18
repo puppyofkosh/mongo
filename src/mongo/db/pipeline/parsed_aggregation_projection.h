@@ -168,6 +168,8 @@ public:
      */
     virtual void parse(const BSONObj& spec) = 0;
 
+    virtual void fromAST(const ProjectionASTCommon& ast) = 0;
+
     /**
      * Optimize any expressions contained within this projection.
      */

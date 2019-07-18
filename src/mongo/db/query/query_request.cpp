@@ -582,7 +582,8 @@ void QueryRequest::addReturnKeyMetaProj() {
     // We use some awful keyname because it's never going to show up in a user's projection.
     // The exact text doesn't matter.
     // TODO: We'll have to figure out what to do about this.
-    // We can probably use any name, since $meta: indexKey will just overwrite the entire return results.
+    // We can probably use any name, since $meta: indexKey will just overwrite the entire return
+    // results.
     BSONObj indexKey =
         BSON("__TODO_FIGURE_OUT_WORKAROUND" << BSON("$meta" << QueryRequest::metaIndexKey));
     projBob.append(indexKey.firstElement());

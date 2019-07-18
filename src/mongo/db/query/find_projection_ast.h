@@ -297,6 +297,9 @@ public:
         return _expression.get();
     }
 
+    BSONObj originalObj() const {
+        return _obj;
+    }
 
     void reportDependencies(DepsTracker* d, const std::string& path) const override {
         _expression->addDependencies(d);
@@ -352,6 +355,10 @@ struct ProjectionASTCommon {
     ProjectionASTCommon& operator=(ProjectionASTCommon&& o) = default;
 
     ProjectionASTCommon(const ProjectionASTCommon& o) = default;
+
+    const ProjectionASTNodeInternal<ProjectionASTNodeCommon>* root() const {
+        return &_root;
+    }
 
     std::string toString() const {
         auto stream = str::stream();
