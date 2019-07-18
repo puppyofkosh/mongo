@@ -220,7 +220,7 @@ ProjectionStageDefault::ProjectionStageDefault(OperationContext* opCtx,
       _originalMatchExpression(&fullExpression) {
 
     _projExec = parsed_aggregation_projection::ParsedAggregationProjection::create(
-        _expCtx, &logicalProjection, ProjectionPolicies{}, &fullExpression);
+        _expCtx, logicalProjection, ProjectionPolicies{});
 }
 
 namespace {

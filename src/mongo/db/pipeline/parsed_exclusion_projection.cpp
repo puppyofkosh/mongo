@@ -49,7 +49,7 @@ Document ParsedExclusionProjection::applyProjection(const Document& inputDoc) co
     return _root->applyToDocument(inputDoc);
 }
 
-void AnalysisExclusionProjection::parse(const BSONObj& spec, ExclusionNode* node, size_t depth) {
+void ParsedExclusionProjection::parse(const BSONObj& spec, ExclusionNode* node, size_t depth) {
     bool idSpecified = false;
 
     for (auto elem : spec) {

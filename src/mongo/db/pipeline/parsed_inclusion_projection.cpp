@@ -31,8 +31,6 @@
 
 #include "mongo/db/pipeline/parsed_inclusion_projection.h"
 
-#include "mongo/db/pipeline/find_expressions.h"
-
 #include <algorithm>
 
 namespace mongo {
@@ -74,12 +72,9 @@ void InclusionNode::reportDependencies(DepsTracker* deps) const {
 // ParsedInclusionProjection
 //
 
-void AnalysisInclusionProjection::parse(const ProjectionASTCommon& lp) {
-    std::cout << "ian: analysisprojection::parse" << std::endl;
+void ParsedInclusionProjection::parse(const BSONObj& spec) {
     // It is illegal to specify an inclusion with no output fields.
     bool atLeastOneFieldInOutput = false;
-
-    const BSONObj& spec = lp.toBson();
 
     // Tracks whether or not we should apply the default _id projection policy.
     bool idSpecified = false;
@@ -108,7 +103,7 @@ void AnalysisInclusionProjection::parse(const ProjectionASTCommon& lp) {
             case BSONType::NumberDecimal: {
                 // This is an inclusion specification.
                 invariant(elem.trueValue());
-                _root->addProjectionForPath(FieldPath(elem.fieldName(), true));
+                _root->addProjectionForPath(FieldPath(elem.fieldName()));
                 break;
             }
             case BSONType::Object: {
@@ -136,7 +131,7 @@ void AnalysisInclusionProjection::parse(const ProjectionASTCommon& lp) {
             default: {
                 // This is a literal value.
                 _root->addExpressionForPath(
-                    FieldPath(elem.fieldName(), true),
+                    FieldPath(elem.fieldName()),
                     Expression::parseOperand(_expCtx, elem, _expCtx->variablesParseState));
             }
         }
@@ -163,7 +158,7 @@ Document ParsedInclusionProjection::applyProjection(const Document& inputDoc) co
     return _root->applyToDocument(inputDoc);
 }
 
-bool AnalysisInclusionProjection::parseObjectAsExpression(
+bool ParsedInclusionProjection::parseObjectAsExpression(
     StringData pathToObject,
     const BSONObj& objSpec,
     const VariablesParseState& variablesParseState) {
@@ -171,19 +166,16 @@ bool AnalysisInclusionProjection::parseObjectAsExpression(
         // This is an expression like {$add: [...]}. We have already verified that it has only one
         // field.
         invariant(objSpec.nFields() == 1);
-
-        // Treat it as a generic agg expression.
         _root->addExpressionForPath(
-            FieldPath(pathToObject.toString(), true),
-            Expression::parseExpression(_expCtx, objSpec, variablesParseState));
+            pathToObject, Expression::parseExpression(_expCtx, objSpec, variablesParseState));
         return true;
     }
     return false;
 }
 
-void AnalysisInclusionProjection::parseSubObject(const BSONObj& subObj,
-                                                 const VariablesParseState& variablesParseState,
-                                                 InclusionNode* node) {
+void ParsedInclusionProjection::parseSubObject(const BSONObj& subObj,
+                                               const VariablesParseState& variablesParseState,
+                                               InclusionNode* node) {
     for (auto elem : subObj) {
         invariant(elem.fieldName()[0] != '$');
         // Dotted paths in a sub-object have already been disallowed in
@@ -198,7 +190,7 @@ void AnalysisInclusionProjection::parseSubObject(const BSONObj& subObj,
             case BSONType::NumberDecimal: {
                 // This is an inclusion specification.
                 invariant(elem.trueValue());
-                node->addProjectionForPath(FieldPath(elem.fieldName(), false));
+                node->addProjectionForPath(FieldPath(elem.fieldName()));
                 break;
             }
             case BSONType::Object: {
@@ -217,7 +209,7 @@ void AnalysisInclusionProjection::parseSubObject(const BSONObj& subObj,
             default: {
                 // This is a literal value.
                 node->addExpressionForPath(
-                    FieldPath(elem.fieldName(), false),
+                    FieldPath(elem.fieldName()),
                     Expression::parseOperand(_expCtx, elem, variablesParseState));
             }
         }

@@ -37,8 +37,8 @@
 #include "mongo/bson/bsonelement.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/projection_policies.h"
 #include "mongo/db/pipeline/transformer_interface.h"
+#include "mongo/db/query/find_projection_ast.h"
 
 namespace mongo {
 
@@ -65,8 +65,7 @@ private:
     ProjectionSpecValidator(const BSONObj& spec) : _rawObj(spec) {}
 
     /**
-     * Uses '_seenPaths' to see if 'path' conflicts with any paths that have already been
-     * specified.
+     * Uses '_seenPaths' to see if 'path' conflicts with any paths that have already been specified.
      *
      * For example, a user is not allowed to specify {'a': 1, 'a.b': 1}, or some similar conflicting
      * paths.
@@ -136,8 +135,10 @@ private:
     std::set<std::string, PathPrefixComparator> _seenPaths;
 };
 
-/*
-  EXECUTION
+/**
+ * A ParsedAggregationProjection is responsible for parsing and executing a $project. It
+ * represents either an inclusion or exclusion projection. This is the common interface between the
+ * two types of projections.
  */
 class ParsedAggregationProjection : public TransformerInterface {
 public:
@@ -145,28 +146,27 @@ public:
      * Main entry point for a ParsedAggregationProjection.
      *
      * Throws a AssertionException if 'spec' is an invalid projection specification.
-     *
-     * 'matchExpression' is only used by the 'find' variant of projection, for positional
-     * projection.
-     *
-     * This is the entry point for "agg-only" projections. The projection will not be desugared.
      */
     static std::unique_ptr<ParsedAggregationProjection> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
-        const BSONObj& spec,
-        ProjectionPolicies policies,
-        const MatchExpression* matchExpression = nullptr);
+        const ProjectionASTCommon& ast,
+        ProjectionPolicies policies);
 
-    /**
-     * Entry point for desugared "find" projections.
-     */
+    // Old path which we will remove
     static std::unique_ptr<ParsedAggregationProjection> create(
         const boost::intrusive_ptr<ExpressionContext>& expCtx,
-        const ProjectionASTCommon* lp,
-        ProjectionPolicies policies,
-        const MatchExpression* matchExpression);
+        const BSONObj& obj,
+        ProjectionPolicies policies);
 
     virtual ~ParsedAggregationProjection() = default;
+
+    /**
+     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has already
+     * been verified to not have any conflicting path specifications, and not to mix and match
+     * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
+     * track which variables are defined so that they can later be referenced at execution time.
+     */
+    virtual void parse(const BSONObj& spec) = 0;
 
     /**
      * Optimize any expressions contained within this projection.
@@ -201,32 +201,5 @@ protected:
 
     ProjectionPolicies _policies;
 };
-
-/*
- * Parsing + analysis
- */
-class AnalysisProjection {
-public:
-    AnalysisProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                       ProjectionPolicies policies)
-        : _expCtx(expCtx), _policies(policies){};
-
-    /**
-     * Parse the user-specified BSON object 'spec'. By the time this is called, 'spec' has
-     * already
-     * been verified to not have any conflicting path specifications, and not to mix and match
-     * inclusions and exclusions. 'variablesParseState' is used by any contained expressions to
-     * track which variables are defined so that they can later be referenced at execution time.
-     */
-    virtual void parse(const ProjectionASTCommon& spec) = 0;
-
-    virtual std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() = 0;
-
-protected:
-    boost::intrusive_ptr<ExpressionContext> _expCtx;
-
-    ProjectionPolicies _policies;
-};
-
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

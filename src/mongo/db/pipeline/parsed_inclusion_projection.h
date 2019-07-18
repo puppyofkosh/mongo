@@ -91,16 +91,7 @@ protected:
 class ParsedInclusionProjection : public ParsedAggregationProjection {
 public:
     ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                              ProjectionPolicies policies,
-                              bool idExcluded,
-                              std::unique_ptr<InclusionNode> root)
-        : ParsedAggregationProjection(expCtx, policies),
-          _idExcluded(idExcluded),
-          _root(std::move(root)) {}
-
-    ParsedInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                              ProjectionPolicies policies,
-                              const MatchExpression* precedingMatchingExpression)
+                              ProjectionPolicies policies)
         : ParsedAggregationProjection(expCtx, policies), _root(new InclusionNode(policies)) {}
 
     TransformerType getType() const final {
@@ -110,6 +101,11 @@ public:
     const InclusionNode& getRoot() const {
         return *_root;
     }
+
+    /**
+     * Parses the projection specification given by 'spec', populating internal data structures.
+     */
+    void parse(const BSONObj& spec) final;
 
     /**
      * Serialize the projection.
@@ -168,30 +164,6 @@ public:
     bool isSubsetOfProjection(const BSONObj& proj) const final;
 
 private:
-    // Not strictly necessary to track here, but makes serialization easier.
-    bool _idExcluded = false;
-
-    // The InclusionNode tree does most of the execution work once constructed.
-    std::unique_ptr<InclusionNode> _root;
-};
-
-class AnalysisInclusionProjection : public AnalysisProjection {
-public:
-    AnalysisInclusionProjection(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                ProjectionPolicies policies)
-        : AnalysisProjection(expCtx, policies), _root(new InclusionNode(_policies)) {}
-
-    /**
-     * Parses the projection specification given by 'spec', populating internal data structures.
-     */
-    void parse(const ProjectionASTCommon& spec) final;
-
-    std::unique_ptr<ParsedAggregationProjection> convertToExecutionTree() {
-        return std::make_unique<ParsedInclusionProjection>(
-            _expCtx, _policies, _idExcluded, std::move(_root));
-    }
-
-private:
     /**
      * Attempts to parse 'objSpec' as an expression like {$add: [...]}. Adds a computed field to
      * '_root' and returns true if it was successfully parsed as an expression. Returns false if it
@@ -212,12 +184,11 @@ private:
                         const VariablesParseState& variablesParseState,
                         InclusionNode* node);
 
-    // The InclusionNode tree does most of the execution work once constructed.
-    std::unique_ptr<InclusionNode> _root;
-
     // Not strictly necessary to track here, but makes serialization easier.
     bool _idExcluded = false;
-};
 
+    // The InclusionNode tree does most of the execution work once constructed.
+    std::unique_ptr<InclusionNode> _root;
+};
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo

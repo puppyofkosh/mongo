@@ -99,8 +99,7 @@ void ProjectionSpecValidator::validate() {
         uasserted(40177, "specification must have at least one field");
     }
     for (auto&& elem : _rawObj) {
-        std::cout << "ian: parsing elem " << elem << std::endl;
-        parseElement(elem, FieldPath(elem.fieldName(), true));
+        parseElement(elem, FieldPath(elem.fieldName()));
     }
 }
 
@@ -153,40 +152,44 @@ namespace {
 
 using ComputedFieldsPolicy = ProjectionPolicies::ComputedFieldsPolicy;
 
+std::string makeBannedComputedFieldsErrorMessage(BSONObj projSpec) {
+    return str::stream() << "Bad projection specification, cannot use computed fields when parsing "
+                            "a spec in kBanComputedFields mode: "
+                         << projSpec.toString();
+}
+
+
 }  // namespace
 
 std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const ProjectionASTCommon* lp,
-    ProjectionPolicies policies,
-    const MatchExpression* matchExpression) {
+    const ProjectionASTCommon& ast,
+    ProjectionPolicies policies) {
+    BSONObj spec = ast.toBson();
 
-    std::unique_ptr<AnalysisProjection> analysisProject(
-        lp->type() == ProjectType::kInclusion
-            ? static_cast<AnalysisProjection*>(new AnalysisInclusionProjection(expCtx, policies))
-            : static_cast<AnalysisProjection*>(new AnalysisExclusionProjection(expCtx, policies)));
-
-    // Actually parse the specification.
-    analysisProject->parse(*lp);
-
-    return analysisProject->convertToExecutionTree();
-}
-
-std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const BSONObj& spec,
-    ProjectionPolicies policies,
-    const MatchExpression* matchExpression) {
     // Check that the specification was valid. Status returned is unspecific because validate()
     // is used by the $addFields stage as well as $project.
     // If there was an error, uassert with a $project-specific message.
     ProjectionSpecValidator::uassertValid(spec, "$project");
 
-    // TODO: This is important. Need to be able to make a projection ast from agg projection.
-    MONGO_UNREACHABLE;
-    // auto lp = LogicalProjection::parse({spec}, policies);
+    // We can't use make_unique() here, since the branches have different types.
+    std::unique_ptr<ParsedAggregationProjection> parsedProject(
+        ast.type() == ProjectType::kInclusion
+            ? static_cast<ParsedAggregationProjection*>(
+                  new ParsedInclusionProjection(expCtx, policies))
+            : static_cast<ParsedAggregationProjection*>(
+                  new ParsedExclusionProjection(expCtx, policies)));
 
-    // return ParsedAggregationProjection::create(expCtx, lp.get(), policies, nullptr);
+    // Actually parse the specification.
+    parsedProject->parse(spec);
+    return parsedProject;
 }
+std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const BSONObj& spec,
+    ProjectionPolicies policies) {
+    MONGO_UNREACHABLE;
+}
+
 }  // namespace parsed_aggregation_projection
 }  // namespace mongo
