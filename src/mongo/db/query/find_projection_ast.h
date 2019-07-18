@@ -323,8 +323,10 @@ struct FindProjectionAST {
 };
 
 
-void walkProjectionAST(const std::function<void(const ProjectionASTNodeCommon*)>& fn,
-                       const ProjectionASTNodeCommon* root);
+void walkProjectionAST(
+    const std::function<void(const ProjectionASTNodeCommon*, const std::string& path)>& fn,
+    const ProjectionASTNodeCommon* root,
+    const std::string& path);
 
 struct SliceInfo {
     FieldPath path;  // path to slice
@@ -392,10 +394,7 @@ struct ProjectionASTCommon {
         return (_type == ProjectType::kExclusion || hasExpression()) && !wantIndexKey();
     }
 
-    std::vector<std::string> sortKeyMetaFields() const {
-        // TODO: This requires $meta to be able to handle sortKey
-        return {};
-    }
+    std::vector<std::string> sortKeyMetaFields() const;
 
     bool needsSortKey() const {
         return !sortKeyMetaFields().empty();
@@ -423,7 +422,7 @@ struct ProjectionASTCommon {
 
     bool wantSortKey() const {
         // TODO: similar to wantTextScore()
-        return false;
+        return needsSortKey();
     }
 
     /**
@@ -460,13 +459,13 @@ struct ProjectionASTCommon {
 private:
     bool hasExpression() const {
         bool res = false;
-        auto fn = [&res](const ProjectionASTNodeCommon* node) {
+        auto fn = [&res](const ProjectionASTNodeCommon* node, const std::string&) {
             if (node->type() == NodeType::EXPRESSION_OTHER) {
                 res = true;
             }
         };
 
-        walkProjectionAST(fn, &_root);
+        walkProjectionAST(fn, &_root, "");
         return res;
     }
 

@@ -2529,6 +2529,8 @@ intrusive_ptr<Expression> ExpressionMeta::parse(
         return new ExpressionMeta(expCtx, MetaType::RECORD_ID);
     } else if (expr.valueStringData() == "indexKey") {
         return new ExpressionMeta(expCtx, MetaType::INDEX_KEY);
+    } else if (expr.valueStringData() == "sortKey") {
+        return new ExpressionMeta(expCtx, MetaType::SORT_KEY);
     } else {
         uasserted(17308, "Unsupported argument to $meta: " + expr.String());
     }
@@ -2564,6 +2566,9 @@ Value ExpressionMeta::serialize(bool explain) const {
         case MetaType::INDEX_KEY:
             return Value(DOC("$meta"
                              << "indexKey"_sd));
+        case MetaType::SORT_KEY:
+            return Value(DOC("$meta"
+                             << "sortKey"_sd));
     }
     MONGO_UNREACHABLE;
 }
@@ -2591,8 +2596,10 @@ Value ExpressionMeta::evaluate(const Document& root) const {
                 return Value(static_cast<long long>(root.getRecordId().repr()));
             }
             return Value();
-         case MetaType::INDEX_KEY:
-             MONGO_UNREACHABLE;
+        case MetaType::INDEX_KEY:
+            MONGO_UNREACHABLE;
+        case MetaType::SORT_KEY:
+            return root.hasSortKeyMetaField() ? Value(root.hasSortKeyMetaField()) : Value();
     }
     MONGO_UNREACHABLE;
 }

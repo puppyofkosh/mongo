@@ -196,6 +196,10 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                               path,
                               path,
                               std::make_unique<ProjectionASTNodeOtherExpression>(obj, expr));
+
+                uassert(ErrorCodes::BadValue,
+                        "Should be inclusion",
+                        !type || *type == ProjectType::kInclusion);
                 type = ProjectType::kInclusion;
             }
 
@@ -345,36 +349,59 @@ std::vector<std::string> ProjectionASTCommon::getRequiredFields() const {
     return std::vector<std::string>(depsTracker.fields.begin(), depsTracker.fields.end());
 }
 
-std::function<void(const ProjectionASTNodeCommon* node)> findMetaExpression(
-    ExpressionMeta::MetaType t, const ProjectionASTNodeOtherExpression** out) {
-    auto fn = [out, t](const ProjectionASTNodeCommon* node) {
+std::function<void(const ProjectionASTNodeCommon* node, const std::string& path)>
+metaExpressionCbMaker(
+    const std::function<void(const ExpressionMeta*, const std::string& path)>& callback) {
+    auto fn = [callback](const ProjectionASTNodeCommon* node, const std::string& path) {
         if (node->type() == NodeType::EXPRESSION_OTHER) {
             auto* exprNode = static_cast<const ProjectionASTNodeOtherExpression*>(node);
             Expression* expr = exprNode->expression();
             ExpressionMeta* meta = dynamic_cast<ExpressionMeta*>(expr);
-
-            if (meta && meta->metaType() == t) {
-                *out = exprNode;
+            if (meta) {
+                callback(meta, path);
             }
         }
     };
     return fn;
 }
 
+std::function<void(const ProjectionASTNodeCommon* node, const std::string&)> findMetaExpression(
+    ExpressionMeta::MetaType t, const ExpressionMeta** out) {
+    auto fn = [out, t](const ExpressionMeta* meta, const std::string& path) {
+        if (meta->metaType() == t) {
+            *out = meta;
+        }
+    };
+    return metaExpressionCbMaker(fn);
+}
+    
 bool ProjectionASTCommon::wantTextScore() const {
-    const ProjectionASTNodeOtherExpression* node = nullptr;
+    const ExpressionMeta* node = nullptr;
     auto fn = findMetaExpression(ExpressionMeta::MetaType::TEXT_SCORE, &node);
 
-    walkProjectionAST(fn, &_root);
+    walkProjectionAST(fn, &_root, "");
     return node != nullptr;
 }
 
 bool ProjectionASTCommon::wantIndexKey() const {
-    const ProjectionASTNodeOtherExpression* node = nullptr;
+    const ExpressionMeta* node = nullptr;
     auto fn = findMetaExpression(ExpressionMeta::MetaType::INDEX_KEY, &node);
 
-    walkProjectionAST(fn, &_root);
+    walkProjectionAST(fn, &_root, "");
     return node != nullptr;
+}
+
+std::vector<std::string> ProjectionASTCommon::sortKeyMetaFields() const {
+    std::vector<std::string> fields;
+    auto fn = [&fields](const ExpressionMeta* expr, const std::string& path) {
+        if (expr->metaType() == ExpressionMeta::MetaType::SORT_KEY) {
+            fields.push_back(path);
+        }
+    };
+    auto cb = metaExpressionCbMaker(fn);
+    walkProjectionAST(cb, &_root, "");
+
+    return fields;
 }
 
 bool ProjectionASTCommon::isFieldRetainedExactly(StringData path) const {
@@ -447,15 +474,16 @@ ProjectionASTCommon desugarFindProjection(FindProjectionAST ast) {
     return ProjectionASTCommon(std::move(root), ast.type, std::move(sliceInfo), std::move(posInfo));
 }
 
-void walkProjectionAST(const std::function<void(const ProjectionASTNodeCommon*)>& fn,
-                       const ProjectionASTNodeCommon* root) {
+void walkProjectionAST(
+    const std::function<void(const ProjectionASTNodeCommon*, const std::string& path)>& fn,
+    const ProjectionASTNodeCommon* root,
+    const std::string& path) {
     // TODO: add some way of bailing out early (maybe have fn return a bool).
-
-    fn(root);
+    fn(root, path);
     if (root->type() == NodeType::INTERNAL) {
         auto* internalNode = static_cast<const ProjectionASTNodeInternalCommon*>(root);
         for (auto&& c : internalNode->children) {
-            fn(c.second.get());
+            walkProjectionAST(fn, c.second.get(), FieldPath::getFullyQualifiedPath(path, c.first));
         }
     }
 }

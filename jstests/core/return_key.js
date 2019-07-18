@@ -61,9 +61,11 @@ load("jstests/libs/analyze_plan.js");
     // returnKey is incompatible with exclusion projection.
     let err =
         assert.throws(() => coll.find({}, {a: 0}).hint({a: 1}).sort({a: -1}).returnKey().toArray());
-    assert.commandFailedWithCode(err, 40182);
+    assert.commandFailedWithCode(err, ErrorCodes.BadValue);
 
     // Unlike other projections, sortKey meta-projection can co-exist with returnKey.
+    printjson(coll.find({}, {c: {$meta: 'sortKey'}}).hint({a: 1}).sort({a: -1}).returnKey().explain());
+
     results =
         coll.find({}, {c: {$meta: 'sortKey'}}).hint({a: 1}).sort({a: -1}).returnKey().toArray();
     assert.eq(results, [{a: 3, c: {'': 3}}, {a: 2, c: {'': 2}}, {a: 1, c: {'': 1}}]);

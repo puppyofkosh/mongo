@@ -1632,6 +1632,7 @@ public:
         GEO_NEAR_POINT,
         RECORD_ID,
         INDEX_KEY,
+        SORT_KEY,
     };
 
     Value serialize(bool explain) const final;
