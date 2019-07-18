@@ -2527,6 +2527,8 @@ intrusive_ptr<Expression> ExpressionMeta::parse(
         return new ExpressionMeta(expCtx, MetaType::GEO_NEAR_POINT);
     } else if (expr.valueStringData() == "recordId") {
         return new ExpressionMeta(expCtx, MetaType::RECORD_ID);
+    } else if (expr.valueStringData() == "indexKey") {
+        return new ExpressionMeta(expCtx, MetaType::INDEX_KEY);
     } else {
         uasserted(17308, "Unsupported argument to $meta: " + expr.String());
     }
@@ -2559,6 +2561,9 @@ Value ExpressionMeta::serialize(bool explain) const {
         case MetaType::RECORD_ID:
             return Value(DOC("$meta"
                              << "recordId"_sd));
+        case MetaType::INDEX_KEY:
+            return Value(DOC("$meta"
+                             << "indexKey"_sd));
     }
     MONGO_UNREACHABLE;
 }
@@ -2586,6 +2591,8 @@ Value ExpressionMeta::evaluate(const Document& root) const {
                 return Value(static_cast<long long>(root.getRecordId().repr()));
             }
             return Value();
+         case MetaType::INDEX_KEY:
+             MONGO_UNREACHABLE;
     }
     MONGO_UNREACHABLE;
 }

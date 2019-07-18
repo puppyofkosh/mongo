@@ -344,6 +344,39 @@ std::vector<std::string> ProjectionASTCommon::getRequiredFields() const {
 
     return std::vector<std::string>(depsTracker.fields.begin(), depsTracker.fields.end());
 }
+
+std::function<void(const ProjectionASTNodeCommon* node)> findMetaExpression(
+    ExpressionMeta::MetaType t, const ProjectionASTNodeOtherExpression** out) {
+    auto fn = [out, t](const ProjectionASTNodeCommon* node) {
+        if (node->type() == NodeType::EXPRESSION_OTHER) {
+            auto* exprNode = static_cast<const ProjectionASTNodeOtherExpression*>(node);
+            Expression* expr = exprNode->expression();
+            ExpressionMeta* meta = dynamic_cast<ExpressionMeta*>(expr);
+
+            if (meta && meta->metaType() == t) {
+                *out = exprNode;
+            }
+        }
+    };
+    return fn;
+}
+
+bool ProjectionASTCommon::wantTextScore() const {
+    const ProjectionASTNodeOtherExpression* node = nullptr;
+    auto fn = findMetaExpression(ExpressionMeta::MetaType::TEXT_SCORE, &node);
+
+    walkProjectionAST(fn, &_root);
+    return node != nullptr;
+}
+
+bool ProjectionASTCommon::wantIndexKey() const {
+    const ProjectionASTNodeOtherExpression* node = nullptr;
+    auto fn = findMetaExpression(ExpressionMeta::MetaType::INDEX_KEY, &node);
+
+    walkProjectionAST(fn, &_root);
+    return node != nullptr;
+}
+
 bool ProjectionASTCommon::isFieldRetainedExactly(StringData path) const {
     FieldPath fp(path);
 

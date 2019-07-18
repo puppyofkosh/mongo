@@ -389,8 +389,7 @@ struct ProjectionASTCommon {
      * Is the full document required to compute this projection?
      */
     bool requiresDocument() const {
-        // TODO: There is a special case here for index key projection that I'm ignoring.
-        return _type == ProjectType::kExclusion || hasExpression();
+        return (_type == ProjectType::kExclusion || hasExpression()) && !wantIndexKey();
     }
 
     std::vector<std::string> sortKeyMetaFields() const {
@@ -408,23 +407,7 @@ struct ProjectionASTCommon {
      */
     std::vector<std::string> getRequiredFields() const;
 
-    bool wantTextScore() const {
-        bool res = false;
-        auto fn = [&res](const ProjectionASTNodeCommon* node) {
-            if (node->type() == NodeType::EXPRESSION_OTHER) {
-                auto* exprNode = static_cast<const ProjectionASTNodeOtherExpression*>(node);
-                Expression* expr = exprNode->expression();
-                ExpressionMeta* meta = dynamic_cast<ExpressionMeta*>(expr);
-
-                if (meta && meta->metaType() == ExpressionMeta::MetaType::TEXT_SCORE) {
-                    res = true;
-                }
-            }
-        };
-
-        walkProjectionAST(fn, &_root);
-        return res;
-    }
+    bool wantTextScore() const;
 
     bool wantGeoNearDistance() const {
         // TODO: similar to wantTextScore()
@@ -436,10 +419,7 @@ struct ProjectionASTCommon {
         return false;
     }
 
-    bool wantIndexKey() const {
-        // TODO: similar to wantTextScore()
-        return false;
-    }
+    bool wantIndexKey() const;
 
     bool wantSortKey() const {
         // TODO: similar to wantTextScore()
