@@ -310,6 +310,12 @@ private:
     boost::intrusive_ptr<Expression> _expression;
 };
 
+struct ParseContext {
+    bool hasPositional = false;
+    bool hasElemMatch = false;
+    boost::optional<ProjectType> type;
+};
+
 // Syntax "tree" (list) for find projection.
 struct FindProjectionAST {
     ProjectionASTNodeInternal<ProjectionASTNode> root;
@@ -484,6 +490,6 @@ private:
     boost::optional<PositionalInfo> _positionalInfo;
 };
 
-
+// TODO: Rename to "convert" or similar
 ProjectionASTCommon desugarFindProjection(FindProjectionAST ast);
 }

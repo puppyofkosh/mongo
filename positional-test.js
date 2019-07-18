@@ -32,4 +32,7 @@
 
     let err = assert.throws(() => coll.find({}, {"a.b": 1, "a.b.c": 1}).itcount());
     assert.commandFailedWithCode(err, ErrorCodes.BadValue);
+
+    res = coll.find({}, {_id: 0, a: {b: {c: 1}}}).toArray();
+    assert.eq(res[0], {a: [{b: {c: [1, 2]}}, {b: [{c: [2, 3]}, {c: [3, 4]}]}]});
 })();

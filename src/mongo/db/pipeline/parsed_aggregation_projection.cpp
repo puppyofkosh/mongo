@@ -188,7 +188,11 @@ std::unique_ptr<ParsedAggregationProjection> ParsedAggregationProjection::create
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     const BSONObj& spec,
     ProjectionPolicies policies) {
-    MONGO_UNREACHABLE;
+
+    auto syntaxTree = FindProjectionAST::fromBson(spec, nullptr);
+    std::cout << "The syntax tree is " << syntaxTree.toString() << std::endl;
+    auto commonProjAST = desugarFindProjection(std::move(syntaxTree));
+    return create(expCtx, commonProjAST, policies);
 }
 
 }  // namespace parsed_aggregation_projection

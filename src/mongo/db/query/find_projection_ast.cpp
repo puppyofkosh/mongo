@@ -111,6 +111,162 @@ void addNodeAtPath(ProjectionASTNodeInternalBase* root,
 }
 }
 
+void parseAsAggExpression(ProjectionASTNodeInternalBase* node,
+                          const std::string& path,
+                          const BSONObj& obj,
+                          const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                          ParseContext* parseContext) {
+    // Some other expression which will get parsed later. Ideally we'd parse it into
+    // some kind of "expression syntax tree" here.
+    std::cout << "attempting to parse " << obj << std::endl;
+    auto expr = Expression::parseExpression(expCtx, obj, expCtx->variablesParseState);
+    addNodeAtPath(node, path, path, std::make_unique<ProjectionASTNodeOtherExpression>(obj, expr));
+
+    uassert(ErrorCodes::BadValue,
+            "Should be inclusion",
+            !parseContext->type || *parseContext->type == ProjectType::kInclusion);
+    parseContext->type = ProjectType::kInclusion;
+}
+
+bool parseObjectAsExpression(ProjectionASTNodeInternalBase* node,
+                             const std::string& path,
+                             const BSONObj& obj,
+                             const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                             ParseContext* parseContext) {
+    if (obj.firstElementFieldName()[0] != '$') {
+        return false;
+    }
+
+    BSONElement e2 = obj.firstElement();
+    if (e2.fieldNameStringData() == "$slice") {
+        if (e2.isNumber()) {
+            // This is A-OK.
+            addNodeAtPath(
+                node, path, path, std::make_unique<ProjectionASTNodeSlice>(0, e2.numberInt()));
+            return true;
+        } else if (e2.type() == Array) {
+            BSONObj arr = e2.embeddedObject();
+            if (2 != arr.nFields()) {
+                uasserted(ErrorCodes::BadValue, "$slice array wrong size");
+            }
+
+            BSONObjIterator it(arr);
+            int skip = it.next().numberInt();
+            // Skip over 'skip'.
+            it.next();
+            int limit = it.next().numberInt();
+            if (limit <= 0) {
+                uasserted(ErrorCodes::BadValue, "$slice limit must be positive");
+            }
+            addNodeAtPath(node, path, path, std::make_unique<ProjectionASTNodeSlice>(skip, limit));
+            return true;
+        } else {
+            parseAsAggExpression(node, path, obj, expCtx, parseContext);
+        }
+    } else if (e2.fieldNameStringData() == "$elemMatch") {
+        // Validate $elemMatch arguments and dependencies.
+        if (Object != e2.type()) {
+            uasserted(ErrorCodes::BadValue, "elemMatch: Invalid argument, object required.");
+        }
+
+        if (parseContext->hasPositional) {
+            uasserted(ErrorCodes::BadValue, "Cannot specify positional operator and $elemMatch.");
+        }
+
+        if (str::contains(path, '.')) {
+            uasserted(ErrorCodes::BadValue, "Cannot use $elemMatch projection on a nested field.");
+        }
+
+        // Create a MatchExpression for the elemMatch.
+        BSONObj elemMatchObj = BSON(path << obj);
+        invariant(elemMatchObj.isOwned());
+
+        // Not parsing the match expression itself because it would require an
+        // expressionContext + operationContext.
+
+        addNodeAtPath(node, path, path, std::make_unique<ProjectionASTNodeElemMatch>(elemMatchObj));
+        parseContext->hasElemMatch = true;
+        return true;
+    } else {
+        parseAsAggExpression(node, path, obj, expCtx, parseContext);
+        return true;
+    }
+
+    MONGO_UNREACHABLE;
+}
+
+void parseSubObject(ProjectionASTNodeInternalBase* node,
+                    const BSONObj& subObj,
+                    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                    ParseContext* parseCtx) {
+    for (auto elem : subObj) {
+        invariant(elem.fieldName()[0] != '$');
+        // Dotted paths in a sub-object have already been disallowed in
+        // ParsedAggregationProjection's parsing.
+        invariant(elem.fieldNameStringData().find('.') == std::string::npos);
+
+        switch (elem.type()) {
+            case BSONType::Bool:
+            case BSONType::NumberInt:
+            case BSONType::NumberLong:
+            case BSONType::NumberDouble:
+            case BSONType::NumberDecimal: {
+                if (elem.trueValue()) {
+                    FieldPath path(elem.fieldNameStringData());
+                    addNodeAtPath(node, path, path, std::make_unique<ProjectionASTNodeInclusion>());
+                    uassert(ErrorCodes::BadValue,
+                            "Should be inclusion",
+                            !parseCtx->type || *parseCtx->type == ProjectType::kInclusion);
+                    parseCtx->type = ProjectType::kInclusion;
+                } else {
+                    FieldPath path(elem.fieldNameStringData());
+                    addNodeAtPath(node, path, path, std::make_unique<ProjectionASTNodeExclusion>());
+
+                    if (elem.fieldNameStringData() != "_id") {
+                        uassert(ErrorCodes::BadValue,
+                                "Should be exclusion",
+                                !parseCtx->type || *parseCtx->type == ProjectType::kExclusion);
+                        parseCtx->type = ProjectType::kExclusion;
+                    }
+                }
+                break;
+            }
+            case BSONType::Object: {
+                // This is either an expression, or a nested specification.
+                if (parseObjectAsExpression(node, elem.fieldName(), elem.Obj(), expCtx, parseCtx)) {
+                    // It was an expression.
+                    break;
+                }
+
+                std::cout << "ian: parsing subobject (non-expression) " << elem.Obj() << std::endl;
+
+                // The field name might be a dotted path. If so, we need to keep adding children
+                // to our tree until we create a child that represents that path.
+                auto newChild =
+                    std::make_unique<ProjectionASTNodeInternalBase>(Children<ProjectionASTNode>{});
+                auto newChildRaw = newChild.get();
+                addNodeAtPath(node,
+                              FieldPath(elem.fieldName()),
+                              FieldPath(elem.fieldName()),
+                              std::move(newChild));
+
+                parseSubObject(newChildRaw, elem.Obj(), expCtx, parseCtx);
+                break;
+            }
+            default: {
+                // Treat it as a literal value (aka expression)
+                auto expr =
+                    Expression::parseExpression(expCtx, elem.Obj(), expCtx->variablesParseState);
+                FieldPath path(elem.fieldName());
+                addNodeAtPath(node,
+                              path,
+                              path,
+                              std::make_unique<ProjectionASTNodeOtherExpression>(elem.Obj(), expr));
+            }
+        }
+    }
+}
+
 FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
                                               const MatchExpression* const query) {
 
@@ -122,143 +278,110 @@ FindProjectionAST FindProjectionAST::fromBson(const BSONObj& b,
 
     ProjectionASTNodeInternal root(Children<ProjectionASTNode>{});
 
-    bool hasPositional = false;
-    bool hasElemMatch = false;
-    boost::optional<ProjectType> type;
+    ParseContext parseCtx;
     for (auto&& elem : b) {
-        if (elem.type() == BSONType::Object) {
-            FieldPath path(elem.fieldNameStringData());
+        switch (elem.type()) {
+            case BSONType::Bool:
+            case BSONType::NumberInt:
+            case BSONType::NumberLong:
+            case BSONType::NumberDouble:
+            case BSONType::NumberDecimal: {
+                if (elem.trueValue()) {
+                    if (!isPositionalOperator(elem.fieldName())) {
+                        FieldPath path(elem.fieldNameStringData());
+                        addNodeAtPath(
+                            &root, path, path, std::make_unique<ProjectionASTNodeInclusion>());
+                    } else {
+                        FieldPath path(str::before(elem.fieldNameStringData(), ".$"));
+                        addNodeAtPath(
+                            &root, path, path, std::make_unique<ProjectionASTNodePositional>());
 
-            BSONObj obj = elem.embeddedObject();
-            BSONElement e2 = obj.firstElement();
+                        if (parseCtx.hasPositional) {
+                            uasserted(ErrorCodes::BadValue,
+                                      "Cannot specify more than one positional proj. per query.");
+                        }
 
-            if (e2.fieldNameStringData() == "$slice") {
-                if (e2.isNumber()) {
-                    // This is A-OK.
-                    addNodeAtPath(&root,
-                                  path,
-                                  path,
-                                  std::make_unique<ProjectionASTNodeSlice>(0, e2.numberInt()));
+                        if (parseCtx.hasElemMatch) {
+                            uasserted(ErrorCodes::BadValue,
+                                      "Cannot specify positional operator and $elemMatch.");
+                        }
 
-                } else if (e2.type() == Array) {
-                    BSONObj arr = e2.embeddedObject();
-                    if (2 != arr.nFields()) {
-                        uasserted(ErrorCodes::BadValue, "$slice array wrong size");
+                        StringData after = str::after(elem.fieldNameStringData(), ".$");
+                        if (after.find(".$"_sd) != std::string::npos) {
+                            str::stream ss;
+                            ss << "Positional projection '" << elem.fieldName() << "' contains "
+                               << "the positional operator more than once.";
+                            uasserted(ErrorCodes::BadValue, ss);
+                        }
+
+                        StringData matchfield = str::before(elem.fieldNameStringData(), '.');
+                        if (query && !hasPositionalOperatorMatch(query, matchfield)) {
+                            str::stream ss;
+                            ss << "Positional projection '" << elem.fieldName() << "' does not "
+                               << "match the query document.";
+                            uasserted(ErrorCodes::BadValue, ss);
+                        }
+
+                        parseCtx.hasPositional = true;
                     }
 
-                    BSONObjIterator it(arr);
-                    int skip = it.next().numberInt();
-                    // Skip over 'skip'.
-                    it.next();
-                    int limit = it.next().numberInt();
-                    if (limit <= 0) {
-                        uasserted(ErrorCodes::BadValue, "$slice limit must be positive");
-                    }
-                    addNodeAtPath(
-                        &root, path, path, std::make_unique<ProjectionASTNodeSlice>(skip, limit));
+                    uassert(ErrorCodes::BadValue,
+                            "Should be inclusion",
+                            !parseCtx.type || *parseCtx.type == ProjectType::kInclusion);
+                    parseCtx.type = ProjectType::kInclusion;
                 } else {
-                    uasserted(ErrorCodes::BadValue,
-                              "$slice only supports numbers and [skip, limit] arrays");
+                    invariant(!elem.trueValue());
+                    FieldPath path(elem.fieldNameStringData());
+                    addNodeAtPath(
+                        &root, path, path, std::make_unique<ProjectionASTNodeExclusion>());
+
+                    if (elem.fieldNameStringData() != "_id") {
+                        uassert(ErrorCodes::BadValue,
+                                "Should be exclusion",
+                                !parseCtx.type || *parseCtx.type == ProjectType::kExclusion);
+                        parseCtx.type = ProjectType::kExclusion;
+                    }
                 }
-            } else if (e2.fieldNameStringData() == "$elemMatch") {
-                // Validate $elemMatch arguments and dependencies.
-                if (Object != e2.type()) {
-                    uasserted(ErrorCodes::BadValue,
-                              "elemMatch: Invalid argument, object required.");
+                break;
+            }
+            case BSONType::Object: {
+                // This is either an expression, or a nested specification.
+                if (parseObjectAsExpression(
+                        &root, elem.fieldName(), elem.Obj(), expCtx, &parseCtx)) {
+                    // It was an expression.
+                    break;
                 }
 
-                if (hasPositional) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot specify positional operator and $elemMatch.");
-                }
+                std::cout << "ian: parsing subobject (non-expression) " << elem.Obj() << std::endl;
 
-                if (str::contains(elem.fieldName(), '.')) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot use $elemMatch projection on a nested field.");
-                }
+                // The field name might be a dotted path. If so, we need to keep adding children
+                // to our tree until we create a child that represents that path.
+                auto newChild =
+                    std::make_unique<ProjectionASTNodeInternalBase>(Children<ProjectionASTNode>{});
+                auto newChildRaw = newChild.get();
+                addNodeAtPath(&root,
+                              FieldPath(elem.fieldName()),
+                              FieldPath(elem.fieldName()),
+                              std::move(newChild));
 
-                // Create a MatchExpression for the elemMatch.
-                BSONObj elemMatchObj = elem.wrap();
-                invariant(elemMatchObj.isOwned());
-
-                // Not parsing the match expression itself because it would require an
-                // expressionContext + operationContext.
-
-                addNodeAtPath(
-                    &root, path, path, std::make_unique<ProjectionASTNodeElemMatch>(elemMatchObj));
-                hasElemMatch = true;
-            } else {
-                // Some other expression which will get parsed later. Ideally we'd parse it into
-                // some kind of "expression syntax tree" here.
-                std::cout << "attempting to parse " << obj << std::endl;
-                auto expr = Expression::parseExpression(expCtx, obj, expCtx->variablesParseState);
+                parseSubObject(newChildRaw, elem.Obj(), expCtx, &parseCtx);
+                break;
+            }
+            default: {
+                // Treat it as a literal value (aka expression)
+                auto expr =
+                    Expression::parseExpression(expCtx, elem.Obj(), expCtx->variablesParseState);
+                FieldPath path(elem.fieldName());
                 addNodeAtPath(&root,
                               path,
                               path,
-                              std::make_unique<ProjectionASTNodeOtherExpression>(obj, expr));
-
-                uassert(ErrorCodes::BadValue,
-                        "Should be inclusion",
-                        !type || *type == ProjectType::kInclusion);
-                type = ProjectType::kInclusion;
-            }
-
-        } else if (elem.trueValue()) {
-            if (!isPositionalOperator(elem.fieldName())) {
-                FieldPath path(elem.fieldNameStringData());
-                addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodeInclusion>());
-            } else {
-                FieldPath path(str::before(elem.fieldNameStringData(), ".$"));
-                addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodePositional>());
-
-                if (hasPositional) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot specify more than one positional proj. per query.");
-                }
-
-                if (hasElemMatch) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot specify positional operator and $elemMatch.");
-                }
-
-                StringData after = str::after(elem.fieldNameStringData(), ".$");
-                if (after.find(".$"_sd) != std::string::npos) {
-                    str::stream ss;
-                    ss << "Positional projection '" << elem.fieldName() << "' contains "
-                       << "the positional operator more than once.";
-                    uasserted(ErrorCodes::BadValue, ss);
-                }
-
-                StringData matchfield = str::before(elem.fieldNameStringData(), '.');
-                if (query && !hasPositionalOperatorMatch(query, matchfield)) {
-                    str::stream ss;
-                    ss << "Positional projection '" << elem.fieldName() << "' does not "
-                       << "match the query document.";
-                    uasserted(ErrorCodes::BadValue, ss);
-                }
-
-                hasPositional = true;
-            }
-
-            uassert(ErrorCodes::BadValue,
-                    "Should be inclusion",
-                    !type || *type == ProjectType::kInclusion);
-            type = ProjectType::kInclusion;
-        } else {
-            invariant(!elem.trueValue());
-            FieldPath path(elem.fieldNameStringData());
-            addNodeAtPath(&root, path, path, std::make_unique<ProjectionASTNodeExclusion>());
-
-            if (elem.fieldNameStringData() != "_id") {
-                uassert(ErrorCodes::BadValue,
-                        "Should be exclusion",
-                        !type || *type == ProjectType::kExclusion);
-                type = ProjectType::kExclusion;
+                              std::make_unique<ProjectionASTNodeOtherExpression>(elem.Obj(), expr));
             }
         }
     }
 
-    return FindProjectionAST{std::move(root), type ? *type : ProjectType::kExclusion};
+    return FindProjectionAST{std::move(root),
+                             parseCtx.type ? *parseCtx.type : ProjectType::kExclusion};
 }
 
 namespace {
