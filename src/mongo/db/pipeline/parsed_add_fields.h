@@ -125,6 +125,10 @@ public:
      */
     Document applyProjection(const Document& inputDoc) const final;
 
+    virtual void fromAST(const ProjectionASTCommon& ast) {
+        MONGO_UNREACHABLE;
+    }
+
 private:
     /**
      * Attempts to parse 'objSpec' as an expression like {$add: [...]}. Adds a computed field to
