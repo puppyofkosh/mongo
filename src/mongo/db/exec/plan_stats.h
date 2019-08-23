@@ -453,6 +453,11 @@ struct IndexKeyStats : public SpecificStats {
     SpecificStats* clone() const final {
         return new IndexKeyStats(*this);
     }
+
+    uint64_t estimateObjectSizeInBytes() const {
+        // TODO: temp
+        return 0;
+    }
 };
 
 struct IndexScanStats : public SpecificStats {
