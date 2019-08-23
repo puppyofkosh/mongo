@@ -75,4 +75,31 @@ void QueryPlannerCommon::reverseScans(QuerySolutionNode* node) {
     }
 }
 
+std::vector<std::string> QueryPlannerCommon::extractSortKeyMetaFieldsFromProjection(
+    const BSONObj& proj) {
+    std::vector<std::string> sortKeyMetaFields;
+    BSONObjIterator it(proj);
+
+    while (it.more()) {
+        BSONElement e = it.next();
+        if (e.type() == BSONType::Object) {
+            BSONObj obj = e.embeddedObject();
+            invariant(1 == obj.nFields());
+
+            BSONElement e2 = obj.firstElement();
+            if (e2.fieldNameStringData() == "$meta") {
+                invariant(e2.type() == BSONType::String);
+                if (e2.valuestr() == QueryRequest::metaSortKey) {
+                    invariant(std::find(sortKeyMetaFields.begin(),
+                                        sortKeyMetaFields.end(),
+                                        e.fieldName()) == sortKeyMetaFields.end());
+                    sortKeyMetaFields.push_back(e.fieldName());
+                }
+            }
+        }
+    }
+
+    return sortKeyMetaFields;
+}
+
 }  // namespace mongo

@@ -47,6 +47,7 @@
 #include "mongo/db/exec/ensure_sorted.h"
 #include "mongo/db/exec/fetch.h"
 #include "mongo/db/exec/geo_near.h"
+#include "mongo/db/exec/index_key.h"
 #include "mongo/db/exec/index_scan.h"
 #include "mongo/db/exec/limit.h"
 #include "mongo/db/exec/merge_sort.h"
@@ -143,6 +144,16 @@ PlanStage* buildStages(OperationContext* opCtx,
                 return nullptr;
             }
             return new SortKeyGeneratorStage(cq.getExpCtx(), childStage, ws, keyGenNode->sortSpec);
+        }
+        case STAGE_INDEX_KEY: {
+            auto indexKeyNode = static_cast<const IndexKeyNode*>(root);
+            unique_ptr<PlanStage> childStage{
+                buildStages(opCtx, collection, cq, qsol, indexKeyNode->children[0], ws)};
+            if (nullptr == childStage) {
+                return nullptr;
+            }
+            return new IndexKeyStage(
+                opCtx, std::move(indexKeyNode->sortKeyMetaFields), ws, std::move(childStage));
         }
         case STAGE_PROJECTION_DEFAULT: {
             auto pn = static_cast<const ProjectionNodeDefault*>(root);

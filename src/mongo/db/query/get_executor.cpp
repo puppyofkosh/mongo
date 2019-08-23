@@ -46,6 +46,7 @@
 #include "mongo/db/exec/delete.h"
 #include "mongo/db/exec/eof.h"
 #include "mongo/db/exec/idhack.h"
+#include "mongo/db/exec/index_key.h"
 #include "mongo/db/exec/multi_plan.h"
 #include "mongo/db/exec/projection.h"
 #include "mongo/db/exec/record_store_fast_count.h"
@@ -388,23 +389,33 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
                 root.release());
         }
 
-        // There might be a projection. The idhack stage will always fetch the full
-        // document, so we don't support covered projections. However, we might use the
-        // simple inclusion fast path.
-        if (nullptr != canonicalQuery->getProj()) {
+        // Add a SortKeyGeneratorStage if there is a $meta sortKey projection.
+        if (canonicalQuery->getProj() && canonicalQuery->getProj()->wantSortKey()) {
+            root = std::make_unique<SortKeyGeneratorStage>(
+                canonicalQuery->getExpCtx(),
+                root.release(),
+                ws,
+                canonicalQuery->getQueryRequest().getSort());
+        }
 
-            // Add a SortKeyGeneratorStage if there is a $meta sortKey projection.
-            if (canonicalQuery->getProj()->wantSortKey()) {
-                root = std::make_unique<SortKeyGeneratorStage>(
-                    canonicalQuery->getExpCtx(),
-                    root.release(),
-                    ws,
-                    canonicalQuery->getQueryRequest().getSort());
-            }
-
+        if (canonicalQuery->getQueryRequest().returnKey()) {
+            // If returnKey was requested, add IndexKeyStage to return only the index keys in the
+            // resulting documents. If a projection was also specified, it will be ignored, with
+            // the exception the $meta sortKey projection, which can be used along with the
+            // returnKey.
+            root = std::make_unique<IndexKeyStage>(
+                opCtx,
+                QueryPlannerCommon::extractSortKeyMetaFieldsFromProjection(
+                    canonicalQuery->getProj() ? canonicalQuery->getProj()->getProjObj()
+                                              : BSONObj()),
+                ws,
+                std::move(root));
+        } else if (nullptr != canonicalQuery->getProj()) {
+            // There might be a projection. The idhack stage will always fetch the full
+            // document, so we don't support covered projections. However, we might use the
+            // simple inclusion fast path.
             // Stuff the right data into the params depending on what proj impl we use.
             if (canonicalQuery->getProj()->requiresDocument() ||
-                canonicalQuery->getProj()->wantIndexKey() ||
                 canonicalQuery->getProj()->wantSortKey() ||
                 canonicalQuery->getProj()->hasDottedFieldPath()) {
                 root = std::make_unique<ProjectionStageDefault>(

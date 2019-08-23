@@ -67,6 +67,8 @@ enum StageType {
 
     STAGE_IDHACK,
 
+    STAGE_INDEX_KEY,
+
     STAGE_IXSCAN,
     STAGE_LIMIT,
 

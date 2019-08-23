@@ -447,6 +447,14 @@ struct IDHackStats : public SpecificStats {
     size_t docsExamined;
 };
 
+struct IndexKeyStats : public SpecificStats {
+    IndexKeyStats() {}
+
+    SpecificStats* clone() const final {
+        return new IndexKeyStats(*this);
+    }
+};
+
 struct IndexScanStats : public SpecificStats {
     IndexScanStats()
         : indexVersion(0),
