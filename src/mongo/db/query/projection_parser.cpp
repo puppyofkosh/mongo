@@ -35,8 +35,6 @@
 namespace mongo {
 namespace projection_ast {
 namespace {
-// TODO: SERVER-42421 Replace BadValue with numeric error code throughout this file.
-
 void addNodeAtPathHelper(ProjectionPathASTNode* root,
                          const FieldPath& path,
                          size_t componentIndex,
@@ -80,7 +78,6 @@ void addNodeAtPath(ProjectionPathASTNode* root,
 }
 
 bool isPositionalOperator(const char* fieldName) {
-    // TODO: SERVER-42421: Deal with special cases of $id, $ref, and $db.
     return str::endsWith(fieldName, ".$");
 }
 
@@ -139,7 +136,7 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
 
             // Before converting to FieldPath make sure this is not a positional operator.
             uassert(
-                ErrorCodes::BadValue,
+                31271,
                 "$slice and positional projection are not allowed together",
                 !(isPositionalOperator(elem.fieldName()) && e2.fieldNameStringData() == "$slice"));
 
@@ -155,7 +152,7 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
                 } else if (e2.type() == BSONType::Array) {
                     BSONObj arr = e2.embeddedObject();
                     if (2 != arr.nFields()) {
-                        uasserted(ErrorCodes::BadValue, "$slice array wrong size");
+                        uasserted(31272, "$slice array argument should be of form [skip, limit]");
                     }
 
                     BSONObjIterator it(arr);
@@ -182,14 +179,12 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
                                   std::make_unique<ProjectionSliceASTNode>(skipElt.numberInt(),
                                                                            limitElt.numberInt()));
                 } else {
-                    uasserted(ErrorCodes::BadValue,
-                              "$slice only supports numbers and [skip, limit] arrays");
+                    uasserted(31273, "$slice only supports numbers and [skip, limit] arrays");
                 }
             } else if (e2.fieldNameStringData() == "$elemMatch") {
                 // Validate $elemMatch arguments and dependencies.
                 if (BSONType::Object != e2.type()) {
-                    uasserted(ErrorCodes::BadValue,
-                              "elemMatch: Invalid argument, object required.");
+                    uasserted(31274, "elemMatch: Invalid argument, object required.");
                 }
 
                 if (hasPositional) {
@@ -197,8 +192,7 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
                 }
 
                 if (str::contains(elem.fieldName(), '.')) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot use $elemMatch projection on a nested field.");
+                    uasserted(31275, "Cannot use $elemMatch projection on a nested field.");
                 }
 
                 // Create a MatchExpression for the elemMatch.
@@ -235,28 +229,24 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
                 addNodeAtPath(&root, path, std::make_unique<BooleanConstantASTNode>(true));
             } else {
                 if (hasPositional) {
-                    uasserted(ErrorCodes::BadValue,
-                              "Cannot specify more than one positional proj. per query.");
+                    uasserted(31276, "Cannot specify more than one positional proj. per query.");
                 }
 
                 if (hasElemMatch) {
                     uasserted(31256, "Cannot specify positional operator and $elemMatch.");
                 }
 
-                StringData after = str::after(elem.fieldNameStringData(), ".$");
-                if (after.find(".$"_sd) != std::string::npos) {
-                    str::stream ss;
-                    ss << "Positional projection '" << elem.fieldName() << "' contains "
-                       << "the positional operator more than once.";
-                    uasserted(ErrorCodes::BadValue, ss);
-                }
+                uassert(31270,
+                        "Positional projection can only be used at the end of a path. For example: "
+                        "a.b.$",
+                        !str::contains(elem.fieldNameStringData(), ".$."));
 
                 StringData matchField = str::before(elem.fieldNameStringData(), '.');
                 if (!query || !hasPositionalOperatorMatch(query, matchField)) {
                     str::stream ss;
                     ss << "Positional projection '" << elem.fieldName() << "' does not "
                        << "match the query document.";
-                    uasserted(ErrorCodes::BadValue, ss);
+                    uasserted(31277, ss);
                 }
 
                 FieldPath path(str::before(elem.fieldNameStringData(), ".$"));

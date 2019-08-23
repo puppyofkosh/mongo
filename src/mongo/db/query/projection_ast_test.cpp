@@ -130,7 +130,6 @@ TEST_F(ProjectionASTTest, TestCloningWithPositionalAndSlice) {
     assertCanClone(std::move(proj));
 }
 
-// Can't use $elemMatch in projections which use the positional projection.
 TEST_F(ProjectionASTTest, TestCloningWithElemMatch) {
     Projection proj =
         parseWithDefaultPolicies(fromjson("{'a.b': 1, b: 1, f: {$elemMatch: {foo: 'bar'}}}"));
@@ -193,7 +192,7 @@ TEST_F(ProjectionASTTest, ParserErrorsOnCollisionNestedFieldLast) {
         parseWithDefaultPolicies(fromjson("{a: 1, d: 1, 'a.b': 1}")), DBException, 31249);
 }
 
-TEST_F(ProjectionASTTest, ParserErrorsOnInvalidSlice) {
+TEST_F(ProjectionASTTest, ParserErrorsOnInvalidSliceArguments) {
     ASSERT_THROWS_CODE(parseWithDefaultPolicies(fromjson("{a: {$slice: ['not a number', 123]}}")),
                        DBException,
                        31257);
@@ -204,6 +203,75 @@ TEST_F(ProjectionASTTest, ParserErrorsOnInvalidSlice) {
 
     ASSERT_THROWS_CODE(
         parseWithDefaultPolicies(fromjson("{a: {$slice: [123, -5]}}")), DBException, 31259);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnSliceWithWrongNumberOfArguments) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a': {$slice: []}}")), DBException, 31272);
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a': {$slice: [1, 2, 3]}}")), DBException, 31272);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnSliceWithWrongArgumentType) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a': {$slice: 'hello world'}}")), DBException, 31273);
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a': {$slice: {foo: 1}}}")), DBException, 31273);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnInvalidElemMatchArgument) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{a: {$elemMatch: []}}")), DBException, 31274);
+
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{a: {$elemMatch: 'string'}}")), DBException, 31274);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnElemMatchOnDottedField) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a.b': {$elemMatch: {b: 1}}}")), DBException, 31275);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnMultiplePositionalInOnePath) {
+    ASSERT_THROWS_CODE(parseWithDefaultPolicies(fromjson("{'a.$.b.$': 1}"), fromjson("{a: 1}")),
+                       DBException,
+                       31270);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnMultiplePositionalInProjection) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a.$': 1, 'b.$': 1}"), fromjson("{a: 1, b: 1}")),
+        DBException,
+        31276);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnPositionalProjectionNotMatchingQuery) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a.$': 1}"), fromjson("{b: 1}")), DBException, 31277);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnSubfieldPrefixedByDbRefField) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a.$idFOOBAR': 1}")), DBException, 16410);
+}
+
+TEST_F(ProjectionASTTest, ParserErrorsOnPositionalAndSlice) {
+    ASSERT_THROWS_CODE(
+        parseWithDefaultPolicies(fromjson("{'a.$': {$slice: 1}}")), DBException, 31271);
+}
+
+TEST_F(ProjectionASTTest, ParserDoesNotErrorOnPositionalOfDbRefField) {
+    Projection idProj =
+        parseWithDefaultPolicies(fromjson("{'a.$id.b.$': 1, x: 1}"), fromjson("{'a.$id.b': 1}"));
+    ASSERT(idProj.type() == ProjectType::kInclusion);
+
+    Projection dbProj =
+        parseWithDefaultPolicies(fromjson("{'a.$db.b.$': 1, x: 1}"), fromjson("{'a.$db.b': 1}"));
+    ASSERT(dbProj.type() == ProjectType::kInclusion);
+
+    Projection refProj =
+        parseWithDefaultPolicies(fromjson("{'a.$ref.b.$': 1, x: 1}"), fromjson("{'a.$ref.b': 1}"));
+    ASSERT(refProj.type() == ProjectType::kInclusion);
 }
 
 }  // namespace
