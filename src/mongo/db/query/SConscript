@@ -28,6 +28,7 @@ env.Library(
         "planner_wildcard_helpers.cpp",
         "planner_analysis.cpp",
         "planner_ixselect.cpp",
+        "projection.cpp",
         "projection_ast_util.cpp",
         "projection_parser.cpp",
         "query_planner.cpp",

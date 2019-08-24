@@ -241,6 +241,7 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     // Validate the projection if there is one.
     if (!_qr->getProj().isEmpty()) {
 
+        std::cout << "ian: proj is " << _qr->getProj() << std::endl;
         Status newParserStatus = Status::OK();
         try {
             auto proj = projection_ast::parse(

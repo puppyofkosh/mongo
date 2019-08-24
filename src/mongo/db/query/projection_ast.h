@@ -269,27 +269,6 @@ private:
     bool _val;
 };
 
-//
-// Not part of the AST, just used to represent a projection by itself.
-//
-enum class ProjectType { kInclusion, kExclusion };
-class Projection {
-public:
-    Projection(ProjectionPathASTNode root, ProjectType type)
-        : _root(std::move(root)), _type(type) {}
-
-    ProjectionPathASTNode* root() {
-        return &_root;
-    }
-
-    ProjectType type() const {
-        return _type;
-    }
-
-private:
-    ProjectionPathASTNode _root;
-    ProjectType _type;
-};
 
 }  // namespace projection_ast
 }  // namespace mongo
