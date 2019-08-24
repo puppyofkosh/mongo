@@ -37,6 +37,7 @@
 #include "mongo/db/matcher/extensions_callback_noop.h"
 #include "mongo/db/query/collation/collator_interface.h"
 #include "mongo/db/query/parsed_projection.h"
+#include "mongo/db/query/projection.h"
 #include "mongo/db/query/query_request.h"
 
 namespace mongo {
@@ -120,8 +121,8 @@ public:
     const QueryRequest& getQueryRequest() const {
         return *_qr;
     }
-    const ParsedProjection* getProj() const {
-        return _proj.get();
+    const projection_ast::Projection* getProj() const {
+        return _newProjection.get_ptr();
     }
     const CollatorInterface* getCollator() const {
         return _collator.get();
@@ -206,6 +207,9 @@ private:
     std::unique_ptr<ParsedProjection> _proj;
 
     std::unique_ptr<CollatorInterface> _collator;
+
+    // TODO: rename
+    boost::optional<projection_ast::Projection> _newProjection;
 
     bool _canHaveNoopMatchNodes = false;
 };

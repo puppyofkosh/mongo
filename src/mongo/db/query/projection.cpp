@@ -36,8 +36,8 @@ namespace projection_ast {
 
 namespace {
 
-// Does "broad" analysis on the projection, like what metadata is required or if the entire document
-// is needed to perform the projection.
+// Does "broad" analysis on the projection, whether the entire document is needed to perform the
+// projection.
 class ProjectionAnalysisVisitor : public ProjectionASTVisitor {
 public:
     void visit(MatchExpressionASTNode* node) {}
@@ -63,19 +63,6 @@ public:
         if (!(meta && meta->getMetaType() == DocumentMetadataFields::MetaType::kSortKey)) {
             _deps.requiresDocument = true;
         }
-
-        if (meta) {
-            const auto type = meta->getMetaType();
-            if (type == DocumentMetadataFields::MetaType::kTextScore) {
-                _deps.needsTextScore = true;
-            } else if (type == DocumentMetadataFields::MetaType::kGeoNearDist) {
-                _deps.needsGeoPoint = true;
-            } else if (type == DocumentMetadataFields::MetaType::kGeoNearPoint) {
-                _deps.needsGeoPoint = true;
-            } else if (type == DocumentMetadataFields::MetaType::kSortKey) {
-                _deps.needsSortKey = true;
-            }
-        }
     }
     void visit(BooleanConstantASTNode* node) {}
 
@@ -95,7 +82,8 @@ struct VisitorContext {
 // Uses a DepsTracker to determine which fields are required from the projection.
 class DepsAnalysisPreVisitor : public ProjectionASTVisitor {
 public:
-    DepsAnalysisPreVisitor(VisitorContext* ctx) : _context(ctx) {}
+    DepsAnalysisPreVisitor(VisitorContext* ctx)
+        : _fieldDependencyTracker(DepsTracker::kAllMetadataAvailable), _context(ctx) {}
 
     void visit(MatchExpressionASTNode* node) {}
     void visit(ProjectionPathASTNode* node) {
@@ -147,6 +135,10 @@ public:
                                         _fieldDependencyTracker.fields.end());
     }
 
+    DepsTracker* depsTracker() {
+        return &_fieldDependencyTracker;
+    }
+
 private:
     std::string getFullFieldName() {
         invariant(!_context->fieldNames.empty());
@@ -177,7 +169,7 @@ public:
     virtual void visit(MatchExpressionASTNode* node) {}
     virtual void visit(ProjectionPathASTNode* node) {
         // Make sure all of the children used their field names.
-        for (auto && s : _context->fieldNames.top()) {
+        for (auto&& s : _context->fieldNames.top()) {
             std::cout << "ian: remaining field names " << s << std::endl;
         }
         invariant(_context->fieldNames.top().empty());
@@ -230,6 +222,15 @@ public:
         ProjectionDependencies res = _generalAnalysisVisitor.extractResult();
         if (_projectionType == ProjectType::kInclusion) {
             res.requiredFields = _preVisitor.requiredFields();
+
+            auto* depsTracker = _preVisitor.depsTracker();
+            res.needsTextScore =
+                depsTracker->getNeedsMetadata(DepsTracker::MetadataType::TEXT_SCORE);
+            res.needsGeoPoint =
+                depsTracker->getNeedsMetadata(DepsTracker::MetadataType::GEO_NEAR_POINT);
+            res.needsGeoDistance =
+                depsTracker->getNeedsMetadata(DepsTracker::MetadataType::GEO_NEAR_DISTANCE);
+            res.needsSortKey = depsTracker->getNeedsMetadata(DepsTracker::MetadataType::SORT_KEY);
         }
 
         return res;
@@ -260,8 +261,8 @@ ProjectionDependencies Projection::analyzeProjection(ProjectionPathASTNode* root
     return deps;
 }
 
-Projection::Projection(ProjectionPathASTNode root, ProjectType type)
-    : _root(std::move(root)), _type(type), _deps(analyzeProjection(&_root, type)) {}
+Projection::Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson)
+    : _root(std::move(root)), _type(type), _deps(analyzeProjection(&_root, type)), _bson(bson) {}
 
 }  // namespace projection_ast
 }  // namespace mongo

@@ -900,7 +900,7 @@ void ProjectionNode::computeProperties() {
     for (auto&& sort : inputSorts) {
         bool sortCompatible = true;
         for (auto&& key : sort) {
-            if (!parsed.isFieldRetainedExactly(key.fieldNameStringData())) {
+            if (!proj.isFieldRetainedExactly(key.fieldNameStringData())) {
                 sortCompatible = false;
                 break;
             }
@@ -924,7 +924,7 @@ ProjectionNode* ProjectionNodeDefault::clone() const {
         std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
         fullExpression,
         projection,
-        parsed);
+        proj);
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
 }
@@ -934,7 +934,7 @@ ProjectionNode* ProjectionNodeCovered::clone() const {
         std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
         fullExpression,
         projection,
-        parsed,
+        proj,
         coveredKeyObj);
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
@@ -945,7 +945,7 @@ ProjectionNode* ProjectionNodeSimple::clone() const {
         std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
         fullExpression,
         projection,
-        parsed);
+        proj);
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
 }

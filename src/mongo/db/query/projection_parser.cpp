@@ -285,7 +285,7 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
         addNodeAtPath(&root, "_id", std::make_unique<BooleanConstantASTNode>(true));
     }
 
-    return Projection{std::move(root), type ? *type : ProjectType::kExclusion};
+    return Projection{std::move(root), type ? *type : ProjectType::kExclusion, obj};
 }
 
 Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,

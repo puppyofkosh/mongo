@@ -64,7 +64,7 @@ public:
     // Static function for determining what the projection depends on.
     static ProjectionDependencies analyzeProjection(ProjectionPathASTNode* root, ProjectType type);
     
-    Projection(ProjectionPathASTNode root, ProjectType type);
+    Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson);
 
     ProjectionPathASTNode* root() {
         return &_root;
@@ -95,8 +95,9 @@ public:
      *
      * Returned StringDatas are owned by, and have the lifetime of, the ParsedProjection.
      */
-    const std::vector<StringData>& getRequiredFields() const {
-        MONGO_UNREACHABLE;
+    const std::vector<std::string>& getRequiredFields() const {
+        invariant(_type == ProjectType::kInclusion);
+        return *_deps.requiredFields;
     }
 
     /**
@@ -132,7 +133,8 @@ public:
      * 'a.b', and the projection {'a.b': 0} will not preserve the element located at 'a'.
      */
     bool isFieldRetainedExactly(StringData path) {
-        MONGO_UNREACHABLE;
+        // TODO: ian
+        return false;
     }
 
     /**
@@ -143,11 +145,18 @@ public:
         return _deps.hasDottedPath;
     }
 
+    // TODO SERVER-42423: Delete this thing and _bson.
+    BSONObj getProjObj() const {
+        return _bson;
+    }
+
 private:
     ProjectionPathASTNode _root;
     ProjectType _type;
 
     ProjectionDependencies _deps;
+    
+    BSONObj _bson;
 };
 
 }  // namespace projection_ast

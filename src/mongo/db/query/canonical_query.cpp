@@ -244,8 +244,8 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         std::cout << "ian: proj is " << _qr->getProj() << std::endl;
         Status newParserStatus = Status::OK();
         try {
-            auto proj = projection_ast::parse(
-                expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{});
+            _newProjection.emplace(projection_ast::parse(
+                expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{}));
         } catch (const DBException& e) {
             newParserStatus = e.toStatus();
         }
