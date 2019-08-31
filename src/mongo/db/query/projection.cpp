@@ -29,6 +29,7 @@
 
 #include "mongo/db/query/projection.h"
 
+#include "mongo/base/exact_cast.h"
 #include "mongo/db/query/projection_ast_walker.h"
 
 namespace mongo {
@@ -36,8 +37,8 @@ namespace projection_ast {
 
 namespace {
 
-// Does "broad" analysis on the projection, whether the entire document is needed to perform the
-// projection.
+// Does "broad" analysis on the projection, about whether the entire document, or details from the
+// match expression are needed and so on.
 class ProjectionAnalysisVisitor : public ProjectionASTVisitor {
 public:
     void visit(MatchExpressionASTNode* node) {}
@@ -50,16 +51,20 @@ public:
         _deps.requiresMatchDetails = true;
     }
 
-    void visit(ProjectionSliceASTNode* node) {}
-    void visit(ProjectionElemMatchASTNode* node) {}
+    void visit(ProjectionSliceASTNode* node) {
+        _deps.requiresDocument = true;
+    }
+    void visit(ProjectionElemMatchASTNode* node) {
+        _deps.requiresDocument = true;
+    }
     void visit(ExpressionASTNode* node) {
-        // A projection with any expression can't be covered
+        // In general, projections with expressions can't be covered.
 
         const Expression* expr = node->expression();
         const ExpressionMeta* meta = dynamic_cast<const ExpressionMeta*>(expr);
 
         // Only {$meta: 'sortKey'} projections can be covered. Projections with any other expression
-        // need to be covered. TODO: ian test this or ban it and do it in a follow up ticket.
+        // need to be covered.
         if (!(meta && meta->getMetaType() == DocumentMetadataFields::MetaType::kSortKey)) {
             _deps.requiresDocument = true;
         }
@@ -100,24 +105,28 @@ public:
 
     void visit(ProjectionPositionalASTNode* node) {
         // Positional projection on a.b.c.$ may actually modify a, a.b, a.b.c, etc.
-        // Treat all of these as dependencies.
+        // Treat the top-level field as a dependency.
 
-        // TODO: This may not be strictly necessary.
-        addAllSubPathsAsDependencies();
+        addTopLevelPathAsDependency();
     }
     void visit(ProjectionSliceASTNode* node) {
         // find() $slice on a.b.c may modify a, a.b, and a.b.c if they're all arrays.
-        // Add them all as dependencies.
+        // Treat the top-level field as a dependency.
 
-        // TODO: This may not be strictly necessary.
-        addAllSubPathsAsDependencies();
+        addTopLevelPathAsDependency();
     }
     void visit(ProjectionElemMatchASTNode* node) {
         _fieldDependencyTracker.fields.insert(getFullFieldName());
     }
     void visit(ExpressionASTNode* node) {
-        // The output of a computed field depends on whether that field is an array.
-        _fieldDependencyTracker.fields.insert(getFullFieldName());
+        const auto fieldName = getFullFieldName();
+
+        // The output of an expression on a dotted path depends on whether that field is an array.
+        invariant(node->parent());
+        if (!node->parent()->isRoot()) {
+            _fieldDependencyTracker.fields.insert(fieldName);
+        }
+
         node->expression()->addDependencies(&_fieldDependencyTracker);
     }
     void visit(BooleanConstantASTNode* node) {
@@ -149,11 +158,9 @@ private:
         return FieldPath::getFullyQualifiedPath(_context->currentPath, lastPart);
     }
 
-    void addAllSubPathsAsDependencies() {
+    void addTopLevelPathAsDependency() {
         FieldPath fp(getFullFieldName());
-        for (size_t i = 0; i < fp.getPathLength(); i++) {
-            _fieldDependencyTracker.fields.insert(fp.getSubpath(i).toString());
-        }
+        _fieldDependencyTracker.fields.insert(fp.getSubpath(0).toString());
     }
 
     DepsTracker _fieldDependencyTracker;
@@ -169,9 +176,6 @@ public:
     virtual void visit(MatchExpressionASTNode* node) {}
     virtual void visit(ProjectionPathASTNode* node) {
         // Make sure all of the children used their field names.
-        for (auto&& s : _context->fieldNames.top()) {
-            std::cout << "ian: remaining field names " << s << std::endl;
-        }
         invariant(_context->fieldNames.top().empty());
         _context->fieldNames.pop();
 
@@ -258,11 +262,93 @@ ProjectionDependencies Projection::analyzeProjection(ProjectionPathASTNode* root
     if (type == ProjectType::kExclusion) {
         deps.requiresDocument = true;
     }
+
     return deps;
 }
 
 Projection::Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson)
     : _root(std::move(root)), _type(type), _deps(analyzeProjection(&_root, type)), _bson(bson) {}
+
+namespace {
+
+/**
+ * Given an AST node for a projection and a path, return the node representing the deepeset
+ * common point between the path and the tree, as well as the index into the path following that
+ * node.
+ *
+ * Example:
+ * Node representing tree {a: {b: 1, c: {d: 1}}}
+ * path: "a.b"
+ * Returns: inclusion node for {b: 1} and index 2.
+ *
+ * Node representing tree {a: {b: 0, c: 0}}
+ * path: "a.b.c.d"
+ * Returns: exclusion node for {c: 0} and index 3.
+ */
+std::pair<const ASTNode*, size_t> findCommonPoint(const ASTNode* astNode,
+                                                  const FieldPath& path,
+                                                  size_t pathIndex) {
+    if (pathIndex >= path.getPathLength()) {
+        // We've run out of path. That is, the projection goes deeper than the path requested.
+        // For example, the projection may be {a.b : 1} and the requested field might be 'a'.
+        return std::make_pair(astNode, path.getPathLength());
+    }
+
+    // What type of node is this?
+    const auto* pathNode = exact_pointer_cast<const ProjectionPathASTNode*>(astNode);
+    if (pathNode) {
+        // We can look up children.
+        StringData field = path.getFieldName(pathIndex);
+        const auto* child = pathNode->getChild(field);
+
+        if (!child) {
+            // This node is the common point.
+            return std::make_pair(astNode, pathIndex);
+        }
+
+        return findCommonPoint(child, path, pathIndex + 1);
+    }
+
+    // This is a terminal node with respect to the projection. We can't traverse any more, so
+    // return the current node.
+    return std::make_pair(astNode, pathIndex);
+}
+
+}  // namespace
+
+bool Projection::isFieldRetainedExactly(StringData path) {
+    FieldPath fieldPath(path);
+
+    const auto [node, pathIndex] = findCommonPoint(&_root, fieldPath, 0);
+
+    // Check the type of the node. If it's a 'path' node then we know more
+    // inclusions/exclusions are beneath it.
+    if (const auto* pathNode = exact_pointer_cast<const ProjectionPathASTNode*>(node)) {
+        // There are two cases:
+        // (I) we project a subfield of the requested path. E.g. the projection is
+        // {a.b.c: <value>} and the requested path was 'a.b'. In this case, the field is not
+        // necessarily retained exactly.
+        if (pathIndex == fieldPath.getPathLength()) {
+            return false;
+        }
+
+        // (II) We project a 'sibling' field of the requested path. E.g. the projection is
+        // {a.b.x: <value>} and the requested path is 'a.b.c'. The common point would be at 'a.b'.
+        // In this case, the field is retained exactly if the projection is an exclusion.
+        if (pathIndex < fieldPath.getPathLength()) {
+            invariant(!pathNode->getChild(fieldPath.getFieldName(pathIndex)));
+            return _type == ProjectType::kExclusion;
+        }
+
+        MONGO_UNREACHABLE;
+    } else if (const auto* boolNode = exact_pointer_cast<const BooleanConstantASTNode*>(node)) {
+        // If the node is an inclusion, then we include a subfield of the requested path.
+        // E.g. projection is {a.b: 1} and requested field is 'a.b.c'.
+        return boolNode->value();
+    }
+
+    return false;
+}
 
 }  // namespace projection_ast
 }  // namespace mongo

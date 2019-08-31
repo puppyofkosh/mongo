@@ -122,7 +122,7 @@ public:
         return *_qr;
     }
     const projection_ast::Projection* getProj() const {
-        return _newProjection.get_ptr();
+        return _proj.get_ptr();
     }
     const CollatorInterface* getCollator() const {
         return _collator.get();
@@ -204,12 +204,9 @@ private:
     // _root points into _qr->getFilter()
     std::unique_ptr<MatchExpression> _root;
 
-    std::unique_ptr<ParsedProjection> _proj;
-
     std::unique_ptr<CollatorInterface> _collator;
 
-    // TODO: rename
-    boost::optional<projection_ast::Projection> _newProjection;
+    boost::optional<projection_ast::Projection> _proj;
 
     bool _canHaveNoopMatchNodes = false;
 };

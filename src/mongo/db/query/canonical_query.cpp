@@ -40,6 +40,7 @@
 #include "mongo/db/query/canonical_query_encoder.h"
 #include "mongo/db/query/collation/collator_factory_interface.h"
 #include "mongo/db/query/indexability.h"
+#include "mongo/db/query/projection_ast_util.h"
 #include "mongo/db/query/projection_parser.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/util/log.h"
@@ -240,33 +241,9 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
     // Validate the projection if there is one.
     if (!_qr->getProj().isEmpty()) {
-
         std::cout << "ian: proj is " << _qr->getProj() << std::endl;
-        Status newParserStatus = Status::OK();
-        try {
-            _newProjection.emplace(projection_ast::parse(
-                expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{}));
-        } catch (const DBException& e) {
-            newParserStatus = e.toStatus();
-        }
-
-        ParsedProjection* pp;
-        Status projStatus = ParsedProjection::make(opCtx, _qr->getProj(), _root.get(), &pp);
-
-        // The new parser is slightly stricter than the old one.
-        if (newParserStatus.isOK() && !projStatus.isOK()) {
-            log() << "proj is " << _qr->getProj();
-            uasserted(ErrorCodes::InternalError, "projection error mismatch");
-        }
-
-        if (!projStatus.isOK()) {
-            return projStatus;
-        }
-
-        if (!newParserStatus.isOK()) {
-            return newParserStatus;
-        }
-        _proj.reset(pp);
+        _proj.emplace(projection_ast::parse(
+            expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{}));
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {

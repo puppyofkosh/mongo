@@ -132,10 +132,7 @@ public:
      * and false otherwise. For example, the projection {a: 1} will preserve the element located at
      * 'a.b', and the projection {'a.b': 0} will not preserve the element located at 'a'.
      */
-    bool isFieldRetainedExactly(StringData path) {
-        // TODO: ian
-        return false;
-    }
+    bool isFieldRetainedExactly(StringData path);
 
     /**
      * Returns true if the project contains any paths with multiple path pieces (e.g. returns true
