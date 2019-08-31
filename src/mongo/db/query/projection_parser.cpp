@@ -126,6 +126,7 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
     bool hasPositional = false;
     bool hasElemMatch = false;
     boost::optional<ProjectType> type;
+
     for (auto&& elem : obj) {
         idSpecified |=
             elem.fieldNameStringData() == "_id" || elem.fieldNameStringData().startsWith("_id.");
@@ -249,7 +250,15 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
                     uasserted(31277, ss);
                 }
 
-                FieldPath path(str::before(elem.fieldNameStringData(), ".$"));
+                StringData fullPathSd = elem.fieldNameStringData();
+                // At least '.$' (2 characters).
+                invariant(fullPathSd.size() > 2);
+
+                // Cut off the trailing '.$' (2 characters).
+                StringData pathWithoutPositionalOperator =
+                    fullPathSd.substr(0, fullPathSd.size() - 2);
+
+                FieldPath path(pathWithoutPositionalOperator);
                 invariant(query);
                 addNodeAtPath(
                     &root,
