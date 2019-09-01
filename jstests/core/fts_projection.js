@@ -68,7 +68,7 @@ assert.neq(-1, results[0].b);
 var results = t.find({a: /text/}, {score: {$meta: "textScore"}}).toArray();
 // printjson(results);
 
-// textScore proj. with nested fields
+// textScore projection with nested fields.
 results = t.find({$text: {$search: "textual content -irrelevant"}}, {
                'realScore': {$meta: "textScore"},
                'x.y': {$meta: "textScore"}

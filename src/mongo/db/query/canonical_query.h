@@ -204,9 +204,9 @@ private:
     // _root points into _qr->getFilter()
     std::unique_ptr<MatchExpression> _root;
 
-    std::unique_ptr<CollatorInterface> _collator;
-
     boost::optional<projection_ast::Projection> _proj;
+
+    std::unique_ptr<CollatorInterface> _collator;
 
     bool _canHaveNoopMatchNodes = false;
 };

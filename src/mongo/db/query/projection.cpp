@@ -49,10 +49,6 @@ public:
     }
     void visit(ProjectionPositionalASTNode* node) {
         _deps.requiresMatchDetails = true;
-
-        // Because the syntax of positional projection involves a '.$', they are considered to have
-        // a dotted path.
-        _deps.hasDottedPath = true;
     }
 
     void visit(ProjectionSliceASTNode* node) {
@@ -68,7 +64,7 @@ public:
         const ExpressionMeta* meta = dynamic_cast<const ExpressionMeta*>(expr);
 
         // Only {$meta: 'sortKey'} projections can be covered. Projections with any other expression
-        // need to be covered.
+        // need the document.
         if (!(meta && meta->getMetaType() == DocumentMetadataFields::MetaType::kSortKey)) {
             _deps.requiresDocument = true;
         }
@@ -128,18 +124,16 @@ public:
         // The output of an expression on a dotted path depends on whether that field is an array.
         invariant(node->parent());
         if (!node->parent()->isRoot()) {
-            _fieldDependencyTracker.fields.insert(fieldName);
+            _fieldDependencyTracker.fields.insert(std::move(fieldName));
         }
 
         node->expression()->addDependencies(&_fieldDependencyTracker);
     }
     void visit(BooleanConstantASTNode* node) {
         // For inclusions, we depend on the field.
+        auto fieldName = getFullFieldName();
         if (node->value()) {
-            _fieldDependencyTracker.fields.insert(getFullFieldName());
-        } else {
-            // Still pop the field name from the stack.
-            _context->fieldNames.top().pop_front();
+            _fieldDependencyTracker.fields.insert(std::move(fieldName));
         }
     }
 
@@ -206,7 +200,7 @@ private:
 class DepsWalker {
 public:
     DepsWalker(ProjectType type)
-        : _preVisitor(&context), _postVisitor(&context), _projectionType(type) {}
+        : _depsPreVisitor(&context), _depsPostVisitor(&context), _projectionType(type) {}
 
     void preVisit(ASTNode* node) {
         node->acceptVisitor(&_generalAnalysisVisitor);
@@ -214,13 +208,13 @@ public:
         // Only do this analysis on inclusion projections, as exclusion projections always require
         // the whole document.
         if (_projectionType == ProjectType::kInclusion) {
-            node->acceptVisitor(&_preVisitor);
+            node->acceptVisitor(&_depsPreVisitor);
         }
     }
 
     void postVisit(ASTNode* node) {
         if (_projectionType == ProjectType::kInclusion) {
-            node->acceptVisitor(&_postVisitor);
+            node->acceptVisitor(&_depsPostVisitor);
         }
     }
 
@@ -229,9 +223,9 @@ public:
     ProjectionDependencies done() {
         ProjectionDependencies res = _generalAnalysisVisitor.extractResult();
         if (_projectionType == ProjectType::kInclusion) {
-            res.requiredFields = _preVisitor.requiredFields();
+            res.requiredFields = _depsPreVisitor.requiredFields();
 
-            auto* depsTracker = _preVisitor.depsTracker();
+            auto* depsTracker = _depsPreVisitor.depsTracker();
             res.needsTextScore =
                 depsTracker->getNeedsMetadata(DepsTracker::MetadataType::TEXT_SCORE);
             res.needsGeoPoint =
@@ -248,8 +242,8 @@ private:
     VisitorContext context;
     ProjectionAnalysisVisitor _generalAnalysisVisitor;
 
-    DepsAnalysisPreVisitor _preVisitor;
-    DepsAnalysisPostVisitor _postVisitor;
+    DepsAnalysisPreVisitor _depsPreVisitor;
+    DepsAnalysisPostVisitor _depsPostVisitor;
 
     ProjectType _projectionType;
 };
@@ -276,7 +270,7 @@ Projection::Projection(ProjectionPathASTNode root, ProjectType type, const BSONO
 namespace {
 
 /**
- * Given an AST node for a projection and a path, return the node representing the deepeset
+ * Given an AST node for a projection and a path, return the node representing the deepest
  * common point between the path and the tree, as well as the index into the path following that
  * node.
  *
@@ -298,7 +292,6 @@ std::pair<const ASTNode*, size_t> findCommonPoint(const ASTNode* astNode,
         return std::make_pair(astNode, path.getPathLength());
     }
 
-    // What type of node is this?
     const auto* pathNode = exact_pointer_cast<const ProjectionPathASTNode*>(astNode);
     if (pathNode) {
         // We can look up children.

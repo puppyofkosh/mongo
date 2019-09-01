@@ -416,9 +416,7 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
             // document, so we don't support covered projections. However, we might use the
             // simple inclusion fast path.
             // Stuff the right data into the params depending on what proj impl we use.
-            if (canonicalQuery->getProj()->requiresDocument() ||
-                canonicalQuery->getProj()->wantSortKey() ||
-                canonicalQuery->getProj()->hasDottedFieldPath()) {
+            if (!canonicalQuery->getProj()->isSimple()) {
                 root = std::make_unique<ProjectionStageDefault>(
                     opCtx,
                     canonicalQuery->getProj()->getProjObj(),

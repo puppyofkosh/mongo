@@ -293,21 +293,12 @@ void geoSkipValidationOn(const std::set<StringData>& twoDSphereFields,
 /**
  * If any field is missing from the list of fields the projection wants, we are not covered.
  */
-auto isCoveredOrAlreadyFetched(const vector<std::string>& fields,
-                               const QuerySolutionNode& solnRoot) {
+auto providesAllFields(const vector<std::string>& fields, const QuerySolutionNode& solnRoot) {
     for (size_t i = 0; i < fields.size(); ++i) {
         if (!solnRoot.hasField(fields[i]))
             return false;
     }
     return true;
-}
-
-/**
- * Checks all properties that exclude a projection from being simple.
- */
-auto isSimpleProjection(const CanonicalQuery& query) {
-    return !query.getProj()->wantSortKey() && !query.getProj()->hasDottedFieldPath() &&
-        !query.getProj()->requiresDocument();
 }
 
 /**
@@ -361,19 +352,20 @@ std::unique_ptr<ProjectionNode> analyzeProjection(const CanonicalQuery& query,
     // we add a fetch stage if we are not covered.
     if (!solnRoot->fetched() &&
         (query.getProj()->requiresDocument() ||
-         (!isCoveredOrAlreadyFetched(query.getProj()->getRequiredFields(), *solnRoot)))) {
+         (!providesAllFields(query.getProj()->getRequiredFields(), *solnRoot)))) {
         auto fetch = std::make_unique<FetchNode>();
         fetch->children.push_back(solnRoot.release());
         solnRoot = std::move(fetch);
     }
 
     // There are two projection fast paths available for simple inclusion projections that don't
-    // need an index key or sort key, don't have any dotted-path inclusions, and don't have the
-    // 'requiresDocument' property: the ProjectionNodeSimple fast-path for plans that have a fetch
-    // stage and the ProjectionNodeCovered for plans with an index scan that the projection can
-    // cover. Plans that don't meet all the requirements for these fast path projections will all
-    // use ProjectionNodeDefault, which is able to handle all projections, covered or otherwise.
-    if (isSimpleProjection(query)) {
+    // need a sort key, don't have any dotted-path inclusions, don't have a positional projection,
+    // and don't have the 'requiresDocument' property: the ProjectionNodeSimple fast-path for plans
+    // that have a fetch stage and the ProjectionNodeCovered for plans with an index scan that the
+    // projection can cover. Plans that don't meet all the requirements for these fast path
+    // projections will all use ProjectionNodeDefault, which is able to handle all projections,
+    // covered or otherwise.
+    if (query.getProj()->isSimple()) {
         // If the projection is simple, but not covered, use 'ProjectionNodeSimple'.
         if (solnRoot->fetched()) {
             return std::make_unique<ProjectionNodeSimple>(

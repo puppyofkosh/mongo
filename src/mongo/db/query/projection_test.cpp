@@ -47,10 +47,9 @@ using namespace mongo;
 
 using projection_ast::Projection;
 
-//
-// creation function
-//
-
+/**
+ * Helper for creating projections.
+ */
 projection_ast::Projection createProjection(const BSONObj& query, const BSONObj& projObj) {
     QueryTestServiceContext serviceCtx;
     auto opCtx = serviceCtx.makeOperationContext();
@@ -73,10 +72,6 @@ projection_ast::Projection createProjection(const char* queryStr, const char* pr
     return createProjection(query, projObj);
 }
 
-//
-// Failure to create a parsed projection is expected
-//
-
 void assertInvalidProjection(const char* queryStr, const char* projStr) {
     BSONObj query = fromjson(queryStr);
     BSONObj projObj = fromjson(projStr);
@@ -89,15 +84,11 @@ void assertInvalidProjection(const char* queryStr, const char* projStr) {
         MatchExpressionParser::parse(query, std::move(expCtx));
     ASSERT(statusWithMatcher.isOK());
     std::unique_ptr<MatchExpression> queryMatchExpr = std::move(statusWithMatcher.getValue());
-    ParsedProjection* out = nullptr;
-    Status status = ParsedProjection::make(opCtx.get(), projObj, queryMatchExpr.get(), &out);
-    std::unique_ptr<ParsedProjection> destroy(out);
-    ASSERT(!status.isOK());
+    ASSERT_THROWS(
+        projection_ast::parse(expCtx, projObj, queryMatchExpr.get(), query, ProjectionPolicies{}),
+        DBException);
 }
 
-// canonical_query.cpp will invoke ParsedProjection::make only when
-// the projection spec is non-empty. This test case is included for
-// completeness and do not reflect actual usage.
 TEST(QueryProjectionTest, MakeId) {
     Projection proj(createProjection("{}", "{}"));
     ASSERT(proj.requiresDocument());
@@ -133,7 +124,6 @@ TEST(QueryProjectionTest, MakeSingleFieldIDCovered) {
     ASSERT_EQUALS(fields[0], "_id");
 }
 
-// boolean support is undocumented
 TEST(QueryProjectionTest, MakeSingleFieldCoveredBoolean) {
     Projection proj(createProjection("{}", "{_id: 0, a: true}"));
     ASSERT(!proj.requiresDocument());
@@ -142,7 +132,6 @@ TEST(QueryProjectionTest, MakeSingleFieldCoveredBoolean) {
     ASSERT_EQUALS(fields[0], "a");
 }
 
-// boolean support is undocumented
 TEST(QueryProjectionTest, MakeSingleFieldCoveredIdBoolean) {
     Projection proj(createProjection("{}", "{_id: false, a: 1}"));
     ASSERT(!proj.requiresDocument());
@@ -152,7 +141,7 @@ TEST(QueryProjectionTest, MakeSingleFieldCoveredIdBoolean) {
 }
 
 //
-// Positional operator validation
+// Positional operator validation.
 //
 
 TEST(QueryProjectionTest, InvalidPositionalOperatorProjections) {
@@ -207,22 +196,26 @@ TEST(QueryProjectionTest, ValidPositionalOperatorProjections) {
 TEST(QueryProjectionTest, InvalidPositionalProjectionDefaultPathMatchExpression) {
     QueryTestServiceContext serviceCtx;
     auto opCtx = serviceCtx.makeOperationContext();
+    const boost::intrusive_ptr<ExpressionContext> expCtx(
+        new ExpressionContext(opCtx.get(), nullptr));
+
     unique_ptr<MatchExpression> queryMatchExpr(new AlwaysFalseMatchExpression());
     ASSERT(nullptr == queryMatchExpr->path().rawData());
 
-    ParsedProjection* out = nullptr;
     BSONObj projObj = fromjson("{'a.$': 1}");
-    Status status = ParsedProjection::make(opCtx.get(), projObj, queryMatchExpr.get(), &out);
-    ASSERT(!status.isOK());
-    std::unique_ptr<ParsedProjection> destroy(out);
+    ASSERT_THROWS(projection_ast::parse(
+                      expCtx, projObj, queryMatchExpr.get(), BSONObj(), ProjectionPolicies{}),
+                  DBException);
 
     // Projecting onto empty field should fail.
     BSONObj emptyFieldProjObj = fromjson("{'.$': 1}");
-    status = ParsedProjection::make(opCtx.get(), emptyFieldProjObj, queryMatchExpr.get(), &out);
-    ASSERT(!status.isOK());
+    ASSERT_THROWS(
+        projection_ast::parse(
+            expCtx, emptyFieldProjObj, queryMatchExpr.get(), BSONObj(), ProjectionPolicies{}),
+        DBException);
 }
 
-TEST(QueryProjectionTest, ParsedProjectionDefaults) {
+TEST(QueryProjectionTest, ProjectionDefaults) {
     auto proj = createProjection("{}", "{}");
 
     ASSERT_FALSE(proj.wantSortKey());
@@ -284,7 +277,7 @@ TEST(QueryProjectionTest, SortKeyMetaAndElemMatch) {
 }
 
 //
-// Cases for ParsedProjection::isFieldRetainedExactly().
+// Cases for Projection::isFieldRetainedExactly().
 //
 
 TEST(QueryProjectionTest, InclusionProjectionPreservesChild) {
@@ -429,7 +422,7 @@ TEST(QueryProjectionTest, ProjectionOfFieldSimilarToIdIsNotSpecial) {
 }
 
 //
-// DBRef projections
+// DBRef projections.
 //
 
 TEST(QueryProjectionTest, DBRefProjections) {

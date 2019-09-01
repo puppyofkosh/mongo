@@ -82,7 +82,7 @@ public:
     }
 
     /**
-     * Is the full document required to compute this projection?
+     * Returns whether the full document required to compute this projection.
      */
     bool requiresDocument() const {
         return _deps.requiresDocument;
@@ -126,17 +126,18 @@ public:
      */
     bool isFieldRetainedExactly(StringData path);
 
-    /**
-     * Returns true if the project contains any paths with multiple path pieces (e.g. returns true
-     * for {_id: 0, "a.b": 1} and returns false for {_id: 0, a: 1, b: 1}).
-     */
-    bool hasDottedFieldPath() const {
-        return _deps.hasDottedPath;
-    }
-
     // TODO SERVER-42423: Delete this thing and _bson.
     BSONObj getProjObj() const {
         return _bson;
+    }
+
+    /**
+     * A projection is considered "simple" if it doesn't require the full document, operates only
+     * on top-level fields, has no positional projection, and doesn't require the sort key.
+     */
+    bool isSimple() const {
+        return !_deps.hasDottedPath && !_deps.requiresMatchDetails && !_deps.needsSortKey &&
+            !_deps.requiresDocument;
     }
 
 private:
