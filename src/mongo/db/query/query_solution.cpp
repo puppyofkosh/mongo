@@ -921,10 +921,7 @@ void ProjectionNode::cloneProjectionData(ProjectionNode* copy) const {
 
 ProjectionNode* ProjectionNodeDefault::clone() const {
     auto copy = std::make_unique<ProjectionNodeDefault>(
-        std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
-        fullExpression,
-        projection,
-        proj);
+        std::unique_ptr<QuerySolutionNode>(children[0]->clone()), fullExpression, projection, proj);
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
 }
@@ -942,10 +939,7 @@ ProjectionNode* ProjectionNodeCovered::clone() const {
 
 ProjectionNode* ProjectionNodeSimple::clone() const {
     auto copy = std::make_unique<ProjectionNodeSimple>(
-        std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
-        fullExpression,
-        projection,
-        proj);
+        std::unique_ptr<QuerySolutionNode>(children[0]->clone()), fullExpression, projection, proj);
     ProjectionNode::cloneProjectionData(copy.get());
     return copy.release();
 }

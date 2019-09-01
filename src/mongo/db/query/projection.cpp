@@ -49,6 +49,10 @@ public:
     }
     void visit(ProjectionPositionalASTNode* node) {
         _deps.requiresMatchDetails = true;
+
+        // Because the syntax of positional projection involves a '.$', they are considered to have
+        // a dotted path.
+        _deps.hasDottedPath = true;
     }
 
     void visit(ProjectionSliceASTNode* node) {

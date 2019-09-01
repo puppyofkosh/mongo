@@ -736,12 +736,10 @@ TEST(QuerySolutionTest, InclusionProjectionPreservesSort) {
     BSONObj projection = BSON("a" << 1);
     BSONObj match;
 
-    auto matchExprAndParsedProjection = createMatchExprAndProjection(match, projection);
+    auto matchExprAndProjection = createMatchExprAndProjection(match, projection);
 
-    ProjectionNodeDefault proj{std::move(node),
-                               *matchExprAndParsedProjection.first,
-                               projection,
-                               matchExprAndParsedProjection.second};
+    ProjectionNodeDefault proj{
+        std::move(node), *matchExprAndProjection.first, projection, matchExprAndProjection.second};
     proj.computeProperties();
 
     ASSERT_EQ(proj.getSort().size(), 1U);
@@ -755,12 +753,10 @@ TEST(QuerySolutionTest, ExclusionProjectionDoesNotPreserveSort) {
     BSONObj projection = BSON("a" << 0);
     BSONObj match;
 
-    auto matchExprAndParsedProjection = createMatchExprAndProjection(match, projection);
+    auto matchExprAndProjection = createMatchExprAndProjection(match, projection);
 
-    ProjectionNodeDefault proj{std::move(node),
-                               *matchExprAndParsedProjection.first,
-                               projection,
-                               matchExprAndParsedProjection.second};
+    ProjectionNodeDefault proj{
+        std::move(node), *matchExprAndProjection.first, projection, matchExprAndProjection.second};
     proj.computeProperties();
 
     ASSERT_EQ(proj.getSort().size(), 0U);
@@ -772,12 +768,10 @@ TEST(QuerySolutionTest, InclusionProjectionTruncatesSort) {
     BSONObj projection = BSON("a" << 1);
     BSONObj match;
 
-    auto matchExprAndParsedProjection = createMatchExprAndProjection(match, projection);
+    auto matchExprAndProjection = createMatchExprAndProjection(match, projection);
 
-    ProjectionNodeDefault proj{std::move(node),
-                               *matchExprAndParsedProjection.first,
-                               projection,
-                               matchExprAndParsedProjection.second};
+    ProjectionNodeDefault proj{
+        std::move(node), *matchExprAndProjection.first, projection, matchExprAndProjection.second};
     proj.computeProperties();
 
     ASSERT_EQ(proj.getSort().size(), 1U);
@@ -790,12 +784,10 @@ TEST(QuerySolutionTest, ExclusionProjectionTruncatesSort) {
     BSONObj projection = BSON("b" << 0);
     BSONObj match;
 
-    auto matchExprAndParsedProjection = createMatchExprAndProjection(match, projection);
+    auto matchExprAndProjection = createMatchExprAndProjection(match, projection);
 
-    ProjectionNodeDefault proj{std::move(node),
-                               *matchExprAndParsedProjection.first,
-                               projection,
-                               matchExprAndParsedProjection.second};
+    ProjectionNodeDefault proj{
+        std::move(node), *matchExprAndProjection.first, projection, matchExprAndProjection.second};
     proj.computeProperties();
 
     ASSERT_EQ(proj.getSort().size(), 1U);

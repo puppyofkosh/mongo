@@ -60,10 +60,9 @@ struct ProjectionDependencies {
 enum class ProjectType { kInclusion, kExclusion };
 class Projection {
 public:
-
     // Static function for determining what the projection depends on.
     static ProjectionDependencies analyzeProjection(ProjectionPathASTNode* root, ProjectType type);
-    
+
     Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson);
 
     ProjectionPathASTNode* root() {
@@ -100,13 +99,6 @@ public:
         return *_deps.requiredFields;
     }
 
-    /**
-     * Get the raw BSONObj proj spec obj
-     */
-    // const BSONObj& getProjObj() const {
-    //     return _source;
-    // }
-
     // TODO: ian: replace with a wantMetadata(MetaType) function.
     /**
      * Does the projection want geoNear metadata?  If so any geoNear stage should include them.
@@ -126,7 +118,7 @@ public:
     bool wantTextScore() const {
         return _deps.needsTextScore;
     }
-    
+
     /**
      * Returns true if the element at 'path' is preserved entirely after this projection is applied,
      * and false otherwise. For example, the projection {a: 1} will preserve the element located at
@@ -152,7 +144,7 @@ private:
     ProjectType _type;
 
     ProjectionDependencies _deps;
-    
+
     BSONObj _bson;
 };
 

@@ -241,7 +241,6 @@ Status CanonicalQuery::init(OperationContext* opCtx,
 
     // Validate the projection if there is one.
     if (!_qr->getProj().isEmpty()) {
-        std::cout << "ian: proj is " << _qr->getProj() << std::endl;
         _proj.emplace(projection_ast::parse(
             expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{}));
     }
