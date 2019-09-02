@@ -68,16 +68,10 @@ assert.neq(-1, results[0].b);
 var results = t.find({a: /text/}, {score: {$meta: "textScore"}}).toArray();
 // printjson(results);
 
-// textScore projection with nested fields.
-results = t.find({$text: {$search: "textual content -irrelevant"}}, {
-               'realScore': {$meta: "textScore"},
-               'x.y': {$meta: "textScore"}
-           }).toArray();
-for (let res of results) {
-    assert.close(scores[res._id], res.realScore);
-    // TODO: SERVER-42423: This should check res.x.y rather than a field name res."x.y"
-    assert.close(scores[res._id], res["x.y"]);
-}
+// No textScore proj. with nested fields
+assert.throws(function() {
+    t.find({$text: {$search: "blah"}}, {'x.y': {$meta: "textScore"}}).toArray();
+});
 
 // SERVER-12173
 // When $text operator is in $or, should evaluate first

@@ -243,6 +243,16 @@ Status CanonicalQuery::init(OperationContext* opCtx,
     if (!_qr->getProj().isEmpty()) {
         _proj.emplace(projection_ast::parse(
             expCtx, _qr->getProj(), _root.get(), _qr->getFilter(), ProjectionPolicies{}));
+
+        // Continue using the old parser as well, so that things like expressions are disallowed.
+        // TODO SERVER-42423: Usage of ParsedProjection can be removed once we have the new
+        // execution code in place.
+        ParsedProjection* pp;
+        Status projStatus = ParsedProjection::make(opCtx, _qr->getProj(), _root.get(), &pp);
+
+        if (!projStatus.isOK()) {
+            return projStatus;
+        }
     }
 
     if (_proj && _proj->wantSortKey() && _qr->getSort().isEmpty()) {
