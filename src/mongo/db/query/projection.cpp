@@ -49,6 +49,7 @@ public:
     }
     void visit(ProjectionPositionalASTNode* node) {
         _deps.requiresMatchDetails = true;
+        _deps.requiresDocument = true;
     }
 
     void visit(ProjectionSliceASTNode* node) {
@@ -58,8 +59,6 @@ public:
         _deps.requiresDocument = true;
     }
     void visit(ExpressionASTNode* node) {
-        // In general, projections with expressions can't be covered.
-
         const Expression* expr = node->expression();
         const ExpressionMeta* meta = dynamic_cast<const ExpressionMeta*>(expr);
 
@@ -90,7 +89,10 @@ public:
     DepsAnalysisPreVisitor(VisitorContext* ctx)
         : _fieldDependencyTracker(DepsTracker::kAllMetadataAvailable), _context(ctx) {}
 
-    void visit(MatchExpressionASTNode* node) {}
+    void visit(MatchExpressionASTNode* node) {
+        node->matchExpression()->addDependencies(&_fieldDependencyTracker);
+    }
+
     void visit(ProjectionPathASTNode* node) {
         if (node->parent()) {
             std::string path = _context->fieldNames.top().front();
@@ -158,7 +160,7 @@ private:
 
     void addTopLevelPathAsDependency() {
         FieldPath fp(getFullFieldName());
-        _fieldDependencyTracker.fields.insert(fp.getSubpath(0).toString());
+        _fieldDependencyTracker.fields.insert(fp.front().toString());
     }
 
     DepsTracker _fieldDependencyTracker;
@@ -178,10 +180,12 @@ public:
         _context->fieldNames.pop();
 
         if (!_context->currentPath.empty()) {
+            // Update the context variable tracking the current path being traversed.
             FieldPath fp(_context->currentPath);
             if (fp.getPathLength() == 1) {
                 _context->currentPath.clear();
             } else {
+                // Pop the last path element.
                 _context->currentPath = fp.getSubpath(fp.getPathLength() - 2).toString();
             }
         }
@@ -233,6 +237,9 @@ public:
             res.needsGeoDistance =
                 depsTracker->getNeedsMetadata(DepsTracker::MetadataType::GEO_NEAR_DISTANCE);
             res.needsSortKey = depsTracker->getNeedsMetadata(DepsTracker::MetadataType::SORT_KEY);
+        } else {
+            invariant(_projectionType == ProjectType::kExclusion);
+            res.requiresDocument = true;
         }
 
         return res;
@@ -248,21 +255,14 @@ private:
     ProjectType _projectionType;
 };
 
-}  // namespace
-
-
-ProjectionDependencies Projection::analyzeProjection(ProjectionPathASTNode* root,
-                                                     ProjectType type) {
+ProjectionDependencies analyzeProjection(ProjectionPathASTNode* root, ProjectType type) {
     DepsWalker walker(type);
     projection_ast_walker::walk(&walker, root);
-    ProjectionDependencies deps = walker.done();
-
-    if (type == ProjectType::kExclusion) {
-        deps.requiresDocument = true;
-    }
-
-    return deps;
+    return walker.done();
 }
+
+}  // namespace
+
 
 Projection::Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson)
     : _root(std::move(root)), _type(type), _deps(analyzeProjection(&_root, type)), _bson(bson) {}
@@ -289,7 +289,7 @@ std::pair<const ASTNode*, size_t> findCommonPoint(const ASTNode* astNode,
     if (pathIndex >= path.getPathLength()) {
         // We've run out of path. That is, the projection goes deeper than the path requested.
         // For example, the projection may be {a.b : 1} and the requested field might be 'a'.
-        return std::make_pair(astNode, path.getPathLength());
+        return {astNode, path.getPathLength()};
     }
 
     const auto* pathNode = exact_pointer_cast<const ProjectionPathASTNode*>(astNode);
@@ -300,7 +300,7 @@ std::pair<const ASTNode*, size_t> findCommonPoint(const ASTNode* astNode,
 
         if (!child) {
             // This node is the common point.
-            return std::make_pair(astNode, pathIndex);
+            return {astNode, pathIndex};
         }
 
         return findCommonPoint(child, path, pathIndex + 1);
@@ -308,7 +308,7 @@ std::pair<const ASTNode*, size_t> findCommonPoint(const ASTNode* astNode,
 
     // This is a terminal node with respect to the projection. We can't traverse any more, so
     // return the current node.
-    return std::make_pair(astNode, pathIndex);
+    return {astNode, pathIndex};
 }
 
 }  // namespace

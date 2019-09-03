@@ -60,9 +60,6 @@ struct ProjectionDependencies {
 enum class ProjectType { kInclusion, kExclusion };
 class Projection {
 public:
-    // Static function for determining what the projection depends on.
-    static ProjectionDependencies analyzeProjection(ProjectionPathASTNode* root, ProjectType type);
-
     Projection(ProjectionPathASTNode root, ProjectType type, const BSONObj& bson);
 
     ProjectionPathASTNode* root() {
