@@ -68,6 +68,7 @@ public:
     };
 
     TextOrStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 const FTSSpec& ftsSpec,
                 WorkingSet* ws,
                 const MatchExpression* filter,

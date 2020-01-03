@@ -52,6 +52,7 @@ class UpsertStage final : public UpdateStage {
 
 public:
     UpsertStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection,

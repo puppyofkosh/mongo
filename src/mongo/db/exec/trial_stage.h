@@ -59,6 +59,7 @@ public:
      * greater than 0, and 'minWorkAdvancedRatio' must be in the range (0,1].
      */
     TrialStage(OperationContext* opCtx,
+               const boost::intrusive_ptr<ExpressionContext>& expCtx,
                WorkingSet* ws,
                std::unique_ptr<PlanStage> trialPlan,
                std::unique_ptr<PlanStage> backupPlan,

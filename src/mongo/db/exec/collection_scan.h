@@ -54,6 +54,7 @@ public:
     static const char* kStageType;
 
     CollectionScan(OperationContext* opCtx,
+                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
                    const Collection* collection,
                    const CollectionScanParams& params,
                    WorkingSet* workingSet,

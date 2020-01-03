@@ -41,8 +41,10 @@ using std::vector;
 
 const char* QueuedDataStage::kStageType = "QUEUED_DATA";
 
-QueuedDataStage::QueuedDataStage(OperationContext* opCtx, WorkingSet* ws)
-    : PlanStage(kStageType, opCtx), _ws(ws) {}
+QueuedDataStage::QueuedDataStage(OperationContext* opCtx,
+                                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                 WorkingSet* ws)
+    : PlanStage(kStageType, opCtx, expCtx), _ws(ws) {}
 
 PlanStage::StageState QueuedDataStage::doWork(WorkingSetID* out) {
     if (isEOF()) {

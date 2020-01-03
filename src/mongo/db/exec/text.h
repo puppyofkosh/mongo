@@ -74,6 +74,7 @@ struct TextStageParams {
 class TextStage final : public PlanStage {
 public:
     TextStage(OperationContext* opCtx,
+              const boost::intrusive_ptr<ExpressionContext>& expCtx,
               const TextStageParams& params,
               WorkingSet* ws,
               const MatchExpression* filter);

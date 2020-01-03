@@ -77,6 +77,7 @@ public:
      * when possible. If 'shouldCache' is false, the plan cache will never be written.
      */
     MultiPlanStage(OperationContext* opCtx,
+                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
                    const Collection* collection,
                    CanonicalQuery* cq,
                    CachingMode cachingMode = CachingMode::AlwaysCache);

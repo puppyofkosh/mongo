@@ -57,10 +57,11 @@ using fts::MAX_WEIGHT;
 const char* TextStage::kStageType = "TEXT";
 
 TextStage::TextStage(OperationContext* opCtx,
+                     const boost::intrusive_ptr<ExpressionContext>& expCtx,
                      const TextStageParams& params,
                      WorkingSet* ws,
                      const MatchExpression* filter)
-    : PlanStage(kStageType, opCtx), _params(params) {
+    : PlanStage(kStageType, opCtx, expCtx), _params(params) {
     _children.emplace_back(buildTextTree(opCtx, ws, filter, params.wantTextScore));
     _specificStats.indexPrefix = _params.indexPrefix;
     _specificStats.indexName = _params.index->indexName();

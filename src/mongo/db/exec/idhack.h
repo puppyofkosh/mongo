@@ -49,11 +49,13 @@ class IDHackStage final : public RequiresIndexStage {
 public:
     /** Takes ownership of all the arguments -collection. */
     IDHackStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 CanonicalQuery* query,
                 WorkingSet* ws,
                 const IndexDescriptor* descriptor);
 
     IDHackStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 const BSONObj& key,
                 WorkingSet* ws,
                 const IndexDescriptor* descriptor);

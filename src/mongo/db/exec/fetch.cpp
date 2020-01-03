@@ -50,11 +50,12 @@ using std::vector;
 const char* FetchStage::kStageType = "FETCH";
 
 FetchStage::FetchStage(OperationContext* opCtx,
+                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> child,
                        const MatchExpression* filter,
                        const Collection* collection)
-    : RequiresCollectionStage(kStageType, opCtx, collection),
+    : RequiresCollectionStage(kStageType, opCtx, expCtx, collection),
       _ws(ws),
       _filter(filter),
       _idRetrying(WorkingSet::INVALID_ID) {

@@ -57,7 +57,10 @@ class MergeSortStageParams;
  */
 class MergeSortStage final : public PlanStage {
 public:
-    MergeSortStage(OperationContext* opCtx, const MergeSortStageParams& params, WorkingSet* ws);
+    MergeSortStage(OperationContext* opCtx,
+                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                   const MergeSortStageParams& params,
+                   WorkingSet* ws);
 
     void addChild(std::unique_ptr<PlanStage> child);
 

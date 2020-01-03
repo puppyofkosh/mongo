@@ -58,13 +58,14 @@ namespace mongo {
 const char* CachedPlanStage::kStageType = "CACHED_PLAN";
 
 CachedPlanStage::CachedPlanStage(OperationContext* opCtx,
+                                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                  Collection* collection,
                                  WorkingSet* ws,
                                  CanonicalQuery* cq,
                                  const QueryPlannerParams& params,
                                  size_t decisionWorks,
                                  std::unique_ptr<PlanStage> root)
-    : RequiresAllIndicesStage(kStageType, opCtx, collection),
+    : RequiresAllIndicesStage(kStageType, opCtx, expCtx, collection),
       _ws(ws),
       _canonicalQuery(cq),
       _plannerParams(params),

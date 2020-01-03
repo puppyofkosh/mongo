@@ -82,6 +82,7 @@ class UpdateStage : public RequiresMutableCollectionStage {
 
 public:
     UpdateStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection,
@@ -127,6 +128,7 @@ public:
 
 protected:
     UpdateStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx   ,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection);

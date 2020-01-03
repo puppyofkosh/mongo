@@ -95,7 +95,10 @@ struct DistinctParams {
  */
 class DistinctScan final : public RequiresIndexStage {
 public:
-    DistinctScan(OperationContext* opCtx, DistinctParams params, WorkingSet* workingSet);
+    DistinctScan(OperationContext* opCtx,
+                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                 DistinctParams params,
+                 WorkingSet* workingSet);
 
     StageState doWork(WorkingSetID* out) final;
     bool isEOF() final;

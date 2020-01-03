@@ -34,6 +34,7 @@
 
 #include "mongo/db/exec/plan_stats.h"
 #include "mongo/db/exec/working_set.h"
+#include "mongo/db/pipeline/expression_context.h"
 
 namespace mongo {
 
@@ -105,16 +106,21 @@ class RecordId;
  */
 class PlanStage {
 public:
-    PlanStage(const char* typeName, OperationContext* opCtx)
-        : _commonStats(typeName), _opCtx(opCtx) {}
+    PlanStage(const char* typeName,
+              OperationContext* opCtx,
+              const boost::intrusive_ptr<ExpressionContext>& expCtx)
+        : _commonStats(typeName), _opCtx(opCtx), _expCtx(expCtx) {}
 
 protected:
     /**
      * Obtain a PlanStage given a child stage. Called during the construction of derived
      * PlanStage types with a single direct descendant.
      */
-    PlanStage(OperationContext* opCtx, std::unique_ptr<PlanStage> child, const char* typeName)
-        : PlanStage(typeName, opCtx) {
+    PlanStage(OperationContext* opCtx,
+              const boost::intrusive_ptr<ExpressionContext>& expCtx,
+              std::unique_ptr<PlanStage> child,
+              const char* typeName)
+        : PlanStage(typeName, opCtx, expCtx) {
         _children.push_back(std::move(child));
     }
 
@@ -386,6 +392,7 @@ protected:
 
 private:
     OperationContext* _opCtx;
+    boost::intrusive_ptr<ExpressionContext> _expCtx;
 };
 
 }  // namespace mongo

@@ -45,6 +45,7 @@ namespace mongo {
 class SkipStage final : public PlanStage {
 public:
     SkipStage(OperationContext* opCtx,
+              const boost::intrusive_ptr<ExpressionContext>& expCtx,
               long long toSkip,
               WorkingSet* ws,
               std::unique_ptr<PlanStage> child);

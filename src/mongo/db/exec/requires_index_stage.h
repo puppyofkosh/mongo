@@ -49,6 +49,7 @@ class RequiresIndexStage : public RequiresCollectionStage {
 public:
     RequiresIndexStage(const char* stageType,
                        OperationContext* opCtx,
+                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        const IndexDescriptor* indexDescriptor,
                        WorkingSet* workingSet);
 

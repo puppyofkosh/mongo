@@ -72,6 +72,7 @@ namespace mongo {
 class ShardFilterStage final : public PlanStage {
 public:
     ShardFilterStage(OperationContext* opCtx,
+                     const boost::intrusive_ptr<ExpressionContext>& expCtx,
                      ScopedCollectionMetadata metadata,
                      WorkingSet* ws,
                      std::unique_ptr<PlanStage> child);

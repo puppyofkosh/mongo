@@ -44,9 +44,10 @@ using std::vector;
 const char* MultiIteratorStage::kStageType = "MULTI_ITERATOR";
 
 MultiIteratorStage::MultiIteratorStage(OperationContext* opCtx,
+                                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                        WorkingSet* ws,
                                        Collection* collection)
-    : RequiresCollectionStage(kStageType, opCtx, collection), _ws(ws) {}
+    : RequiresCollectionStage(kStageType, opCtx, expCtx, collection), _ws(ws) {}
 
 void MultiIteratorStage::addIterator(unique_ptr<RecordCursor> it) {
     _iterators.push_back(std::move(it));

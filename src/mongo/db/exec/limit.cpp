@@ -44,10 +44,11 @@ using std::vector;
 const char* LimitStage::kStageType = "LIMIT";
 
 LimitStage::LimitStage(OperationContext* opCtx,
+                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        long long limit,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> child)
-    : PlanStage(kStageType, opCtx), _ws(ws), _numToReturn(limit) {
+    : PlanStage(kStageType, opCtx, expCtx), _ws(ws), _numToReturn(limit) {
     _specificStats.limit = _numToReturn;
     _children.emplace_back(std::move(child));
 }

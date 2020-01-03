@@ -73,8 +73,11 @@ const char* CountScan::kStageType = "COUNT_SCAN";
 // When building the CountScan stage we take the keyPattern, index name, and multikey details from
 // the CountScanParams rather than resolving them via the IndexDescriptor, since these may differ
 // from the descriptor's contents.
-CountScan::CountScan(OperationContext* opCtx, CountScanParams params, WorkingSet* workingSet)
-    : RequiresIndexStage(kStageType, opCtx, params.indexDescriptor, workingSet),
+CountScan::CountScan(OperationContext* opCtx,
+                     const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                     CountScanParams params,
+                     WorkingSet* workingSet)
+    : RequiresIndexStage(kStageType, opCtx, expCtx, params.indexDescriptor, workingSet),
       _workingSet(workingSet),
       _keyPattern(std::move(params.keyPattern)),
       _shouldDedup(params.isMultiKey),

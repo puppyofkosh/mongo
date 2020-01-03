@@ -51,6 +51,7 @@ class SeekableRecordCursor;
 class FetchStage : public RequiresCollectionStage {
 public:
     FetchStage(OperationContext* opCtx,
+               const boost::intrusive_ptr<ExpressionContext>& expCtx,
                WorkingSet* ws,
                std::unique_ptr<PlanStage> child,
                const MatchExpression* filter,

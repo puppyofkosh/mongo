@@ -47,7 +47,10 @@ namespace mongo {
  */
 class MultiIteratorStage final : public RequiresCollectionStage {
 public:
-    MultiIteratorStage(OperationContext* opCtx, WorkingSet* ws, Collection* collection);
+    MultiIteratorStage(OperationContext* opCtx,
+                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                       WorkingSet* ws,
+                       Collection* collection);
 
     void addIterator(std::unique_ptr<RecordCursor> it);
 

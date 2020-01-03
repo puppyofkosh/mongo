@@ -47,12 +47,13 @@ namespace mongo {
 const char* TrialStage::kStageType = "TRIAL";
 
 TrialStage::TrialStage(OperationContext* opCtx,
+                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> trialPlan,
                        std::unique_ptr<PlanStage> backupPlan,
                        size_t maxTrialWorks,
                        double minWorkAdvancedRatio)
-    : PlanStage(kStageType, opCtx), _ws(ws) {
+    : PlanStage(kStageType, opCtx, expCtx), _ws(ws) {
     invariant(minWorkAdvancedRatio > 0);
     invariant(minWorkAdvancedRatio <= 1);
     invariant(maxTrialWorks > 0);

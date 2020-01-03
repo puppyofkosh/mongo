@@ -100,6 +100,7 @@ class DeleteStage final : public RequiresMutableCollectionStage {
 
 public:
     DeleteStage(OperationContext* opCtx,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 std::unique_ptr<DeleteStageParams> params,
                 WorkingSet* ws,
                 Collection* collection,

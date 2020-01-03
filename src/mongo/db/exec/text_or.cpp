@@ -53,11 +53,12 @@ using fts::FTSSpec;
 const char* TextOrStage::kStageType = "TEXT_OR";
 
 TextOrStage::TextOrStage(OperationContext* opCtx,
+                         const boost::intrusive_ptr<ExpressionContext>& expCtx,
                          const FTSSpec& ftsSpec,
                          WorkingSet* ws,
                          const MatchExpression* filter,
                          const Collection* collection)
-    : RequiresCollectionStage(kStageType, opCtx, collection),
+    : RequiresCollectionStage(kStageType, opCtx, expCtx, collection),
       _ftsSpec(ftsSpec),
       _ws(ws),
       _scoreIterator(_scores.end()),

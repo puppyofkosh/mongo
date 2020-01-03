@@ -47,7 +47,9 @@ namespace mongo {
  */
 class AndSortedStage final : public PlanStage {
 public:
-    AndSortedStage(OperationContext* opCtx, WorkingSet* ws);
+    AndSortedStage(OperationContext* opCtx,
+                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                   WorkingSet* ws);
 
     void addChild(std::unique_ptr<PlanStage> child);
 
