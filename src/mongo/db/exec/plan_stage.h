@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "mongo/db/exec/plan_stats.h"
+#include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set.h"
 #include "mongo/db/pipeline/expression_context.h"
 
@@ -109,7 +110,9 @@ public:
     PlanStage(const char* typeName,
               OperationContext* opCtx,
               const boost::intrusive_ptr<ExpressionContext>& expCtx)
-        : _commonStats(typeName), _opCtx(opCtx), _expCtx(expCtx) {}
+        : _commonStats(typeName), _opCtx(opCtx), _expCtx(expCtx) {
+        invariant(expCtx);
+    }
 
 protected:
     /**
@@ -197,7 +200,28 @@ public:
      * Stage returns StageState::ADVANCED if *out is set to the next unit of output.  Otherwise,
      * returns another value of StageState to indicate the stage's status.
      */
-    StageState work(WorkingSetID* out);
+    StageState work(WorkingSetID* out) {
+        invariant(_opCtx);
+        boost::optional<ScopedTimer> timer;
+        if (_expCtx->explain) {
+            timer.emplace(getClock(), &_commonStats.executionTimeMillis);
+        }
+        ++_commonStats.works;
+
+        StageState workResult = doWork(out);
+
+        if (StageState::ADVANCED == workResult) {
+            ++_commonStats.advanced;
+        } else if (StageState::NEED_TIME == workResult) {
+            ++_commonStats.needTime;
+        } else if (StageState::NEED_YIELD == workResult) {
+            ++_commonStats.needYield;
+        } else if (StageState::FAILURE == workResult) {
+            _commonStats.failed = true;
+        }
+
+        return workResult;
+    }
 
     /**
      * Returns true if no more work can be done on the query / out of results.

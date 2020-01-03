@@ -1143,7 +1143,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
     qr->setHint(request.getHint());
     qr->setExplain(explain);
 
-    const boost::intrusive_ptr<ExpressionContext> expCtx;
+    boost::intrusive_ptr<ExpressionContext> expCtx;
     auto statusWithCQ = CanonicalQuery::canonicalize(
         opCtx,
         std::move(qr),
@@ -1157,6 +1157,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
         return statusWithCQ.getStatus();
     }
     unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+    expCtx = cq->getExpCtx();
 
     const auto yieldPolicy = opCtx->inMultiDocumentTransaction() ? PlanExecutor::INTERRUPT_ONLY
                                                                  : PlanExecutor::YIELD_AUTO;
