@@ -43,11 +43,12 @@ using std::unique_ptr;
 using std::vector;
 
 NearStage::NearStage(OperationContext* opCtx,
+                     const boost::intrusive_ptr<ExpressionContext>& expCtx,
                      const char* typeName,
                      StageType type,
                      WorkingSet* workingSet,
                      const IndexDescriptor* indexDescriptor)
-    : RequiresIndexStage(typeName, opCtx, indexDescriptor, workingSet),
+    : RequiresIndexStage(typeName, opCtx, expCtx, indexDescriptor, workingSet),
       _workingSet(workingSet),
       _searchState(SearchState_Initializing),
       _nextIntervalStats(nullptr),

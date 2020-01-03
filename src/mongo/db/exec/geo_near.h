@@ -70,6 +70,7 @@ class GeoNear2DStage final : public NearStage {
 public:
     GeoNear2DStage(const GeoNearParams& nearParams,
                    OperationContext* opCtx,
+                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
                    WorkingSet* workingSet,
                    const IndexDescriptor* twoDIndex);
 
@@ -93,6 +94,7 @@ private:
                          const R2Annulus& fullBounds);
 
         PlanStage::StageState work(OperationContext* opCtx,
+                                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                    WorkingSet* workingSet,
                                    const IndexDescriptor* twoDIndex,
                                    WorkingSetID* out,
@@ -100,6 +102,7 @@ private:
 
     private:
         void buildIndexScan(OperationContext* opCtx,
+                            const boost::intrusive_ptr<ExpressionContext>& expCtx,
                             WorkingSet* workingSet,
                             const IndexDescriptor* twoDIndex);
 
@@ -136,6 +139,7 @@ class GeoNear2DSphereStage final : public NearStage {
 public:
     GeoNear2DSphereStage(const GeoNearParams& nearParams,
                          OperationContext* opCtx,
+                         const boost::intrusive_ptr<ExpressionContext>& expCtx,
                          WorkingSet* workingSet,
                          const IndexDescriptor* s2Index);
 
@@ -164,6 +168,7 @@ private:
         // Search for a document in neighbors at current level.
         // Return IS_EOF is such document exists and set the estimated distance to the nearest doc.
         PlanStage::StageState work(OperationContext* opCtx,
+                                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                    WorkingSet* workingSet,
                                    const IndexDescriptor* s2Index,
                                    WorkingSetID* out,
@@ -171,6 +176,7 @@ private:
 
     private:
         void buildIndexScan(OperationContext* opCtx,
+                            const boost::intrusive_ptr<ExpressionContext>& expCtx,
                             WorkingSet* workingSet,
                             const IndexDescriptor* s2Index);
 

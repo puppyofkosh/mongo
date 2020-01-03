@@ -284,6 +284,10 @@ public:
         std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> exec;
         BSONArrayBuilder firstBatch;
         {
+            const CollatorInterface* collator = nullptr;
+            const boost::intrusive_ptr<ExpressionContext> expCtx(
+                new ExpressionContext(opCtx, collator));
+
             AutoGetDb autoDb(opCtx, dbname, MODE_IS);
             Database* db = autoDb.getDb();
 
@@ -295,7 +299,7 @@ public:
                                                              cursorNss);
 
             auto ws = std::make_unique<WorkingSet>();
-            auto root = std::make_unique<QueuedDataStage>(opCtx, ws.get());
+            auto root = std::make_unique<QueuedDataStage>(opCtx, expCtx, ws.get());
 
             if (db) {
                 if (auto collNames = _getExactNameMatches(matcher.get())) {

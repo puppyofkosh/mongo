@@ -49,6 +49,7 @@ public:
      * the constructor will cause an invariant() to fail.
      */
     ChangeStreamProxyStage(OperationContext* opCtx,
+                           const boost::intrusive_ptr<ExpressionContext>& expCtx,
                            std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
                            WorkingSet* ws);
 

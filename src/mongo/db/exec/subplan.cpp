@@ -60,11 +60,12 @@ using std::vector;
 const char* SubplanStage::kStageType = "SUBPLAN";
 
 SubplanStage::SubplanStage(OperationContext* opCtx,
+                           const boost::intrusive_ptr<ExpressionContext>& expCtx,
                            const Collection* collection,
                            WorkingSet* ws,
                            const QueryPlannerParams& params,
                            CanonicalQuery* cq)
-    : RequiresAllIndicesStage(kStageType, opCtx, collection),
+    : RequiresAllIndicesStage(kStageType, opCtx, expCtx, collection),
       _ws(ws),
       _plannerParams(params),
       _query(cq) {
@@ -253,6 +254,7 @@ Status SubplanStage::choosePlanForSubqueries(PlanYieldPolicy* yieldPolicy) {
             invariant(_children.empty());
             _children.emplace_back(
                 std::make_unique<MultiPlanStage>(getOpCtx(),
+                                                 _expCtx,
                                                  collection(),
                                                  branchResult->canonicalQuery.get(),
                                                  MultiPlanStage::CachingMode::SometimesCache));
@@ -381,7 +383,7 @@ Status SubplanStage::choosePlanWholeQuery(PlanYieldPolicy* yieldPolicy) {
         // Many solutions. Create a MultiPlanStage to pick the best, update the cache,
         // and so on. The working set will be shared by all candidate plans.
         invariant(_children.empty());
-        _children.emplace_back(new MultiPlanStage(getOpCtx(), collection(), _query));
+        _children.emplace_back(new MultiPlanStage(getOpCtx(), _expCtx, collection(), _query));
         MultiPlanStage* multiPlanStage = static_cast<MultiPlanStage*>(child().get());
 
         for (size_t ix = 0; ix < solutions.size(); ++ix) {

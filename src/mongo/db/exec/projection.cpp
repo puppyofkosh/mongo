@@ -122,7 +122,7 @@ ProjectionStage::ProjectionStage(boost::intrusive_ptr<ExpressionContext> expCtx,
                                  WorkingSet* ws,
                                  std::unique_ptr<PlanStage> child,
                                  const char* stageType)
-    : PlanStage{expCtx->opCtx, std::move(child), stageType},
+    : PlanStage{expCtx->opCtx, expCtx, std::move(child), stageType},
       _projObj{expCtx->explain ? boost::make_optional(projObj.getOwned()) : boost::none},
       _ws{*ws} {}
 

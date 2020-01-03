@@ -47,15 +47,17 @@ using std::vector;
 const char* PipelineProxyStage::kStageType = "PIPELINE_PROXY";
 
 PipelineProxyStage::PipelineProxyStage(OperationContext* opCtx,
+                                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                        std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
                                        WorkingSet* ws)
-    : PipelineProxyStage(opCtx, std::move(pipeline), ws, kStageType) {}
+    : PipelineProxyStage(opCtx, expCtx, std::move(pipeline), ws, kStageType) {}
 
 PipelineProxyStage::PipelineProxyStage(OperationContext* opCtx,
+                                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                        std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
                                        WorkingSet* ws,
                                        const char* stageTypeName)
-    : PlanStage(stageTypeName, opCtx),
+    : PlanStage(stageTypeName, opCtx, expCtx),
       _pipeline(std::move(pipeline)),
       _includeMetaData(_pipeline->getContext()->needsMerge),  // send metadata to merger
       _ws(ws) {

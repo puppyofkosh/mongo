@@ -301,7 +301,7 @@ public:
             uassert(
                 16921, "Nodes argument must be provided to AND", nodeArgs["nodes"].isABSONObj());
 
-            auto andStage = std::make_unique<AndHashStage>(opCtx, workingSet);
+            auto andStage = std::make_unique<AndHashStage>(opCtx, expCtx, workingSet);
 
             int nodesAdded = 0;
             BSONObjIterator it(nodeArgs["nodes"].Obj());
@@ -325,7 +325,7 @@ public:
             uassert(
                 16924, "Nodes argument must be provided to AND", nodeArgs["nodes"].isABSONObj());
 
-            auto andStage = std::make_unique<AndSortedStage>(opCtx, workingSet);
+            auto andStage = std::make_unique<AndSortedStage>(opCtx, expCtx, workingSet);
 
             int nodesAdded = 0;
             BSONObjIterator it(nodeArgs["nodes"].Obj());

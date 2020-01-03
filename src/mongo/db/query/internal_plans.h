@@ -131,6 +131,7 @@ private:
      * Used as a helper for collectionScan() and deleteWithCollectionScan().
      */
     static std::unique_ptr<PlanStage> _collectionScan(OperationContext* opCtx,
+                                                      const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                                       WorkingSet* ws,
                                                       const Collection* collection,
                                                       Direction direction);
@@ -141,6 +142,7 @@ private:
      * Used as a helper for indexScan() and deleteWithIndexScan().
      */
     static std::unique_ptr<PlanStage> _indexScan(OperationContext* opCtx,
+                                                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                                  WorkingSet* ws,
                                                  const Collection* collection,
                                                  const IndexDescriptor* descriptor,

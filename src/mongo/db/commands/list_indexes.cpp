@@ -145,6 +145,10 @@ public:
         std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> exec;
         BSONArrayBuilder firstBatch;
         {
+            const CollatorInterface* collator = nullptr;
+            const boost::intrusive_ptr<ExpressionContext> expCtx(
+                new ExpressionContext(opCtx, collator));
+
             AutoGetCollectionForReadCommand ctx(opCtx,
                                                 CommandHelpers::parseNsOrUUID(dbname, cmdObj));
             Collection* collection = ctx.getCollection();
@@ -154,7 +158,7 @@ public:
             nss = ctx.getNss();
             auto indexList = listIndexesInLock(opCtx, collection, nss, includeBuildUUIDs);
             auto ws = std::make_unique<WorkingSet>();
-            auto root = std::make_unique<QueuedDataStage>(opCtx, ws.get());
+            auto root = std::make_unique<QueuedDataStage>(opCtx, expCtx, ws.get());
 
             for (auto&& indexSpec : indexList) {
                 WorkingSetID id = ws->allocate();

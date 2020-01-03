@@ -392,6 +392,8 @@ protected:
 
 private:
     OperationContext* _opCtx;
+
+protected:
     boost::intrusive_ptr<ExpressionContext> _expCtx;
 };
 

@@ -359,7 +359,7 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
         const string& ns = canonicalQuery->ns();
         LOG(2) << "Collection " << ns << " does not exist."
                << " Using EOF plan: " << redact(canonicalQuery->toStringShort());
-        root = std::make_unique<EOFStage>(opCtx);
+        root = std::make_unique<EOFStage>(opCtx, canonicalQuery->getExpCtx());
         return PrepareExecutionResult(std::move(canonicalQuery), nullptr, std::move(root));
     }
 
@@ -381,12 +381,14 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
     if (descriptor && IDHackStage::supportsQuery(collection, *canonicalQuery)) {
         LOG(2) << "Using idhack: " << redact(canonicalQuery->toStringShort());
 
-        root = std::make_unique<IDHackStage>(opCtx, canonicalQuery.get(), ws, descriptor);
+        root = std::make_unique<IDHackStage>(
+            opCtx, canonicalQuery->getExpCtx(), canonicalQuery.get(), ws, descriptor);
 
         // Might have to filter out orphaned docs.
         if (plannerParams.options & QueryPlannerParams::INCLUDE_SHARD_FILTER) {
             root = std::make_unique<ShardFilterStage>(
                 opCtx,
+                canonicalQuery->getExpCtx(),
                 CollectionShardingState::get(opCtx, canonicalQuery->nss())
                     ->getOrphansFilter(opCtx, collection),
                 ws,
@@ -411,6 +413,7 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
             // returnKey.
             root = std::make_unique<ReturnKeyStage>(
                 opCtx,
+                canonicalQuery->getExpCtx(),
                 cqProjection
                     ? QueryPlannerCommon::extractSortKeyMetaFieldsFromProjection(*cqProjection)
                     : std::vector<FieldPath>{},
@@ -482,13 +485,15 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
                 //
                 // 'decisionWorks' is used to determine whether the existing cache entry should
                 // be evicted, and the query replanned.
-                auto cachedPlanStage = std::make_unique<CachedPlanStage>(opCtx,
-                                                                         collection,
-                                                                         ws,
-                                                                         canonicalQuery.get(),
-                                                                         plannerParams,
-                                                                         cs->decisionWorks,
-                                                                         std::move(root));
+                auto cachedPlanStage =
+                    std::make_unique<CachedPlanStage>(opCtx,
+                                                      canonicalQuery->getExpCtx(),
+                                                      collection,
+                                                      ws,
+                                                      canonicalQuery.get(),
+                                                      plannerParams,
+                                                      cs->decisionWorks,
+                                                      std::move(root));
                 return PrepareExecutionResult(std::move(canonicalQuery),
                                               std::move(querySolution),
                                               std::move(cachedPlanStage));
@@ -500,8 +505,12 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
         SubplanStage::canUseSubplanning(*canonicalQuery)) {
         LOG(2) << "Running query as sub-queries: " << redact(canonicalQuery->toStringShort());
 
-        root = std::make_unique<SubplanStage>(
-            opCtx, collection, ws, plannerParams, canonicalQuery.get());
+        root = std::make_unique<SubplanStage>(opCtx,
+                                              canonicalQuery->getExpCtx(),
+                                              collection,
+                                              ws,
+                                              plannerParams,
+                                              canonicalQuery.get());
         return PrepareExecutionResult(std::move(canonicalQuery), nullptr, std::move(root));
     }
 
@@ -545,8 +554,8 @@ StatusWith<PrepareExecutionResult> prepareExecution(OperationContext* opCtx,
     } else {
         // Many solutions. Create a MultiPlanStage to pick the best, update the cache,
         // and so on. The working set will be shared by all candidate plans.
-        auto multiPlanStage =
-            std::make_unique<MultiPlanStage>(opCtx, collection, canonicalQuery.get());
+        auto multiPlanStage = std::make_unique<MultiPlanStage>(
+            opCtx, canonicalQuery->getExpCtx(), collection, canonicalQuery.get());
 
         for (size_t ix = 0; ix < solutions.size(); ++ix) {
             if (solutions[ix]->cacheData.get()) {
@@ -728,12 +737,16 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDelete(
     const PlanExecutor::YieldPolicy policy = parsedDelete->yieldPolicy();
 
     if (!collection) {
+        const CollatorInterface* collator = nullptr;
+        const boost::intrusive_ptr<ExpressionContext> expCtx(
+            new ExpressionContext(opCtx, collator));
+
         // Treat collections that do not exist as empty collections. Return a PlanExecutor which
         // contains an EOF stage.
         LOG(2) << "Collection " << nss.ns() << " does not exist."
                << " Using EOF stage: " << redact(request->getQuery());
         return PlanExecutor::make(
-            opCtx, std::move(ws), std::make_unique<EOFStage>(opCtx), nullptr, policy, nss);
+            opCtx, std::move(ws), std::make_unique<EOFStage>(opCtx, expCtx), nullptr, policy, nss);
     }
 
     if (!parsedDelete->hasParsedQuery()) {
@@ -760,10 +773,19 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDelete(
             request->getProj().isEmpty() && hasCollectionDefaultCollation) {
             LOG(2) << "Using idhack: " << redact(unparsedQuery);
 
+            const CollatorInterface* collator = nullptr;
+            const boost::intrusive_ptr<ExpressionContext> expCtx(
+                new ExpressionContext(opCtx, collator));
+
             auto idHackStage = std::make_unique<IDHackStage>(
-                opCtx, unparsedQuery["_id"].wrap(), ws.get(), descriptor);
-            unique_ptr<DeleteStage> root = std::make_unique<DeleteStage>(
-                opCtx, std::move(deleteStageParams), ws.get(), collection, idHackStage.release());
+                opCtx, expCtx, unparsedQuery["_id"].wrap(), ws.get(), descriptor);
+            unique_ptr<DeleteStage> root =
+                std::make_unique<DeleteStage>(opCtx,
+                                              expCtx,
+                                              std::move(deleteStageParams),
+                                              ws.get(),
+                                              collection,
+                                              idHackStage.release());
             return PlanExecutor::make(opCtx, std::move(ws), std::move(root), collection, policy);
         }
 
@@ -795,7 +817,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDelete(
 
     invariant(root);
     root = std::make_unique<DeleteStage>(
-        opCtx, std::move(deleteStageParams), ws.get(), collection, root.release());
+        opCtx, cq->getExpCtx(), std::move(deleteStageParams), ws.get(), collection, root.release());
 
     if (!request->getProj().isEmpty()) {
         invariant(request->shouldReturnDeleted());
@@ -878,8 +900,13 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpdate(
     if (!collection) {
         LOG(2) << "Collection " << nss.ns() << " does not exist."
                << " Using EOF stage: " << redact(request->getQuery());
+
+        const CollatorInterface* collator = nullptr;
+        const boost::intrusive_ptr<ExpressionContext> expCtx(
+            new ExpressionContext(opCtx, collator));
+
         return PlanExecutor::make(
-            opCtx, std::move(ws), std::make_unique<EOFStage>(opCtx), nullptr, policy, nss);
+            opCtx, std::move(ws), std::make_unique<EOFStage>(opCtx, expCtx), nullptr, policy, nss);
     }
 
     // Pass index information to the update driver, so that it can determine for us whether the
@@ -943,10 +970,16 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpdate(
     updateStageParams.canonicalQuery = cq.get();
 
     const bool isUpsert = updateStageParams.request->isUpsert();
-    root = (isUpsert ? std::make_unique<UpsertStage>(
-                           opCtx, updateStageParams, ws.get(), collection, root.release())
-                     : std::make_unique<UpdateStage>(
-                           opCtx, updateStageParams, ws.get(), collection, root.release()));
+    root =
+        (isUpsert
+             ? std::make_unique<UpsertStage>(
+                   opCtx, cq->getExpCtx(), updateStageParams, ws.get(), collection, root.release())
+             : std::make_unique<UpdateStage>(opCtx,
+                                             cq->getExpCtx(),
+                                             updateStageParams,
+                                             ws.get(),
+                                             collection,
+                                             root.release()));
 
     if (!request->getProj().isEmpty()) {
         invariant(request->shouldReturnAnyDocs());
@@ -1136,7 +1169,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
         // machinery always assumes that the root stage for a count operation is a CountStage, so in
         // this case we put a CountStage on top of an EOFStage.
         unique_ptr<PlanStage> root = std::make_unique<CountStage>(
-            opCtx, collection, limit, skip, ws.get(), new EOFStage(opCtx));
+            opCtx, expCtx, collection, limit, skip, ws.get(), new EOFStage(opCtx, expCtx));
         return PlanExecutor::make(opCtx, std::move(ws), std::move(root), nullptr, yieldPolicy, nss);
     }
 
@@ -1151,7 +1184,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
 
     if (useRecordStoreCount) {
         unique_ptr<PlanStage> root =
-            std::make_unique<RecordStoreFastCountStage>(opCtx, collection, skip, limit);
+            std::make_unique<RecordStoreFastCountStage>(opCtx, expCtx, collection, skip, limit);
         return PlanExecutor::make(opCtx, std::move(ws), std::move(root), nullptr, yieldPolicy, nss);
     }
 
@@ -1172,7 +1205,8 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
     invariant(root);
 
     // Make a CountStage to be the new root.
-    root = std::make_unique<CountStage>(opCtx, collection, limit, skip, ws.get(), root.release());
+    root = std::make_unique<CountStage>(
+        opCtx, expCtx, collection, limit, skip, ws.get(), root.release());
     // We must have a tree of stages in order to have a valid plan executor, but the query
     // solution may be NULL. Takes ownership of all args other than 'collection' and 'opCtx'
     return PlanExecutor::make(std::move(cq),
@@ -1576,10 +1610,14 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
                                                                  : PlanExecutor::YIELD_AUTO;
 
     if (!collection) {
+        const CollatorInterface* collator = nullptr;
+        const boost::intrusive_ptr<ExpressionContext> expCtx(
+            new ExpressionContext(opCtx, collator));
+
         // Treat collections that do not exist as empty collections.
         return PlanExecutor::make(parsedDistinct->releaseQuery(),
                                   std::make_unique<WorkingSet>(),
-                                  std::make_unique<EOFStage>(opCtx),
+                                  std::make_unique<EOFStage>(opCtx, expCtx),
                                   collection,
                                   yieldPolicy);
     }

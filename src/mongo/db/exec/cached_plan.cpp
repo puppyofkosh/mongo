@@ -227,7 +227,7 @@ Status CachedPlanStage::replan(PlanYieldPolicy* yieldPolicy, bool shouldCache) {
     auto cachingMode = shouldCache ? MultiPlanStage::CachingMode::AlwaysCache
                                    : MultiPlanStage::CachingMode::NeverCache;
     _children.emplace_back(
-        new MultiPlanStage(getOpCtx(), collection(), _canonicalQuery, cachingMode));
+        new MultiPlanStage(getOpCtx(), _expCtx, collection(), _canonicalQuery, cachingMode));
     MultiPlanStage* multiPlanStage = static_cast<MultiPlanStage*>(child().get());
 
     for (size_t ix = 0; ix < solutions.size(); ++ix) {
