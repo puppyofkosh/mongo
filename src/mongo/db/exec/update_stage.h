@@ -128,7 +128,7 @@ public:
 
 protected:
     UpdateStage(OperationContext* opCtx,
-                const boost::intrusive_ptr<ExpressionContext>& expCtx   ,
+                const boost::intrusive_ptr<ExpressionContext>& expCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection);

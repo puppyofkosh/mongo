@@ -52,7 +52,11 @@ CountStage::CountStage(OperationContext* opCtx,
                        long long skip,
                        WorkingSet* ws,
                        PlanStage* child)
-    : PlanStage(kStageType, opCtx, expCtx), _limit(limit), _skip(skip), _leftToSkip(_skip), _ws(ws) {
+    : PlanStage(kStageType, opCtx, expCtx),
+      _limit(limit),
+      _skip(skip),
+      _leftToSkip(_skip),
+      _ws(ws) {
     invariant(_skip >= 0);
     invariant(_limit >= 0);
     invariant(child);

@@ -49,7 +49,11 @@ OrStage::OrStage(OperationContext* opCtx,
                  WorkingSet* ws,
                  bool dedup,
                  const MatchExpression* filter)
-    : PlanStage(kStageType, opCtx, expCtx), _ws(ws), _filter(filter), _currentChild(0), _dedup(dedup) {}
+    : PlanStage(kStageType, opCtx, expCtx),
+      _ws(ws),
+      _filter(filter),
+      _currentChild(0),
+      _dedup(dedup) {}
 
 void OrStage::addChild(std::unique_ptr<PlanStage> child) {
     _children.emplace_back(std::move(child));

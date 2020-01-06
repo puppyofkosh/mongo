@@ -130,27 +130,29 @@ private:
      *
      * Used as a helper for collectionScan() and deleteWithCollectionScan().
      */
-    static std::unique_ptr<PlanStage> _collectionScan(OperationContext* opCtx,
-                                                      const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                                      WorkingSet* ws,
-                                                      const Collection* collection,
-                                                      Direction direction);
+    static std::unique_ptr<PlanStage> _collectionScan(
+        OperationContext* opCtx,
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        WorkingSet* ws,
+        const Collection* collection,
+        Direction direction);
 
     /**
      * Returns a plan stage that is either an index scan or an index scan with a fetch stage.
      *
      * Used as a helper for indexScan() and deleteWithIndexScan().
      */
-    static std::unique_ptr<PlanStage> _indexScan(OperationContext* opCtx,
-                                                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                                 WorkingSet* ws,
-                                                 const Collection* collection,
-                                                 const IndexDescriptor* descriptor,
-                                                 const BSONObj& startKey,
-                                                 const BSONObj& endKey,
-                                                 BoundInclusion boundInclusion,
-                                                 Direction direction = FORWARD,
-                                                 int options = IXSCAN_DEFAULT);
+    static std::unique_ptr<PlanStage> _indexScan(
+        OperationContext* opCtx,
+        const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        WorkingSet* ws,
+        const Collection* collection,
+        const IndexDescriptor* descriptor,
+        const BSONObj& startKey,
+        const BSONObj& endKey,
+        BoundInclusion boundInclusion,
+        Direction direction = FORWARD,
+        int options = IXSCAN_DEFAULT);
 };
 
 }  // namespace mongo

@@ -490,7 +490,8 @@ public:
                     nullptr != subNode);
             auto params = std::make_unique<DeleteStageParams>();
             params->isMulti = nodeArgs["isMulti"].Bool();
-            return new DeleteStage(opCtx, expCtx, std::move(params), workingSet, collection, subNode);
+            return new DeleteStage(
+                opCtx, expCtx, std::move(params), workingSet, collection, subNode);
         } else {
             return nullptr;
         }
