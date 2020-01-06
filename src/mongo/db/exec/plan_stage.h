@@ -202,9 +202,9 @@ public:
      */
     StageState work(WorkingSetID* out) {
         invariant(_opCtx);
-        boost::optional<ScopedTimer> timer;
+        ON_BLOCK_EXIT([this] {_timer = boost::none;});
         if (_expCtx->explain) {
-            timer.emplace(getClock(), &_commonStats.executionTimeMillis);
+            _timer.emplace(getClock(), &_commonStats.executionTimeMillis);
         }
         ++_commonStats.works;
 
@@ -417,6 +417,9 @@ protected:
 private:
     OperationContext* _opCtx;
 
+    // Timer for keeping track of duration to work() calls. Store here instead of as a variable in
+    // work() for performance reasons (????).
+    boost::optional<ScopedTimer> _timer;
 protected:
     boost::intrusive_ptr<ExpressionContext> _expCtx;
 };
