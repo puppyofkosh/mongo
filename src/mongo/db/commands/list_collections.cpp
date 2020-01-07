@@ -299,7 +299,7 @@ public:
                                                              cursorNss);
 
             auto ws = std::make_unique<WorkingSet>();
-            auto root = std::make_unique<QueuedDataStage>(opCtx, expCtx, ws.get());
+            auto root = std::make_unique<QueuedDataStage>(expCtx, ws.get());
 
             if (db) {
                 if (auto collNames = _getExactNameMatches(matcher.get())) {

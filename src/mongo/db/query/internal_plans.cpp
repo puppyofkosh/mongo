@@ -59,7 +59,7 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::collection
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
 
     if (nullptr == collection) {
-        auto eof = std::make_unique<EOFStage>(opCtx, expCtx);
+        auto eof = std::make_unique<EOFStage>(expCtx);
         // Takes ownership of 'ws' and 'eof'.
         auto statusWithPlanExecutor = PlanExecutor::make(
             opCtx, std::move(ws), std::move(eof), nullptr, yieldPolicy, NamespaceString(ns));
@@ -69,7 +69,7 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::collection
 
     invariant(ns == collection->ns().ns());
 
-    auto cs = _collectionScan(opCtx, expCtx, ws.get(), collection, direction);
+    auto cs = _collectionScan(expCtx, ws.get(), collection, direction);
 
     // Takes ownership of 'ws' and 'cs'.
     auto statusWithPlanExecutor =
@@ -90,10 +90,10 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::deleteWith
     const CollatorInterface* collator = nullptr;
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
 
-    auto root = _collectionScan(opCtx, expCtx, ws.get(), collection, direction);
+    auto root = _collectionScan(expCtx, ws.get(), collection, direction);
 
     root = std::make_unique<DeleteStage>(
-        opCtx, expCtx, std::move(params), ws.get(), collection, root.release());
+        expCtx, std::move(params), ws.get(), collection, root.release());
 
     auto executor =
         PlanExecutor::make(opCtx, std::move(ws), std::move(root), collection, yieldPolicy);
@@ -117,8 +117,7 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::indexScan(
     const CollatorInterface* collator = nullptr;
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
 
-    std::unique_ptr<PlanStage> root = _indexScan(opCtx,
-                                                 expCtx,
+    std::unique_ptr<PlanStage> root = _indexScan(expCtx,
                                                  ws.get(),
                                                  collection,
                                                  descriptor,
@@ -150,8 +149,7 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::deleteWith
     const CollatorInterface* collator = nullptr;
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
 
-    std::unique_ptr<PlanStage> root = _indexScan(opCtx,
-                                                 expCtx,
+    std::unique_ptr<PlanStage> root = _indexScan(expCtx,
                                                  ws.get(),
                                                  collection,
                                                  descriptor,
@@ -162,7 +160,7 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::deleteWith
                                                  InternalPlanner::IXSCAN_FETCH);
 
     root = std::make_unique<DeleteStage>(
-        opCtx, expCtx, std::move(params), ws.get(), collection, root.release());
+        expCtx, std::move(params), ws.get(), collection, root.release());
 
     auto executor =
         PlanExecutor::make(opCtx, std::move(ws), std::move(root), collection, yieldPolicy);
@@ -183,14 +181,13 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::updateWith
     const CollatorInterface* collator = nullptr;
     const boost::intrusive_ptr<ExpressionContext> expCtx(new ExpressionContext(opCtx, collator));
 
-    auto idHackStage = std::make_unique<IDHackStage>(opCtx, expCtx, key, ws.get(), descriptor);
+    auto idHackStage = std::make_unique<IDHackStage>(expCtx, key, ws.get(), descriptor);
 
     const bool isUpsert = params.request->isUpsert();
-    auto root =
-        (isUpsert ? std::make_unique<UpsertStage>(
-                        opCtx, expCtx, params, ws.get(), collection, idHackStage.release())
-                  : std::make_unique<UpdateStage>(
-                        opCtx, expCtx, params, ws.get(), collection, idHackStage.release()));
+    auto root = (isUpsert ? std::make_unique<UpsertStage>(
+                                expCtx, params, ws.get(), collection, idHackStage.release())
+                          : std::make_unique<UpdateStage>(
+                                expCtx, params, ws.get(), collection, idHackStage.release()));
 
     auto executor =
         PlanExecutor::make(opCtx, std::move(ws), std::move(root), collection, yieldPolicy);
@@ -199,7 +196,6 @@ std::unique_ptr<PlanExecutor, PlanExecutor::Deleter> InternalPlanner::updateWith
 }
 
 std::unique_ptr<PlanStage> InternalPlanner::_collectionScan(
-    OperationContext* opCtx,
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     WorkingSet* ws,
     const Collection* collection,
@@ -207,7 +203,8 @@ std::unique_ptr<PlanStage> InternalPlanner::_collectionScan(
     invariant(collection);
 
     CollectionScanParams params;
-    params.shouldWaitForOplogVisibility = shouldWaitForOplogVisibility(opCtx, collection, false);
+    params.shouldWaitForOplogVisibility =
+        shouldWaitForOplogVisibility(expCtx->opCtx, collection, false);
 
     if (FORWARD == direction) {
         params.direction = CollectionScanParams::FORWARD;
@@ -215,11 +212,10 @@ std::unique_ptr<PlanStage> InternalPlanner::_collectionScan(
         params.direction = CollectionScanParams::BACKWARD;
     }
 
-    return std::make_unique<CollectionScan>(opCtx, expCtx, collection, params, ws, nullptr);
+    return std::make_unique<CollectionScan>(expCtx, collection, params, ws, nullptr);
 }
 
 std::unique_ptr<PlanStage> InternalPlanner::_indexScan(
-    OperationContext* opCtx,
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     WorkingSet* ws,
     const Collection* collection,
@@ -232,7 +228,7 @@ std::unique_ptr<PlanStage> InternalPlanner::_indexScan(
     invariant(collection);
     invariant(descriptor);
 
-    IndexScanParams params(opCtx, descriptor);
+    IndexScanParams params(expCtx->opCtx, descriptor);
     params.direction = direction;
     params.bounds.isSimpleRange = true;
     params.bounds.startKey = startKey;
@@ -241,11 +237,10 @@ std::unique_ptr<PlanStage> InternalPlanner::_indexScan(
     params.shouldDedup = descriptor->isMultikey();
 
     std::unique_ptr<PlanStage> root =
-        std::make_unique<IndexScan>(opCtx, expCtx, std::move(params), ws, nullptr);
+        std::make_unique<IndexScan>(expCtx, std::move(params), ws, nullptr);
 
     if (InternalPlanner::IXSCAN_FETCH & options) {
-        root =
-            std::make_unique<FetchStage>(opCtx, expCtx, ws, std::move(root), nullptr, collection);
+        root = std::make_unique<FetchStage>(expCtx, ws, std::move(root), nullptr, collection);
     }
 
     return root;

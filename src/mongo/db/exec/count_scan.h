@@ -87,8 +87,7 @@ struct CountScanParams {
  */
 class CountScan final : public RequiresIndexStage {
 public:
-    CountScan(OperationContext* opCtx,
-              const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    CountScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
               CountScanParams params,
               WorkingSet* workingSet);
 

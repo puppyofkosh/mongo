@@ -69,7 +69,6 @@ struct GeoNearParams {
 class GeoNear2DStage final : public NearStage {
 public:
     GeoNear2DStage(const GeoNearParams& nearParams,
-                   OperationContext* opCtx,
                    const boost::intrusive_ptr<ExpressionContext>& expCtx,
                    WorkingSet* workingSet,
                    const IndexDescriptor* twoDIndex);
@@ -93,16 +92,14 @@ private:
                          const GeoNearParams* nearParams,
                          const R2Annulus& fullBounds);
 
-        PlanStage::StageState work(OperationContext* opCtx,
-                                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        PlanStage::StageState work(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                    WorkingSet* workingSet,
                                    const IndexDescriptor* twoDIndex,
                                    WorkingSetID* out,
                                    double* estimatedDistance);
 
     private:
-        void buildIndexScan(OperationContext* opCtx,
-                            const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        void buildIndexScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                             WorkingSet* workingSet,
                             const IndexDescriptor* twoDIndex);
 
@@ -138,7 +135,6 @@ private:
 class GeoNear2DSphereStage final : public NearStage {
 public:
     GeoNear2DSphereStage(const GeoNearParams& nearParams,
-                         OperationContext* opCtx,
                          const boost::intrusive_ptr<ExpressionContext>& expCtx,
                          WorkingSet* workingSet,
                          const IndexDescriptor* s2Index);
@@ -167,16 +163,14 @@ private:
 
         // Search for a document in neighbors at current level.
         // Return IS_EOF is such document exists and set the estimated distance to the nearest doc.
-        PlanStage::StageState work(OperationContext* opCtx,
-                                   const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        PlanStage::StageState work(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                    WorkingSet* workingSet,
                                    const IndexDescriptor* s2Index,
                                    WorkingSetID* out,
                                    double* estimatedDistance);
 
     private:
-        void buildIndexScan(OperationContext* opCtx,
-                            const boost::intrusive_ptr<ExpressionContext>& expCtx,
+        void buildIndexScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                             WorkingSet* workingSet,
                             const IndexDescriptor* s2Index);
 

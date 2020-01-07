@@ -44,12 +44,11 @@ using std::vector;
 // static
 const char* OrStage::kStageType = "OR";
 
-OrStage::OrStage(OperationContext* opCtx,
-                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
+OrStage::OrStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                  WorkingSet* ws,
                  bool dedup,
                  const MatchExpression* filter)
-    : PlanStage(kStageType, opCtx, expCtx),
+    : PlanStage(kStageType, expCtx),
       _ws(ws),
       _filter(filter),
       _currentChild(0),

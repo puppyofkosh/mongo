@@ -39,7 +39,7 @@ namespace mongo {
  */
 class EOFStage final : public PlanStage {
 public:
-    EOFStage(OperationContext* opCtx, const boost::intrusive_ptr<ExpressionContext>& expCtx);
+    EOFStage(const boost::intrusive_ptr<ExpressionContext>& expCtx);
 
     ~EOFStage();
 

@@ -108,8 +108,7 @@ public:
         HIT_END
     };
 
-    IndexScan(OperationContext* opCtx,
-              const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    IndexScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
               IndexScanParams params,
               WorkingSet* workingSet,
               const MatchExpression* filter);

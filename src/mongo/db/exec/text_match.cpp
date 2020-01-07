@@ -45,13 +45,12 @@ using std::vector;
 
 const char* TextMatchStage::kStageType = "TEXT_MATCH";
 
-TextMatchStage::TextMatchStage(OperationContext* opCtx,
-                               const boost::intrusive_ptr<ExpressionContext>& expCtx,
+TextMatchStage::TextMatchStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                                unique_ptr<PlanStage> child,
                                const FTSQueryImpl& query,
                                const FTSSpec& spec,
                                WorkingSet* ws)
-    : PlanStage(kStageType, opCtx, expCtx), _ftsMatcher(query, spec), _ws(ws) {
+    : PlanStage(kStageType, expCtx), _ftsMatcher(query, spec), _ws(ws) {
     _children.emplace_back(std::move(child));
 }
 

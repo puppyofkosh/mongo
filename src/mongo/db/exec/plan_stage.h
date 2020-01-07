@@ -107,10 +107,8 @@ class RecordId;
  */
 class PlanStage {
 public:
-    PlanStage(const char* typeName,
-              OperationContext* opCtx,
-              const boost::intrusive_ptr<ExpressionContext>& expCtx)
-        : _commonStats(typeName), _opCtx(opCtx), _expCtx(expCtx) {
+    PlanStage(const char* typeName, const boost::intrusive_ptr<ExpressionContext>& expCtx)
+        : _commonStats(typeName), _opCtx(expCtx->opCtx), _expCtx(expCtx) {
         invariant(expCtx);
     }
 
@@ -119,11 +117,10 @@ protected:
      * Obtain a PlanStage given a child stage. Called during the construction of derived
      * PlanStage types with a single direct descendant.
      */
-    PlanStage(OperationContext* opCtx,
-              const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    PlanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
               std::unique_ptr<PlanStage> child,
               const char* typeName)
-        : PlanStage(typeName, opCtx, expCtx) {
+        : PlanStage(typeName, expCtx) {
         _children.push_back(std::move(child));
     }
 
@@ -417,8 +414,8 @@ protected:
 private:
     OperationContext* _opCtx;
 
-    // Timer for keeping track of duration to work() calls. Store here instead of as a variable in
-    // work() for performance reasons (????).
+    // Timer for keeping track of duration to work() calls. Stored here instead of as a variable in
+    // work() to avoid having the stack get really big.
     boost::optional<ScopedTimer> _timer;
 
 protected:

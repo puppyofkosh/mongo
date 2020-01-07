@@ -48,15 +48,12 @@ namespace mongo {
  */
 class AndHashStage final : public PlanStage {
 public:
-    AndHashStage(OperationContext* opCtx,
-                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                 WorkingSet* ws);
+    AndHashStage(const boost::intrusive_ptr<ExpressionContext>& expCtx, WorkingSet* ws);
 
     /**
      * For testing only. Allows tests to set memory usage threshold.
      */
-    AndHashStage(OperationContext* opCtx,
-                 const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    AndHashStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                  WorkingSet* ws,
                  size_t maxMemUsage);
 

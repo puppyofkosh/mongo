@@ -42,10 +42,9 @@ namespace mongo {
 class RequiresAllIndicesStage : public RequiresCollectionStage {
 public:
     RequiresAllIndicesStage(const char* stageType,
-                            OperationContext* opCtx,
                             const boost::intrusive_ptr<ExpressionContext>& expCtx,
                             const Collection* coll)
-        : RequiresCollectionStage(stageType, opCtx, expCtx, coll) {
+        : RequiresCollectionStage(stageType, expCtx, coll) {
         auto allEntriesShared = coll->getIndexCatalog()->getAllReadyEntriesShared();
         _indexCatalogEntries.reserve(allEntriesShared.size());
         _indexNames.reserve(allEntriesShared.size());

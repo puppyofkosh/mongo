@@ -55,21 +55,18 @@ const size_t AndHashStage::kLookAheadWorks = 10;
 // static
 const char* AndHashStage::kStageType = "AND_HASH";
 
-AndHashStage::AndHashStage(OperationContext* opCtx,
-                           const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                           WorkingSet* ws)
-    : PlanStage(kStageType, opCtx, expCtx),
+AndHashStage::AndHashStage(const boost::intrusive_ptr<ExpressionContext>& expCtx, WorkingSet* ws)
+    : PlanStage(kStageType, expCtx),
       _ws(ws),
       _hashingChildren(true),
       _currentChild(0),
       _memUsage(0),
       _maxMemUsage(kDefaultMaxMemUsageBytes) {}
 
-AndHashStage::AndHashStage(OperationContext* opCtx,
-                           const boost::intrusive_ptr<ExpressionContext>& expCtx,
+AndHashStage::AndHashStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                            WorkingSet* ws,
                            size_t maxMemUsage)
-    : PlanStage(kStageType, opCtx, expCtx),
+    : PlanStage(kStageType, expCtx),
       _ws(ws),
       _hashingChildren(true),
       _currentChild(0),

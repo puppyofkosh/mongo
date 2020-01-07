@@ -36,12 +36,11 @@ namespace mongo {
 const char* RecordStoreFastCountStage::kStageType = "RECORD_STORE_FAST_COUNT";
 
 RecordStoreFastCountStage::RecordStoreFastCountStage(
-    OperationContext* opCtx,
     const boost::intrusive_ptr<ExpressionContext>& expCtx,
     Collection* collection,
     long long skip,
     long long limit)
-    : RequiresCollectionStage(kStageType, opCtx, expCtx, collection), _skip(skip), _limit(limit) {
+    : RequiresCollectionStage(kStageType, expCtx, collection), _skip(skip), _limit(limit) {
     invariant(_skip >= 0);
     invariant(_limit >= 0);
 }

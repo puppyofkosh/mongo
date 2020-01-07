@@ -180,7 +180,7 @@ public:
 
         // Add a fetch at the top for the user so we can get obj back for sure.
         unique_ptr<PlanStage> rootFetch = std::make_unique<FetchStage>(
-            opCtx, expCtx, ws.get(), std::move(userRoot), nullptr, collection);
+            expCtx, ws.get(), std::move(userRoot), nullptr, collection);
 
         auto statusWithPlanExecutor = PlanExecutor::make(
             opCtx, std::move(ws), std::move(rootFetch), collection, PlanExecutor::YIELD_AUTO);
@@ -296,12 +296,12 @@ public:
             params.direction = nodeArgs["direction"].numberInt();
             params.shouldDedup = desc->isMultikey();
 
-            return new IndexScan(opCtx, expCtx, params, workingSet, matcher);
+            return new IndexScan(expCtx, params, workingSet, matcher);
         } else if ("andHash" == nodeName) {
             uassert(
                 16921, "Nodes argument must be provided to AND", nodeArgs["nodes"].isABSONObj());
 
-            auto andStage = std::make_unique<AndHashStage>(opCtx, expCtx, workingSet);
+            auto andStage = std::make_unique<AndHashStage>(expCtx, workingSet);
 
             int nodesAdded = 0;
             BSONObjIterator it(nodeArgs["nodes"].Obj());
@@ -325,7 +325,7 @@ public:
             uassert(
                 16924, "Nodes argument must be provided to AND", nodeArgs["nodes"].isABSONObj());
 
-            auto andStage = std::make_unique<AndSortedStage>(opCtx, expCtx, workingSet);
+            auto andStage = std::make_unique<AndSortedStage>(expCtx, workingSet);
 
             int nodesAdded = 0;
             BSONObjIterator it(nodeArgs["nodes"].Obj());
@@ -350,8 +350,8 @@ public:
                 16934, "Nodes argument must be provided to AND", nodeArgs["nodes"].isABSONObj());
             uassert(16935, "Dedup argument must be provided to OR", !nodeArgs["dedup"].eoo());
             BSONObjIterator it(nodeArgs["nodes"].Obj());
-            auto orStage = std::make_unique<OrStage>(
-                opCtx, expCtx, workingSet, nodeArgs["dedup"].Bool(), matcher);
+            auto orStage =
+                std::make_unique<OrStage>(expCtx, workingSet, nodeArgs["dedup"].Bool(), matcher);
             while (it.more()) {
                 BSONElement e = it.next();
                 if (!e.isABSONObj()) {
@@ -373,8 +373,7 @@ public:
             uassert(28731,
                     "Can't parse sub-node of FETCH: " + nodeArgs["node"].Obj().toString(),
                     nullptr != subNode);
-            return new FetchStage(
-                opCtx, expCtx, workingSet, std::move(subNode), matcher, collection);
+            return new FetchStage(expCtx, workingSet, std::move(subNode), matcher, collection);
         } else if ("limit" == nodeName) {
             uassert(16937,
                     "Limit stage doesn't have a filter (put it on the child)",
@@ -388,7 +387,7 @@ public:
                     "Can't parse sub-node of LIMIT: " + nodeArgs["node"].Obj().toString(),
                     nullptr != subNode);
             return new LimitStage(
-                opCtx, expCtx, nodeArgs["num"].numberInt(), workingSet, std ::move(subNode));
+                expCtx, nodeArgs["num"].numberInt(), workingSet, std ::move(subNode));
         } else if ("skip" == nodeName) {
             uassert(16938,
                     "Skip stage doesn't have a filter (put it on the child)",
@@ -401,7 +400,7 @@ public:
                     "Can't parse sub-node of SKIP: " + nodeArgs["node"].Obj().toString(),
                     nullptr != subNode);
             return new SkipStage(
-                opCtx, expCtx, nodeArgs["num"].numberInt(), workingSet, std::move(subNode));
+                expCtx, nodeArgs["num"].numberInt(), workingSet, std::move(subNode));
         } else if ("cscan" == nodeName) {
             CollectionScanParams params;
 
@@ -415,7 +414,7 @@ public:
                 params.direction = CollectionScanParams::BACKWARD;
             }
 
-            return new CollectionScan(opCtx, expCtx, collection, params, workingSet, matcher);
+            return new CollectionScan(expCtx, collection, params, workingSet, matcher);
         } else if ("mergeSort" == nodeName) {
             uassert(
                 16971, "Nodes argument must be provided to sort", nodeArgs["nodes"].isABSONObj());
@@ -427,7 +426,7 @@ public:
             params.pattern = nodeArgs["pattern"].Obj();
             // Dedup is true by default.
 
-            auto mergeStage = std::make_unique<MergeSortStage>(opCtx, expCtx, params, workingSet);
+            auto mergeStage = std::make_unique<MergeSortStage>(expCtx, params, workingSet);
 
             BSONObjIterator it(nodeArgs["nodes"].Obj());
             while (it.more()) {
@@ -473,7 +472,7 @@ public:
                 return nullptr;
             }
 
-            return new TextStage(opCtx, expCtx, params, workingSet, matcher);
+            return new TextStage(expCtx, params, workingSet, matcher);
         } else if ("delete" == nodeName) {
             uassert(18636,
                     "Delete stage doesn't have a filter (put it on the child)",
@@ -490,8 +489,7 @@ public:
                     nullptr != subNode);
             auto params = std::make_unique<DeleteStageParams>();
             params->isMulti = nodeArgs["isMulti"].Bool();
-            return new DeleteStage(
-                opCtx, expCtx, std::move(params), workingSet, collection, subNode);
+            return new DeleteStage(expCtx, std::move(params), workingSet, collection, subNode);
         } else {
             return nullptr;
         }

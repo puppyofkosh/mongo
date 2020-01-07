@@ -110,25 +110,23 @@ const char* UpdateStage::kStageType = "UPDATE";
 const UpdateStats UpdateStage::kEmptyUpdateStats;
 
 // Public constructor.
-UpdateStage::UpdateStage(OperationContext* opCtx,
-                         const boost::intrusive_ptr<ExpressionContext>& expCtx,
+UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                          const UpdateStageParams& params,
                          WorkingSet* ws,
                          Collection* collection,
                          PlanStage* child)
-    : UpdateStage(opCtx, expCtx, params, ws, collection) {
+    : UpdateStage(expCtx, params, ws, collection) {
     // We should never reach here if the request is an upsert.
     invariant(!_params.request->isUpsert());
     _children.emplace_back(child);
 }
 
 // Protected constructor.
-UpdateStage::UpdateStage(OperationContext* opCtx,
-                         const boost::intrusive_ptr<ExpressionContext>& expCtx,
+UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                          const UpdateStageParams& params,
                          WorkingSet* ws,
                          Collection* collection)
-    : RequiresMutableCollectionStage(kStageType, opCtx, expCtx, collection),
+    : RequiresMutableCollectionStage(kStageType, expCtx, collection),
       _params(params),
       _ws(ws),
       _doc(params.driver->getDocument()),

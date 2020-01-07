@@ -56,13 +56,12 @@ using fts::MAX_WEIGHT;
 
 const char* TextStage::kStageType = "TEXT";
 
-TextStage::TextStage(OperationContext* opCtx,
-                     const boost::intrusive_ptr<ExpressionContext>& expCtx,
+TextStage::TextStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                      const TextStageParams& params,
                      WorkingSet* ws,
                      const MatchExpression* filter)
-    : PlanStage(kStageType, opCtx, expCtx), _params(params) {
-    _children.emplace_back(buildTextTree(opCtx, ws, filter, params.wantTextScore));
+    : PlanStage(kStageType, expCtx), _params(params) {
+    _children.emplace_back(buildTextTree(expCtx->opCtx, ws, filter, params.wantTextScore));
     _specificStats.indexPrefix = _params.indexPrefix;
     _specificStats.indexName = _params.index->indexName();
     _specificStats.parsedTextQuery = _params.query.toBSON();
@@ -113,7 +112,7 @@ unique_ptr<PlanStage> TextStage::buildTextTree(OperationContext* opCtx,
         ixparams.direction = -1;
         ixparams.shouldDedup = _params.index->isMultikey();
 
-        indexScanList.push_back(std::make_unique<IndexScan>(opCtx, _expCtx, ixparams, ws, nullptr));
+        indexScanList.push_back(std::make_unique<IndexScan>(_expCtx, ixparams, ws, nullptr));
     }
 
     // Build the union of the index scans as a TEXT_OR or an OR stage, depending on whether the
@@ -123,16 +122,16 @@ unique_ptr<PlanStage> TextStage::buildTextTree(OperationContext* opCtx,
         // We use a TEXT_OR stage to get the union of the results from the index scans and then
         // compute their text scores. This is a blocking operation.
         auto textScorer =
-            std::make_unique<TextOrStage>(opCtx, _expCtx, _params.spec, ws, filter, collection);
+            std::make_unique<TextOrStage>(_expCtx, _params.spec, ws, filter, collection);
 
         textScorer->addChildren(std::move(indexScanList));
 
         textMatchStage = std::make_unique<TextMatchStage>(
-            opCtx, _expCtx, std::move(textScorer), _params.query, _params.spec, ws);
+            _expCtx, std::move(textScorer), _params.query, _params.spec, ws);
     } else {
         // Because we don't need the text score, we can use a non-blocking OR stage to get the union
         // of the index scans.
-        auto textSearcher = std::make_unique<OrStage>(opCtx, _expCtx, ws, true, filter);
+        auto textSearcher = std::make_unique<OrStage>(_expCtx, ws, true, filter);
 
         textSearcher->addChildren(std::move(indexScanList));
 
@@ -141,10 +140,10 @@ unique_ptr<PlanStage> TextStage::buildTextTree(OperationContext* opCtx,
         // WorkingSetMember inputs have fetched data.
         const MatchExpression* emptyFilter = nullptr;
         auto fetchStage = std::make_unique<FetchStage>(
-            opCtx, _expCtx, ws, std::move(textSearcher), emptyFilter, collection);
+            _expCtx, ws, std::move(textSearcher), emptyFilter, collection);
 
         textMatchStage = std::make_unique<TextMatchStage>(
-            opCtx, _expCtx, std::move(fetchStage), _params.query, _params.spec, ws);
+            _expCtx, std::move(fetchStage), _params.query, _params.spec, ws);
     }
 
     return textMatchStage;
