@@ -168,6 +168,10 @@ public:
         return _unownedCollator;
     }
 
+    bool shouldTrackTiming() const {
+        return static_cast<bool>(explain);
+    }
+
     /**
      * Returns the BSON spec for the ExpressionContext's collator, or the simple collator spec if
      * the collator is null.

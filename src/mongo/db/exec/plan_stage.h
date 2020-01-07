@@ -203,7 +203,7 @@ public:
     StageState work(WorkingSetID* out) {
         invariant(_opCtx);
         ON_BLOCK_EXIT([this] { _timer = boost::none; });
-        if (_expCtx->explain) {
+        if (MONGO_unlikely(_expCtx->shouldTrackTiming())) {
             _timer.emplace(getClock(), &_commonStats.executionTimeMillis);
         }
         ++_commonStats.works;
