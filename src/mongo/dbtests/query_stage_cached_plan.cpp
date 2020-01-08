@@ -152,13 +152,13 @@ public:
         const size_t decisionWorks = 10;
         const size_t mockWorks =
             1U + static_cast<size_t>(internalQueryCacheEvictionRatio * decisionWorks);
-        auto mockChild = std::make_unique<QueuedDataStage>(&_opCtx, &_ws);
+        auto mockChild = std::make_unique<QueuedDataStage>(_expCtx, &_ws);
         for (size_t i = 0; i < mockWorks; i++) {
             mockChild->pushBack(PlanStage::NEED_TIME);
         }
 
         CachedPlanStage cachedPlanStage(
-            &_opCtx, collection, &_ws, cq, plannerParams, decisionWorks, std::move(mockChild));
+            _expCtx, collection, &_ws, cq, plannerParams, decisionWorks, std::move(mockChild));
 
         // This should succeed after triggering a replan.
         PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
@@ -171,6 +171,8 @@ protected:
     OperationContext& _opCtx = *_opCtxPtr;
     WorkingSet _ws;
     DBDirectClient _client{&_opCtx};
+
+    boost::intrusive_ptr<ExpressionContext> _expCtx = new ExpressionContext(&_opCtx, nullptr);
 };
 
 /**
@@ -199,13 +201,13 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanFailure) {
     fillOutPlannerParams(&_opCtx, collection, cq.get(), &plannerParams);
 
     // Queued data stage will return a failure during the cached plan trial period.
-    auto mockChild = std::make_unique<QueuedDataStage>(&_opCtx, &_ws);
+    auto mockChild = std::make_unique<QueuedDataStage>(_expCtx, &_ws);
     mockChild->pushBack(PlanStage::FAILURE);
 
     // High enough so that we shouldn't trigger a replan based on works.
     const size_t decisionWorks = 50;
     CachedPlanStage cachedPlanStage(
-        &_opCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, std::move(mockChild));
+        _expCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, std::move(mockChild));
 
     // This should succeed after triggering a replan.
     PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
@@ -249,13 +251,13 @@ TEST_F(QueryStageCachedPlan, QueryStageCachedPlanHitMaxWorks) {
     const size_t decisionWorks = 10;
     const size_t mockWorks =
         1U + static_cast<size_t>(internalQueryCacheEvictionRatio * decisionWorks);
-    auto mockChild = std::make_unique<QueuedDataStage>(&_opCtx, &_ws);
+    auto mockChild = std::make_unique<QueuedDataStage>(_expCtx, &_ws);
     for (size_t i = 0; i < mockWorks; i++) {
         mockChild->pushBack(PlanStage::NEED_TIME);
     }
 
     CachedPlanStage cachedPlanStage(
-        &_opCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, std::move(mockChild));
+        _expCtx, collection, &_ws, cq.get(), plannerParams, decisionWorks, std::move(mockChild));
 
     // This should succeed after triggering a replan.
     PlanYieldPolicy yieldPolicy(PlanExecutor::NO_YIELD,
@@ -453,13 +455,13 @@ TEST_F(QueryStageCachedPlan, ThrowsOnYieldRecoveryWhenIndexIsDroppedBeforePlanSe
     fillOutPlannerParams(&_opCtx, collection, cq.get(), &plannerParams);
 
     const size_t decisionWorks = 10;
-    CachedPlanStage cachedPlanStage(&_opCtx,
+    CachedPlanStage cachedPlanStage(_expCtx,
                                     collection,
                                     &_ws,
                                     cq.get(),
                                     plannerParams,
                                     decisionWorks,
-                                    std::make_unique<QueuedDataStage>(&_opCtx, &_ws));
+                                    std::make_unique<QueuedDataStage>(_expCtx, &_ws));
 
     // Drop an index while the CachedPlanStage is in a saved state. Restoring should fail, since we
     // may still need the dropped index for plan selection.
@@ -495,13 +497,13 @@ TEST_F(QueryStageCachedPlan, DoesNotThrowOnYieldRecoveryWhenIndexIsDroppedAferPl
     fillOutPlannerParams(&_opCtx, collection, cq.get(), &plannerParams);
 
     const size_t decisionWorks = 10;
-    CachedPlanStage cachedPlanStage(&_opCtx,
+    CachedPlanStage cachedPlanStage(_expCtx,
                                     collection,
                                     &_ws,
                                     cq.get(),
                                     plannerParams,
                                     decisionWorks,
-                                    std::make_unique<QueuedDataStage>(&_opCtx, &_ws));
+                                    std::make_unique<QueuedDataStage>(_expCtx, &_ws));
 
     PlanYieldPolicy yieldPolicy(PlanExecutor::YIELD_MANUAL,
                                 _opCtx.getServiceContext()->getFastClockSource());

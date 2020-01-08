@@ -33,7 +33,6 @@
 #include <vector>
 
 #include "mongo/db/exec/plan_stats.h"
-#include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set.h"
 #include "mongo/db/pipeline/expression_context.h"
 
@@ -197,28 +196,7 @@ public:
      * Stage returns StageState::ADVANCED if *out is set to the next unit of output.  Otherwise,
      * returns another value of StageState to indicate the stage's status.
      */
-    StageState work(WorkingSetID* out) {
-        invariant(_opCtx);
-        ON_BLOCK_EXIT([this] { _timer = boost::none; });
-        if (MONGO_unlikely(_expCtx->shouldTrackTiming())) {
-            _timer.emplace(getClock(), &_commonStats.executionTimeMillis);
-        }
-        ++_commonStats.works;
-
-        StageState workResult = doWork(out);
-
-        if (StageState::ADVANCED == workResult) {
-            ++_commonStats.advanced;
-        } else if (StageState::NEED_TIME == workResult) {
-            ++_commonStats.needTime;
-        } else if (StageState::NEED_YIELD == workResult) {
-            ++_commonStats.needYield;
-        } else if (StageState::FAILURE == workResult) {
-            _commonStats.failed = true;
-        }
-
-        return workResult;
-    }
+    StageState work(WorkingSetID* out);
 
     /**
      * Returns true if no more work can be done on the query / out of results.
@@ -413,10 +391,6 @@ protected:
 
 private:
     OperationContext* _opCtx;
-
-    // Timer for keeping track of duration to work() calls. Stored here instead of as a variable in
-    // work() to avoid having the stack get really big.
-    boost::optional<ScopedTimer> _timer;
 
 protected:
     boost::intrusive_ptr<ExpressionContext> _expCtx;

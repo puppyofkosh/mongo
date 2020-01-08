@@ -110,6 +110,8 @@ protected:
     const ServiceContext::UniqueOperationContext _txnPtr = cc().makeOperationContext();
     OperationContext& _opCtx = *_txnPtr;
 
+    boost::intrusive_ptr<ExpressionContext> _expCtx = new ExpressionContext(&_opCtx, nullptr);
+
 private:
     DBDirectClient _client;
 };
@@ -138,7 +140,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(2, numCounted);
@@ -169,7 +171,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(5, numCounted);
@@ -200,7 +202,7 @@ public:
         params.endKeyInclusive = false;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(3, numCounted);
@@ -227,7 +229,7 @@ public:
         params.endKeyInclusive = false;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(0, numCounted);
@@ -255,7 +257,7 @@ public:
         params.endKeyInclusive = false;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(0, numCounted);
@@ -284,7 +286,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(0, numCounted);
@@ -314,7 +316,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
         WorkingSetID wsid;
 
         int numCounted = 0;
@@ -366,7 +368,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
         WorkingSetID wsid;
 
         int numCounted = 0;
@@ -421,7 +423,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
         WorkingSetID wsid;
 
         int numCounted = 0;
@@ -483,7 +485,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(7, numCounted);
@@ -515,7 +517,7 @@ public:
         params.endKeyInclusive = true;  // yes?
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
 
         int numCounted = runCount(&count);
         ASSERT_EQUALS(9, numCounted);
@@ -544,7 +546,7 @@ public:
         params.endKeyInclusive = true;
 
         WorkingSet ws;
-        CountScan count(&_opCtx, params, &ws);
+        CountScan count(_expCtx, params, &ws);
         WorkingSetID wsid;
 
         int numCounted = 0;

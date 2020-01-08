@@ -56,8 +56,9 @@ using std::unique_ptr;
 static const int N = 50;
 
 /* Populate a QueuedDataStage and return it.  Caller owns it. */
-std::unique_ptr<QueuedDataStage> getMS(OperationContext* opCtx, WorkingSet* ws) {
-    auto ms = std::make_unique<QueuedDataStage>(opCtx, ws);
+std::unique_ptr<QueuedDataStage> getMS(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                       WorkingSet* ws) {
+    auto ms = std::make_unique<QueuedDataStage>(expCtx, ws);
 
     // Put N ADVANCED results into the mock stage, and some other stalling results (YIELD/TIME).
     for (int i = 0; i < N; ++i) {
@@ -94,15 +95,19 @@ int countResults(PlanStage* stage) {
 class QueryStageLimitSkipBasicTest {
 public:
     void run() {
+        const CollatorInterface* collator = nullptr;
+        const boost::intrusive_ptr<ExpressionContext> expCtx(
+            new ExpressionContext(_opCtx, collator));
+
         for (int i = 0; i < 2 * N; ++i) {
             WorkingSet ws;
 
             unique_ptr<PlanStage> skip =
-                std::make_unique<SkipStage>(_opCtx, i, &ws, getMS(_opCtx, &ws));
+                std::make_unique<SkipStage>(expCtx, i, &ws, getMS(expCtx, &ws));
             ASSERT_EQUALS(max(0, N - i), countResults(skip.get()));
 
             unique_ptr<PlanStage> limit =
-                std::make_unique<LimitStage>(_opCtx, i, &ws, getMS(_opCtx, &ws));
+                std::make_unique<LimitStage>(expCtx, i, &ws, getMS(expCtx, &ws));
             ASSERT_EQUALS(min(N, i), countResults(limit.get()));
         }
     }

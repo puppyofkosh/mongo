@@ -113,7 +113,7 @@ public:
         Collection* coll) {
         // Build the mock scan stage which feeds the data.
         auto ws = std::make_unique<WorkingSet>();
-        auto queuedDataStage = std::make_unique<QueuedDataStage>(&_opCtx, ws.get());
+        auto queuedDataStage = std::make_unique<QueuedDataStage>(_expCtx, ws.get());
         insertVarietyOfObjects(ws.get(), queuedDataStage.get(), coll);
 
         auto sortPattern = BSON("foo" << 1);
@@ -151,7 +151,7 @@ public:
      */
     void sortAndCheck(int direction, Collection* coll) {
         auto ws = std::make_unique<WorkingSet>();
-        auto queuedDataStage = std::make_unique<QueuedDataStage>(&_opCtx, ws.get());
+        auto queuedDataStage = std::make_unique<QueuedDataStage>(_expCtx, ws.get());
 
         // Insert a mix of the various types of data.
         insertVarietyOfObjects(ws.get(), queuedDataStage.get(), coll);
@@ -168,7 +168,7 @@ public:
                                                      std::move(keyGenStage));
 
         auto fetchStage =
-            std::make_unique<FetchStage>(&_opCtx, ws.get(), std::move(sortStage), nullptr, coll);
+            std::make_unique<FetchStage>(_expCtx, ws.get(), std::move(sortStage), nullptr, coll);
 
         // Must fetch so we can look at the doc as a BSONObj.
         auto statusWithPlanExecutor = PlanExecutor::make(
@@ -548,7 +548,7 @@ public:
         }
 
         auto ws = std::make_unique<WorkingSet>();
-        auto queuedDataStage = std::make_unique<QueuedDataStage>(&_opCtx, ws.get());
+        auto queuedDataStage = std::make_unique<QueuedDataStage>(_expCtx, ws.get());
 
         for (int i = 0; i < numObj(); ++i) {
             {
@@ -582,7 +582,7 @@ public:
                                                      std::move(keyGenStage));
 
         auto fetchStage =
-            std::make_unique<FetchStage>(&_opCtx, ws.get(), std::move(sortStage), nullptr, coll);
+            std::make_unique<FetchStage>(_expCtx, ws.get(), std::move(sortStage), nullptr, coll);
 
         // We don't get results back since we're sorting some parallel arrays.
         auto statusWithPlanExecutor = PlanExecutor::make(
