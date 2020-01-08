@@ -147,7 +147,7 @@ UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
     _shouldCheckForShardKeyUpdate =
         !(request->isFromOplogApplication() || request->getNamespaceString().isConfigDB() ||
           request->isFromMigration()) &&
-        OperationShardingState::isOperationVersioned(opCtx);
+        OperationShardingState::isOperationVersioned(_expCtx->opCtx);
 
     _specificStats.isModUpdate = params.driver->type() == UpdateDriver::UpdateType::kOperator;
 }

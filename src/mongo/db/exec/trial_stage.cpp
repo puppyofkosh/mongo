@@ -46,8 +46,7 @@ namespace mongo {
 
 const char* TrialStage::kStageType = "TRIAL";
 
-TrialStage::TrialStage(OperationContext* opCtx,
-                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
+TrialStage::TrialStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> trialPlan,
                        std::unique_ptr<PlanStage> backupPlan,
@@ -173,8 +172,7 @@ void TrialStage::_assessTrialAndBuildFinalPlan() {
 
     // The trial plan succeeded, but we need to build a plan that includes the queued data. Create a
     // final plan which UNIONs across the QueuedDataStage and the trial plan.
-    std::unique_ptr<PlanStage> unionPlan =
-        std::make_unique<OrStage>(_expCtx, _ws, false, nullptr);
+    std::unique_ptr<PlanStage> unionPlan = std::make_unique<OrStage>(_expCtx, _ws, false, nullptr);
     static_cast<OrStage*>(unionPlan.get())->addChild(std::move(_queuedData));
     static_cast<OrStage*>(unionPlan.get())->addChild(std::move(_children.front()));
     _replaceCurrentPlan(unionPlan);

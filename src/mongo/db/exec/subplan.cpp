@@ -59,8 +59,7 @@ using std::vector;
 
 const char* SubplanStage::kStageType = "SUBPLAN";
 
-SubplanStage::SubplanStage(OperationContext* opCtx,
-                           const boost::intrusive_ptr<ExpressionContext>& expCtx,
+SubplanStage::SubplanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                            const Collection* collection,
                            WorkingSet* ws,
                            const QueryPlannerParams& params,

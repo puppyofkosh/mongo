@@ -129,8 +129,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> createRandomCursorEx
 
     // Build a MultiIteratorStage and pass it the random-sampling RecordCursor.
     auto ws = std::make_unique<WorkingSet>();
-    std::unique_ptr<PlanStage> root =
-        std::make_unique<MultiIteratorStage>(opCtx, expCtx, ws.get(), coll);
+    std::unique_ptr<PlanStage> root = std::make_unique<MultiIteratorStage>(expCtx, ws.get(), coll);
     static_cast<MultiIteratorStage*>(root.get())->addIterator(std::move(rsRandCursor));
 
     // If the incoming operation is sharded, use the CSS to infer the filtering metadata for the
@@ -152,16 +151,15 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> createRandomCursorEx
         const auto minWorkAdvancedRatio = std::max(
             sampleSize / (numRecords * kMaxSampleRatioForRandCursor), kMaxSampleRatioForRandCursor);
         // The trial plan is SHARDING_FILTER-MULTI_ITERATOR.
-        auto randomCursorPlan = std::make_unique<ShardFilterStage>(
-            opCtx, expCtx, shardMetadata, ws.get(), std::move(root));
+        auto randomCursorPlan =
+            std::make_unique<ShardFilterStage>(expCtx, shardMetadata, ws.get(), std::move(root));
         // The backup plan is SHARDING_FILTER-COLLSCAN.
         std::unique_ptr<PlanStage> collScanPlan = std::make_unique<CollectionScan>(
-            opCtx, expCtx, coll, CollectionScanParams{}, ws.get(), nullptr);
+            expCtx, coll, CollectionScanParams{}, ws.get(), nullptr);
         collScanPlan = std::make_unique<ShardFilterStage>(
-            opCtx, expCtx, shardMetadata, ws.get(), std::move(collScanPlan));
+            expCtx, shardMetadata, ws.get(), std::move(collScanPlan));
         // Place a TRIAL stage at the root of the plan tree, and pass it the trial and backup plans.
-        root = std::make_unique<TrialStage>(opCtx,
-                                            expCtx,
+        root = std::make_unique<TrialStage>(expCtx,
                                             ws.get(),
                                             std::move(randomCursorPlan),
                                             std::move(collScanPlan),
