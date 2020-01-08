@@ -69,7 +69,9 @@ private:
 //
 TEST_F(QueuedDataStageTest, getValidStats) {
     WorkingSet ws;
-    auto mock = std::make_unique<QueuedDataStage>(getOpCtx(), &ws);
+    const boost::intrusive_ptr<ExpressionContext> expCtx(
+        new ExpressionContext(getOpCtx(), nullptr));
+    auto mock = std::make_unique<QueuedDataStage>(expCtx, &ws);
     const CommonStats* commonStats = mock->getCommonStats();
     ASSERT_EQUALS(commonStats->works, static_cast<size_t>(0));
     const SpecificStats* specificStats = mock->getSpecificStats();
@@ -84,7 +86,9 @@ TEST_F(QueuedDataStageTest, getValidStats) {
 TEST_F(QueuedDataStageTest, validateStats) {
     WorkingSet ws;
     WorkingSetID wsID;
-    auto mock = std::make_unique<QueuedDataStage>(getOpCtx(), &ws);
+    const boost::intrusive_ptr<ExpressionContext> expCtx(
+        new ExpressionContext(getOpCtx(), nullptr));
+    auto mock = std::make_unique<QueuedDataStage>(expCtx, &ws);
 
     // make sure that we're at all zero
     const CommonStats* stats = mock->getCommonStats();

@@ -60,8 +60,13 @@ public:
                   CollatorInterface* collator = nullptr) {
         auto opCtx = _serviceContext.makeOperationContext();
 
+        // Create a mock ExpressionContext.
+        boost::intrusive_ptr<ExpressionContext> pExpCtx(
+            new ExpressionContext(opCtx.get(), collator));
+        pExpCtx->setCollator(collator);
+
         WorkingSet ws;
-        auto queuedDataStage = std::make_unique<QueuedDataStage>(opCtx.get(), &ws);
+        auto queuedDataStage = std::make_unique<QueuedDataStage>(pExpCtx, &ws);
         BSONObj inputObj = fromjson(inputStr);
         BSONElement inputElt = inputObj["input"];
         ASSERT(inputElt.isABSONObj());
@@ -78,16 +83,11 @@ public:
             queuedDataStage->pushBack(id);
         }
 
-        // Create a mock ExpressionContext.
-        boost::intrusive_ptr<ExpressionContext> pExpCtx(
-            new ExpressionContext(opCtx.get(), collator));
-        pExpCtx->setCollator(collator);
-
         // Initialization.
         BSONObj pattern = fromjson(patternStr);
         auto sortKeyGen = std::make_unique<SortKeyGeneratorStage>(
             pExpCtx, std::move(queuedDataStage), &ws, pattern);
-        EnsureSortedStage ess(opCtx.get(), pattern, &ws, std::move(sortKeyGen));
+        EnsureSortedStage ess(pExpCtx, pattern, &ws, std::move(sortKeyGen));
         WorkingSetID id = WorkingSet::INVALID_ID;
         PlanStage::StageState state = PlanStage::NEED_TIME;
 
@@ -124,10 +124,10 @@ TEST_F(QueryStageEnsureSortedTest, EnsureSortedEmptyWorkingSet) {
     boost::intrusive_ptr<ExpressionContext> pExpCtx(new ExpressionContext(opCtx.get(), nullptr));
 
     WorkingSet ws;
-    auto queuedDataStage = std::make_unique<QueuedDataStage>(opCtx.get(), &ws);
+    auto queuedDataStage = std::make_unique<QueuedDataStage>(pExpCtx, &ws);
     auto sortKeyGen = std::make_unique<SortKeyGeneratorStage>(
         pExpCtx, std::move(queuedDataStage), &ws, BSONObj());
-    EnsureSortedStage ess(opCtx.get(), BSONObj(), &ws, std::move(sortKeyGen));
+    EnsureSortedStage ess(pExpCtx, BSONObj(), &ws, std::move(sortKeyGen));
 
     WorkingSetID id = WorkingSet::INVALID_ID;
     PlanStage::StageState state = PlanStage::NEED_TIME;

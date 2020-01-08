@@ -772,12 +772,8 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDelete(
 
             auto idHackStage = std::make_unique<IDHackStage>(
                 expCtx, unparsedQuery["_id"].wrap(), ws.get(), descriptor);
-            unique_ptr<DeleteStage> root =
-                std::make_unique<DeleteStage>(expCtx,
-                                              std::move(deleteStageParams),
-                                              ws.get(),
-                                              collection,
-                                              idHackStage.release());
+            unique_ptr<DeleteStage> root = std::make_unique<DeleteStage>(
+                expCtx, std::move(deleteStageParams), ws.get(), collection, idHackStage.release());
             return PlanExecutor::make(opCtx, std::move(ws), std::move(root), collection, policy);
         }
 

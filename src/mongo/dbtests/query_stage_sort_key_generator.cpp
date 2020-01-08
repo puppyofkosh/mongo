@@ -70,7 +70,7 @@ Value extractSortKey(const char* sortSpec, const char* doc, const CollatorInterf
 
     WorkingSet workingSet;
 
-    auto mockStage = std::make_unique<QueuedDataStage>(opCtx.get(), &workingSet);
+    auto mockStage = std::make_unique<QueuedDataStage>(pExpCtx, &workingSet);
     auto wsid = workingSet.allocate();
     auto wsm = workingSet.get(wsid);
     wsm->doc = {SnapshotId(), Document{fromjson(doc)}};
@@ -99,7 +99,7 @@ Value extractSortKeyCovered(const char* sortSpec,
 
     WorkingSet workingSet;
 
-    auto mockStage = std::make_unique<QueuedDataStage>(opCtx.get(), &workingSet);
+    auto mockStage = std::make_unique<QueuedDataStage>(pExpCtx, &workingSet);
     auto wsid = workingSet.allocate();
     auto wsm = workingSet.get(wsid);
     wsm->keyData.push_back(ikd);
