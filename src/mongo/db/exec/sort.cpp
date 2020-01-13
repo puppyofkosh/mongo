@@ -34,13 +34,13 @@
 
 namespace mongo {
 
-SortStage::SortStage(boost::intrusive_ptr<ExpressionContext> expCtx,
+SortStage::SortStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                      WorkingSet* ws,
                      SortPattern sortPattern,
                      uint64_t limit,
                      uint64_t maxMemoryUsageBytes,
                      std::unique_ptr<PlanStage> child)
-    : PlanStage(kStageType.rawData(), expCtx),
+    : PlanStage(kStageType.rawData(), &expCtx->qeCtx),
       _ws(ws),
       _sortExecutor(std::move(sortPattern),
                     limit,

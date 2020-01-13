@@ -42,11 +42,11 @@ using std::unique_ptr;
 
 const char* EnsureSortedStage::kStageType = "ENSURE_SORTED";
 
-EnsureSortedStage::EnsureSortedStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+EnsureSortedStage::EnsureSortedStage(QueryExecContext* qeCtx,
                                      BSONObj pattern,
                                      WorkingSet* ws,
                                      std::unique_ptr<PlanStage> child)
-    : PlanStage(kStageType, expCtx), _ws(ws), _sortKeyComparator(pattern) {
+    : PlanStage(kStageType, qeCtx), _ws(ws), _sortKeyComparator(pattern) {
     _children.emplace_back(std::move(child));
 }
 

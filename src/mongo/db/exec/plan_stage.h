@@ -34,6 +34,7 @@
 
 #include "mongo/db/exec/plan_stats.h"
 #include "mongo/db/exec/working_set.h"
+#include "mongo/db/exec/query_execution_context.h"
 #include "mongo/db/pipeline/expression_context.h"
 
 namespace mongo {
@@ -42,6 +43,7 @@ class ClockSource;
 class Collection;
 class OperationContext;
 class RecordId;
+class QueryExecContext;
 
 /**
  * A PlanStage ("stage") is the basic building block of a "Query Execution Plan."  A stage is
@@ -106,9 +108,9 @@ class RecordId;
  */
 class PlanStage {
 public:
-    PlanStage(const char* typeName, const boost::intrusive_ptr<ExpressionContext>& expCtx)
-        : _commonStats(typeName), _opCtx(expCtx->opCtx), _expCtx(expCtx) {
-        invariant(expCtx);
+    PlanStage(const char* typeName, QueryExecContext* qeCtx)
+        : _commonStats(typeName), _opCtx(qeCtx->opCtx), _qeCtx(qeCtx) {
+        invariant(qeCtx);
     }
 
 protected:
@@ -116,10 +118,10 @@ protected:
      * Obtain a PlanStage given a child stage. Called during the construction of derived
      * PlanStage types with a single direct descendant.
      */
-    PlanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    PlanStage(QueryExecContext* qeCtx,
               std::unique_ptr<PlanStage> child,
               const char* typeName)
-        : PlanStage(typeName, expCtx) {
+        : PlanStage(typeName, qeCtx) {
         _children.push_back(std::move(child));
     }
 
@@ -393,7 +395,7 @@ private:
     OperationContext* _opCtx;
 
 protected:
-    boost::intrusive_ptr<ExpressionContext> _expCtx;
+    QueryExecContext* _qeCtx;
 };
 
 }  // namespace mongo

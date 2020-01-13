@@ -44,7 +44,7 @@ namespace mongo {
  */
 class OrStage final : public PlanStage {
 public:
-    OrStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    OrStage(QueryExecContext* qeCtx,
             WorkingSet* ws,
             bool dedup,
             const MatchExpression* filter);

@@ -43,8 +43,8 @@ using std::vector;
 // static
 const char* EOFStage::kStageType = "EOF";
 
-EOFStage::EOFStage(const boost::intrusive_ptr<ExpressionContext>& expCtx)
-    : PlanStage(kStageType, expCtx) {}
+EOFStage::EOFStage(QueryExecContext* qeCtx)
+    : PlanStage(kStageType, qeCtx) {}
 
 EOFStage::~EOFStage() {}
 

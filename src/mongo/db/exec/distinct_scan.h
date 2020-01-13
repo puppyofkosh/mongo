@@ -95,7 +95,7 @@ struct DistinctParams {
  */
 class DistinctScan final : public RequiresIndexStage {
 public:
-    DistinctScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    DistinctScan(QueryExecContext* qeCtx,
                  DistinctParams params,
                  WorkingSet* workingSet);
 

@@ -49,12 +49,12 @@ using std::vector;
 // static
 const char* FetchStage::kStageType = "FETCH";
 
-FetchStage::FetchStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+FetchStage::FetchStage(QueryExecContext* qeCtx,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> child,
                        const MatchExpression* filter,
                        const Collection* collection)
-    : RequiresCollectionStage(kStageType, expCtx, collection),
+    : RequiresCollectionStage(kStageType, qeCtx, collection),
       _ws(ws),
       _filter(filter),
       _idRetrying(WorkingSet::INVALID_ID) {

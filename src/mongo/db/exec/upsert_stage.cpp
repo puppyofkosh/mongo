@@ -73,12 +73,12 @@ void getShardKeyAndImmutablePaths(OperationContext* opCtx,
 }
 }  // namespace
 
-UpsertStage::UpsertStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+UpsertStage::UpsertStage(QueryExecContext* qeCtx,
                          const UpdateStageParams& params,
                          WorkingSet* ws,
                          Collection* collection,
                          PlanStage* child)
-    : UpdateStage(expCtx, params, ws, collection) {
+    : UpdateStage(qeCtx, params, ws, collection) {
     // We should never create this stage for a non-upsert request.
     invariant(_params.request->isUpsert());
     _children.emplace_back(child);

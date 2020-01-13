@@ -56,12 +56,12 @@ using std::vector;
 // static
 const char* CollectionScan::kStageType = "COLLSCAN";
 
-CollectionScan::CollectionScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+CollectionScan::CollectionScan(QueryExecContext* qeCtx,
                                const Collection* collection,
                                const CollectionScanParams& params,
                                WorkingSet* workingSet,
                                const MatchExpression* filter)
-    : RequiresCollectionStage(kStageType, expCtx, collection),
+    : RequiresCollectionStage(kStageType, qeCtx, collection),
       _workingSet(workingSet),
       _filter(filter),
       _params(params) {

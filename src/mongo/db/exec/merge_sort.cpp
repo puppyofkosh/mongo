@@ -47,10 +47,10 @@ using std::vector;
 // static
 const char* MergeSortStage::kStageType = "SORT_MERGE";
 
-MergeSortStage::MergeSortStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+MergeSortStage::MergeSortStage(QueryExecContext* qeCtx,
                                const MergeSortStageParams& params,
                                WorkingSet* ws)
-    : PlanStage(kStageType, expCtx),
+    : PlanStage(kStageType, qeCtx),
       _ws(ws),
       _pattern(params.pattern),
       _collator(params.collator),

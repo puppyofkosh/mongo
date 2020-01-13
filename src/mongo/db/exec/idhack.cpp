@@ -49,22 +49,22 @@ using std::vector;
 // static
 const char* IDHackStage::kStageType = "IDHACK";
 
-IDHackStage::IDHackStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+IDHackStage::IDHackStage(QueryExecContext* qeCtx,
                          CanonicalQuery* query,
                          WorkingSet* ws,
                          const IndexDescriptor* descriptor)
-    : RequiresIndexStage(kStageType, expCtx, descriptor, ws),
+    : RequiresIndexStage(kStageType, qeCtx, descriptor, ws),
       _workingSet(ws),
       _key(query->getQueryObj()["_id"].wrap()) {
     _specificStats.indexName = descriptor->indexName();
     _addKeyMetadata = query->getQueryRequest().returnKey();
 }
 
-IDHackStage::IDHackStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+IDHackStage::IDHackStage(QueryExecContext* qeCtx,
                          const BSONObj& key,
                          WorkingSet* ws,
                          const IndexDescriptor* descriptor)
-    : RequiresIndexStage(kStageType, expCtx, descriptor, ws), _workingSet(ws), _key(key) {
+    : RequiresIndexStage(kStageType, qeCtx, descriptor, ws), _workingSet(ws), _key(key) {
     _specificStats.indexName = descriptor->indexName();
 }
 

@@ -158,7 +158,7 @@ public:
             nss = ctx.getNss();
             auto indexList = listIndexesInLock(opCtx, collection, nss, includeBuildUUIDs);
             auto ws = std::make_unique<WorkingSet>();
-            auto root = std::make_unique<QueuedDataStage>(expCtx, ws.get());
+            auto root = std::make_unique<QueuedDataStage>(&expCtx->qeCtx, ws.get());
 
             for (auto&& indexSpec : indexList) {
                 WorkingSetID id = ws->allocate();

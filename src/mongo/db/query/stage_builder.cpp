@@ -76,6 +76,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
                                        WorkingSet* ws) {
 
     const auto& expCtx = cq.getExpCtx();
+    auto* const qeCtx = &expCtx->qeCtx;
     switch (root->getType()) {
         case STAGE_COLLSCAN: {
             const CollectionScanNode* csn = static_cast<const CollectionScanNode*>(root);
@@ -91,7 +92,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             params.resumeAfterRecordId = csn->resumeAfterRecordId;
             params.stopApplyingFilterAfterFirstMatch = csn->stopApplyingFilterAfterFirstMatch;
             return std::make_unique<CollectionScan>(
-                expCtx, collection, params, ws, csn->filter.get());
+                qeCtx, collection, params, ws, csn->filter.get());
         }
         case STAGE_IXSCAN: {
             const IndexScanNode* ixn = static_cast<const IndexScanNode*>(root);
@@ -115,13 +116,13 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             params.direction = ixn->direction;
             params.addKeyMetadata = ixn->addKeyMetadata;
             params.shouldDedup = ixn->shouldDedup;
-            return std::make_unique<IndexScan>(expCtx, std::move(params), ws, ixn->filter.get());
+            return std::make_unique<IndexScan>(qeCtx, std::move(params), ws, ixn->filter.get());
         }
         case STAGE_FETCH: {
             const FetchNode* fn = static_cast<const FetchNode*>(root);
             auto childStage = buildStages(opCtx, collection, cq, qsol, fn->children[0], ws);
             return std::make_unique<FetchStage>(
-                expCtx, ws, std::move(childStage), fn->filter.get(), collection);
+                qeCtx, ws, std::move(childStage), fn->filter.get(), collection);
         }
         case STAGE_SORT: {
             const SortNode* sn = static_cast<const SortNode*>(root);
@@ -143,7 +144,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             auto returnKeyNode = static_cast<const ReturnKeyNode*>(root);
             auto childStage =
                 buildStages(opCtx, collection, cq, qsol, returnKeyNode->children[0], ws);
-            return std::make_unique<ReturnKeyStage>(expCtx,
+            return std::make_unique<ReturnKeyStage>(qeCtx,
                                                     std::move(returnKeyNode->sortKeyMetaFields),
                                                     ws,
                                                     cq.getExpCtx()->sortKeyFormat,
@@ -180,16 +181,16 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
         case STAGE_LIMIT: {
             const LimitNode* ln = static_cast<const LimitNode*>(root);
             auto childStage = buildStages(opCtx, collection, cq, qsol, ln->children[0], ws);
-            return std::make_unique<LimitStage>(expCtx, ln->limit, ws, std::move(childStage));
+            return std::make_unique<LimitStage>(qeCtx, ln->limit, ws, std::move(childStage));
         }
         case STAGE_SKIP: {
             const SkipNode* sn = static_cast<const SkipNode*>(root);
             auto childStage = buildStages(opCtx, collection, cq, qsol, sn->children[0], ws);
-            return std::make_unique<SkipStage>(expCtx, sn->skip, ws, std::move(childStage));
+            return std::make_unique<SkipStage>(qeCtx, sn->skip, ws, std::move(childStage));
         }
         case STAGE_AND_HASH: {
             const AndHashNode* ahn = static_cast<const AndHashNode*>(root);
-            auto ret = std::make_unique<AndHashStage>(expCtx, ws);
+            auto ret = std::make_unique<AndHashStage>(qeCtx, ws);
             for (size_t i = 0; i < ahn->children.size(); ++i) {
                 auto childStage = buildStages(opCtx, collection, cq, qsol, ahn->children[i], ws);
                 ret->addChild(std::move(childStage));
@@ -198,7 +199,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
         }
         case STAGE_OR: {
             const OrNode* orn = static_cast<const OrNode*>(root);
-            auto ret = std::make_unique<OrStage>(expCtx, ws, orn->dedup, orn->filter.get());
+            auto ret = std::make_unique<OrStage>(qeCtx, ws, orn->dedup, orn->filter.get());
             for (size_t i = 0; i < orn->children.size(); ++i) {
                 auto childStage = buildStages(opCtx, collection, cq, qsol, orn->children[i], ws);
                 ret->addChild(std::move(childStage));
@@ -207,7 +208,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
         }
         case STAGE_AND_SORTED: {
             const AndSortedNode* asn = static_cast<const AndSortedNode*>(root);
-            auto ret = std::make_unique<AndSortedStage>(expCtx, ws);
+            auto ret = std::make_unique<AndSortedStage>(qeCtx, ws);
             for (size_t i = 0; i < asn->children.size(); ++i) {
                 auto childStage = buildStages(opCtx, collection, cq, qsol, asn->children[i], ws);
                 ret->addChild(std::move(childStage));
@@ -220,7 +221,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             params.dedup = msn->dedup;
             params.pattern = msn->sort;
             params.collator = cq.getCollator();
-            auto ret = std::make_unique<MergeSortStage>(expCtx, params, ws);
+            auto ret = std::make_unique<MergeSortStage>(qeCtx, params, ws);
             for (size_t i = 0; i < msn->children.size(); ++i) {
                 auto childStage = buildStages(opCtx, collection, cq, qsol, msn->children[i], ws);
                 ret->addChild(std::move(childStage));
@@ -242,7 +243,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
                 opCtx, node->index.identifier.catalogName);
             invariant(twoDIndex);
 
-            return std::make_unique<GeoNear2DStage>(params, expCtx, ws, twoDIndex);
+            return std::make_unique<GeoNear2DStage>(params, qeCtx, ws, twoDIndex);
         }
         case STAGE_GEO_NEAR_2DSPHERE: {
             const GeoNear2DSphereNode* node = static_cast<const GeoNear2DSphereNode*>(root);
@@ -259,7 +260,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
                 opCtx, node->index.identifier.catalogName);
             invariant(s2Index);
 
-            return std::make_unique<GeoNear2DSphereStage>(params, expCtx, ws, s2Index);
+            return std::make_unique<GeoNear2DSphereStage>(params, qeCtx, ws, s2Index);
         }
         case STAGE_TEXT: {
             const TextNode* node = static_cast<const TextNode*>(root);
@@ -279,7 +280,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             // created by planning a query that contains "no-op" expressions.
             params.query = static_cast<FTSQueryImpl&>(*node->ftsQuery);
             params.wantTextScore = cq.metadataDeps()[DocumentMetadataFields::kTextScore];
-            return std::make_unique<TextStage>(expCtx, params, ws, node->filter.get());
+            return std::make_unique<TextStage>(qeCtx, params, ws, node->filter.get());
         }
         case STAGE_SHARDING_FILTER: {
             const ShardingFilterNode* fn = static_cast<const ShardingFilterNode*>(root);
@@ -287,7 +288,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
 
             auto css = CollectionShardingState::get(opCtx, collection->ns());
             return std::make_unique<ShardFilterStage>(
-                expCtx, css->getOrphansFilter(opCtx, collection), ws, std::move(childStage));
+                qeCtx, css->getOrphansFilter(opCtx, collection), ws, std::move(childStage));
         }
         case STAGE_DISTINCT_SCAN: {
             const DistinctNode* dn = static_cast<const DistinctNode*>(root);
@@ -308,7 +309,7 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             params.scanDirection = dn->direction;
             params.bounds = dn->bounds;
             params.fieldNo = dn->fieldNo;
-            return std::make_unique<DistinctScan>(expCtx, std::move(params), ws);
+            return std::make_unique<DistinctScan>(qeCtx, std::move(params), ws);
         }
         case STAGE_COUNT_SCAN: {
             const CountScanNode* csn = static_cast<const CountScanNode*>(root);
@@ -330,13 +331,13 @@ std::unique_ptr<PlanStage> buildStages(OperationContext* opCtx,
             params.startKeyInclusive = csn->startKeyInclusive;
             params.endKey = csn->endKey;
             params.endKeyInclusive = csn->endKeyInclusive;
-            return std::make_unique<CountScan>(expCtx, std::move(params), ws);
+            return std::make_unique<CountScan>(qeCtx, std::move(params), ws);
         }
         case STAGE_ENSURE_SORTED: {
             const EnsureSortedNode* esn = static_cast<const EnsureSortedNode*>(root);
             auto childStage = buildStages(opCtx, collection, cq, qsol, esn->children[0], ws);
             return std::make_unique<EnsureSortedStage>(
-                expCtx, esn->pattern, ws, std::move(childStage));
+                qeCtx, esn->pattern, ws, std::move(childStage));
         }
         case STAGE_CACHED_PLAN:
         case STAGE_CHANGE_STREAM_PROXY:

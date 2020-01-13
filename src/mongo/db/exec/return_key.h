@@ -46,12 +46,12 @@ class ReturnKeyStage : public PlanStage {
 public:
     static constexpr StringData kStageName = "RETURN_KEY"_sd;
 
-    ReturnKeyStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    ReturnKeyStage(QueryExecContext* qeCtx,
                    std::vector<FieldPath> sortKeyMetaFields,
                    WorkingSet* ws,
                    SortKeyFormat sortKeyFormat,
                    std::unique_ptr<PlanStage> child)
-        : PlanStage(expCtx, std::move(child), kStageName.rawData()),
+        : PlanStage(qeCtx, std::move(child), kStageName.rawData()),
           _ws(*ws),
           _sortKeyMetaFields(std::move(sortKeyMetaFields)),
           _sortKeyFormat(sortKeyFormat) {}

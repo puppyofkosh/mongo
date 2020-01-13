@@ -95,6 +95,7 @@ ExpressionContext::ExpressionContext(
                            ? TimeZoneDatabase::get(opCtx->getServiceContext())
                            : nullptr),
       variablesParseState(variables.useIdGenerator()),
+      qeCtx{opCtx},
       _ownedCollator(std::move(collator)),
       _unownedCollator(_ownedCollator.get()),
       _documentComparator(_unownedCollator),
@@ -122,6 +123,7 @@ ExpressionContext::ExpressionContext(OperationContext* opCtx,
                            ? TimeZoneDatabase::get(opCtx->getServiceContext())
                            : nullptr),
       variablesParseState(variables.useIdGenerator()),
+      qeCtx{opCtx},
       _unownedCollator(collator),
       _documentComparator(_unownedCollator),
       _valueComparator(_unownedCollator) {

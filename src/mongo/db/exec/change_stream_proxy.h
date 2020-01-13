@@ -48,7 +48,7 @@ public:
      * The 'pipeline' argument must be a $changeStream pipeline. Passing a non-$changeStream into
      * the constructor will cause an invariant() to fail.
      */
-    ChangeStreamProxyStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    ChangeStreamProxyStage(QueryExecContext* qeCtx,
                            std::unique_ptr<Pipeline, PipelineDeleter> pipeline,
                            WorkingSet* ws);
 

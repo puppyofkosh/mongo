@@ -45,13 +45,13 @@ using std::vector;
 // static
 const char* CountStage::kStageType = "COUNT";
 
-CountStage::CountStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+CountStage::CountStage(QueryExecContext* qeCtx,
                        Collection* collection,
                        long long limit,
                        long long skip,
                        WorkingSet* ws,
                        PlanStage* child)
-    : PlanStage(kStageType, expCtx), _limit(limit), _skip(skip), _leftToSkip(_skip), _ws(ws) {
+    : PlanStage(kStageType, qeCtx), _limit(limit), _skip(skip), _leftToSkip(_skip), _ws(ws) {
     invariant(_skip >= 0);
     invariant(_limit >= 0);
     invariant(child);

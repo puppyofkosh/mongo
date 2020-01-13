@@ -110,23 +110,23 @@ const char* UpdateStage::kStageType = "UPDATE";
 const UpdateStats UpdateStage::kEmptyUpdateStats;
 
 // Public constructor.
-UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+UpdateStage::UpdateStage(QueryExecContext* qeCtx,
                          const UpdateStageParams& params,
                          WorkingSet* ws,
                          Collection* collection,
                          PlanStage* child)
-    : UpdateStage(expCtx, params, ws, collection) {
+    : UpdateStage(qeCtx, params, ws, collection) {
     // We should never reach here if the request is an upsert.
     invariant(!_params.request->isUpsert());
     _children.emplace_back(child);
 }
 
 // Protected constructor.
-UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+UpdateStage::UpdateStage(QueryExecContext* qeCtx,
                          const UpdateStageParams& params,
                          WorkingSet* ws,
                          Collection* collection)
-    : RequiresMutableCollectionStage(kStageType, expCtx, collection),
+    : RequiresMutableCollectionStage(kStageType, qeCtx, collection),
       _params(params),
       _ws(ws),
       _doc(params.driver->getDocument()),
@@ -147,7 +147,7 @@ UpdateStage::UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
     _shouldCheckForShardKeyUpdate =
         !(request->isFromOplogApplication() || request->getNamespaceString().isConfigDB() ||
           request->isFromMigration()) &&
-        OperationShardingState::isOperationVersioned(_expCtx->opCtx);
+        OperationShardingState::isOperationVersioned(_qeCtx->opCtx);
 
     _specificStats.isModUpdate = params.driver->type() == UpdateDriver::UpdateType::kOperator;
 }

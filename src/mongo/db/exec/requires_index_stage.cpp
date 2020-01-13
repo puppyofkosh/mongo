@@ -34,10 +34,10 @@
 namespace mongo {
 
 RequiresIndexStage::RequiresIndexStage(const char* stageType,
-                                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                       QueryExecContext* qeCtx,
                                        const IndexDescriptor* indexDescriptor,
                                        WorkingSet* workingSet)
-    : RequiresCollectionStage(stageType, expCtx, indexDescriptor->getCollection()),
+    : RequiresCollectionStage(stageType, qeCtx, indexDescriptor->getCollection()),
       _weakIndexCatalogEntry(collection()->getIndexCatalog()->getEntryShared(indexDescriptor)) {
     auto indexCatalogEntry = _weakIndexCatalogEntry.lock();
     _indexDescriptor = indexCatalogEntry->descriptor();

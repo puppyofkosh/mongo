@@ -108,7 +108,7 @@ public:
         HIT_END
     };
 
-    IndexScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    IndexScan(QueryExecContext* qeCtx,
               IndexScanParams params,
               WorkingSet* workingSet,
               const MatchExpression* filter);

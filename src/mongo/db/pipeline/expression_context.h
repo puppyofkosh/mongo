@@ -39,6 +39,7 @@
 #include "mongo/bson/bsonobj.h"
 #include "mongo/db/exec/document_value/document_comparator.h"
 #include "mongo/db/exec/document_value/value_comparator.h"
+#include "mongo/db/exec/query_execution_context.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/pipeline/aggregation_request.h"
@@ -255,6 +256,7 @@ public:
     // The explain verbosity requested by the user, or boost::none if no explain was requested.
     boost::optional<ExplainOptions::Verbosity> explain;
 
+    // TODO: Remove all the stuff that's duplicated in QueryExecContext.
     bool fromMongos = false;
     bool needsMerge = false;
     bool inMongos = false;
@@ -310,6 +312,9 @@ public:
 
     // True if this ExpressionContext is used to parse a collection validator expression.
     bool isParsingCollectionValidator = false;
+
+    // TODO: ian fill this in.
+    QueryExecContext qeCtx;
 
 protected:
     static const int kInterruptCheckPeriod = 128;

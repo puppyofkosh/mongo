@@ -57,7 +57,7 @@ class MergeSortStageParams;
  */
 class MergeSortStage final : public PlanStage {
 public:
-    MergeSortStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    MergeSortStage(QueryExecContext* qeCtx,
                    const MergeSortStageParams& params,
                    WorkingSet* ws);
 

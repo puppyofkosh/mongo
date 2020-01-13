@@ -45,9 +45,9 @@ using std::vector;
 // static
 const char* AndSortedStage::kStageType = "AND_SORTED";
 
-AndSortedStage::AndSortedStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+AndSortedStage::AndSortedStage(QueryExecContext* qeCtx,
                                WorkingSet* ws)
-    : PlanStage(kStageType, expCtx),
+    : PlanStage(kStageType, qeCtx),
       _ws(ws),
       _targetNode(numeric_limits<size_t>::max()),
       _targetId(WorkingSet::INVALID_ID),

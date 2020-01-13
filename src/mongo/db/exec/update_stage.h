@@ -81,7 +81,7 @@ class UpdateStage : public RequiresMutableCollectionStage {
     UpdateStage& operator=(const UpdateStage&) = delete;
 
 public:
-    UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    UpdateStage(QueryExecContext* qeCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection,
@@ -126,7 +126,7 @@ public:
                                                  const DuplicateKeyErrorInfo& errorInfo);
 
 protected:
-    UpdateStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    UpdateStage(QueryExecContext* qeCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection);

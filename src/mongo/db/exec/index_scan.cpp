@@ -60,11 +60,11 @@ namespace mongo {
 // static
 const char* IndexScan::kStageType = "IXSCAN";
 
-IndexScan::IndexScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+IndexScan::IndexScan(QueryExecContext* qeCtx,
                      IndexScanParams params,
                      WorkingSet* workingSet,
                      const MatchExpression* filter)
-    : RequiresIndexStage(kStageType, expCtx, params.indexDescriptor, workingSet),
+    : RequiresIndexStage(kStageType, qeCtx, params.indexDescriptor, workingSet),
       _workingSet(workingSet),
       _keyPattern(params.keyPattern.getOwned()),
       _bounds(std::move(params.bounds)),

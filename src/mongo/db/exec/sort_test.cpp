@@ -85,7 +85,7 @@ public:
         auto expCtx = make_intrusive<ExpressionContext>(getOpCtx(), collator);
 
         // QueuedDataStage will be owned by SortStage.
-        auto queuedDataStage = std::make_unique<QueuedDataStage>(expCtx, &ws);
+        auto queuedDataStage = std::make_unique<QueuedDataStage>(qeCtx, &ws);
         BSONObj inputObj = fromjson(inputStr);
         BSONElement inputElt = inputObj.getField("input");
         ASSERT(inputElt.isABSONObj());
@@ -106,9 +106,9 @@ public:
         auto sortPattern = fromjson(patternStr);
 
         auto sortKeyGen = std::make_unique<SortKeyGeneratorStage>(
-            expCtx, std::move(queuedDataStage), &ws, sortPattern);
+            qeCtx, std::move(queuedDataStage), &ws, sortPattern);
 
-        SortStage sort(expCtx,
+        SortStage sort(qeCtx,
                        &ws,
                        SortPattern{sortPattern, expCtx},
                        limit,
@@ -169,11 +169,11 @@ TEST_F(SortStageTest, SortEmptyWorkingSet) {
     auto expCtx = make_intrusive<ExpressionContext>(getOpCtx(), nullptr);
 
     // QueuedDataStage will be owned by SortStage.
-    auto queuedDataStage = std::make_unique<QueuedDataStage>(expCtx, &ws);
+    auto queuedDataStage = std::make_unique<QueuedDataStage>(qeCtx, &ws);
     auto sortKeyGen =
-        std::make_unique<SortKeyGeneratorStage>(expCtx, std::move(queuedDataStage), &ws, BSONObj());
+        std::make_unique<SortKeyGeneratorStage>(qeCtx, std::move(queuedDataStage), &ws, BSONObj());
     auto sortPattern = BSON("a" << 1);
-    SortStage sort(expCtx,
+    SortStage sort(qeCtx,
                    &ws,
                    SortPattern{sortPattern, expCtx},
                    0u,

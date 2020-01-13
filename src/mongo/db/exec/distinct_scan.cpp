@@ -46,10 +46,10 @@ using std::vector;
 // static
 const char* DistinctScan::kStageType = "DISTINCT_SCAN";
 
-DistinctScan::DistinctScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+DistinctScan::DistinctScan(QueryExecContext* qeCtx,
                            DistinctParams params,
                            WorkingSet* workingSet)
-    : RequiresIndexStage(kStageType, expCtx, params.indexDescriptor, workingSet),
+    : RequiresIndexStage(kStageType, qeCtx, params.indexDescriptor, workingSet),
       _workingSet(workingSet),
       _keyPattern(std::move(params.keyPattern)),
       _scanDirection(params.scanDirection),

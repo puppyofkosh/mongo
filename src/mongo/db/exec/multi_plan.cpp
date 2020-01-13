@@ -61,11 +61,11 @@ using std::vector;
 // static
 const char* MultiPlanStage::kStageType = "MULTI_PLAN";
 
-MultiPlanStage::MultiPlanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+MultiPlanStage::MultiPlanStage(QueryExecContext* qeCtx,
                                const Collection* collection,
                                CanonicalQuery* cq,
                                CachingMode cachingMode)
-    : RequiresCollectionStage(kStageType, expCtx, collection),
+    : RequiresCollectionStage(kStageType, qeCtx, collection),
       _cachingMode(cachingMode),
       _query(cq),
       _bestPlanIdx(kNoSuchPlan),

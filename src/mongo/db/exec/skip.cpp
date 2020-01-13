@@ -43,11 +43,11 @@ using std::vector;
 // static
 const char* SkipStage::kStageType = "SKIP";
 
-SkipStage::SkipStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+SkipStage::SkipStage(QueryExecContext* qeCtx,
                      long long toSkip,
                      WorkingSet* ws,
                      std::unique_ptr<PlanStage> child)
-    : PlanStage(kStageType, expCtx), _ws(ws), _toSkip(toSkip) {
+    : PlanStage(kStageType, qeCtx), _ws(ws), _toSkip(toSkip) {
     _children.emplace_back(std::move(child));
 }
 

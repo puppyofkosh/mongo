@@ -53,7 +53,7 @@ SortKeyGeneratorStage::SortKeyGeneratorStage(const boost::intrusive_ptr<Expressi
                                              std::unique_ptr<PlanStage> child,
                                              WorkingSet* ws,
                                              const BSONObj& sortSpecObj)
-    : PlanStage(kStageType, pExpCtx),
+    : PlanStage(kStageType, &pExpCtx->qeCtx),
       _ws(ws),
       _sortKeyGen({{sortSpecObj, pExpCtx}, pExpCtx->getCollator()}) {
     _children.emplace_back(std::move(child));

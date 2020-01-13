@@ -50,11 +50,11 @@ using std::vector;
 // static
 const char* ShardFilterStage::kStageType = "SHARDING_FILTER";
 
-ShardFilterStage::ShardFilterStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+ShardFilterStage::ShardFilterStage(QueryExecContext* qeCtx,
                                    ScopedCollectionMetadata metadata,
                                    WorkingSet* ws,
                                    std::unique_ptr<PlanStage> child)
-    : PlanStage(kStageType, expCtx), _ws(ws), _shardFilterer(std::move(metadata)) {
+    : PlanStage(kStageType, qeCtx), _ws(ws), _shardFilterer(std::move(metadata)) {
     _children.emplace_back(std::move(child));
 }
 

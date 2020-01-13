@@ -69,7 +69,7 @@ class OperationContext;
  */
 class SubplanStage final : public RequiresAllIndicesStage {
 public:
-    SubplanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    SubplanStage(QueryExecContext* qeCtx,
                  const Collection* collection,
                  WorkingSet* ws,
                  const QueryPlannerParams& params,

@@ -43,7 +43,7 @@ namespace mongo {
  */
 class EnsureSortedStage final : public PlanStage {
 public:
-    EnsureSortedStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    EnsureSortedStage(QueryExecContext* qeCtx,
                       BSONObj pattern,
                       WorkingSet* ws,
                       std::unique_ptr<PlanStage> child);

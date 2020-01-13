@@ -53,7 +53,7 @@ class SortStage final : public PlanStage {
 public:
     static constexpr StringData kStageType = "SORT"_sd;
 
-    SortStage(boost::intrusive_ptr<ExpressionContext> expCtx,
+    SortStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
               WorkingSet* ws,
               SortPattern sortPattern,
               uint64_t limit,

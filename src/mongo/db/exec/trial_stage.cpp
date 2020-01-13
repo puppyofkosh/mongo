@@ -46,13 +46,13 @@ namespace mongo {
 
 const char* TrialStage::kStageType = "TRIAL";
 
-TrialStage::TrialStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+TrialStage::TrialStage(QueryExecContext* qeCtx,
                        WorkingSet* ws,
                        std::unique_ptr<PlanStage> trialPlan,
                        std::unique_ptr<PlanStage> backupPlan,
                        size_t maxTrialWorks,
                        double minWorkAdvancedRatio)
-    : PlanStage(kStageType, expCtx), _ws(ws) {
+    : PlanStage(kStageType, qeCtx), _ws(ws) {
     invariant(minWorkAdvancedRatio > 0);
     invariant(minWorkAdvancedRatio <= 1);
     invariant(maxTrialWorks > 0);
@@ -64,7 +64,7 @@ TrialStage::TrialStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
     _backupPlan = std::move(backupPlan);
 
     // We need to cache results during the trial phase in case it succeeds.
-    _queuedData = std::make_unique<QueuedDataStage>(expCtx, _ws);
+    _queuedData = std::make_unique<QueuedDataStage>(qeCtx, _ws);
 
     // Set up stats tracking specific to this stage.
     _specificStats.successThreshold = minWorkAdvancedRatio;
@@ -172,7 +172,7 @@ void TrialStage::_assessTrialAndBuildFinalPlan() {
 
     // The trial plan succeeded, but we need to build a plan that includes the queued data. Create a
     // final plan which UNIONs across the QueuedDataStage and the trial plan.
-    std::unique_ptr<PlanStage> unionPlan = std::make_unique<OrStage>(_expCtx, _ws, false, nullptr);
+    std::unique_ptr<PlanStage> unionPlan = std::make_unique<OrStage>(_qeCtx, _ws, false, nullptr);
     static_cast<OrStage*>(unionPlan.get())->addChild(std::move(_queuedData));
     static_cast<OrStage*>(unionPlan.get())->addChild(std::move(_children.front()));
     _replaceCurrentPlan(unionPlan);

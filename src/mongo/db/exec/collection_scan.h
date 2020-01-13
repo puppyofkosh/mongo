@@ -53,7 +53,7 @@ class CollectionScan final : public RequiresCollectionStage {
 public:
     static const char* kStageType;
 
-    CollectionScan(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    CollectionScan(QueryExecContext* qeCtx,
                    const Collection* collection,
                    const CollectionScanParams& params,
                    WorkingSet* workingSet,

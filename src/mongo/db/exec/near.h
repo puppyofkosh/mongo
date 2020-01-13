@@ -104,7 +104,7 @@ protected:
     /**
      * Subclasses of NearStage must provide basics + a stats object which gets owned here.
      */
-    NearStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    NearStage(QueryExecContext* qeCtx,
               const char* typeName,
               StageType type,
               WorkingSet* workingSet,

@@ -56,7 +56,7 @@ class RecordID;
  */
 class TextMatchStage final : public PlanStage {
 public:
-    TextMatchStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    TextMatchStage(QueryExecContext* qeCtx,
                    std::unique_ptr<PlanStage> child,
                    const FTSQueryImpl& query,
                    const FTSSpec& spec,

@@ -57,14 +57,14 @@ namespace mongo {
 // static
 const char* CachedPlanStage::kStageType = "CACHED_PLAN";
 
-CachedPlanStage::CachedPlanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+CachedPlanStage::CachedPlanStage(QueryExecContext* qeCtx,
                                  Collection* collection,
                                  WorkingSet* ws,
                                  CanonicalQuery* cq,
                                  const QueryPlannerParams& params,
                                  size_t decisionWorks,
                                  std::unique_ptr<PlanStage> root)
-    : RequiresAllIndicesStage(kStageType, expCtx, collection),
+    : RequiresAllIndicesStage(kStageType, qeCtx, collection),
       _ws(ws),
       _canonicalQuery(cq),
       _plannerParams(params),
@@ -225,7 +225,7 @@ Status CachedPlanStage::replan(PlanYieldPolicy* yieldPolicy, bool shouldCache) {
     // and so on. The working set will be shared by all candidate plans.
     auto cachingMode = shouldCache ? MultiPlanStage::CachingMode::AlwaysCache
                                    : MultiPlanStage::CachingMode::NeverCache;
-    _children.emplace_back(new MultiPlanStage(_expCtx, collection(), _canonicalQuery, cachingMode));
+    _children.emplace_back(new MultiPlanStage(_qeCtx, collection(), _canonicalQuery, cachingMode));
     MultiPlanStage* multiPlanStage = static_cast<MultiPlanStage*>(child().get());
 
     for (size_t ix = 0; ix < solutions.size(); ++ix) {

@@ -56,7 +56,7 @@ class PlanYieldPolicy;
  */
 class CachedPlanStage final : public RequiresAllIndicesStage {
 public:
-    CachedPlanStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    CachedPlanStage(QueryExecContext* qeCtx,
                     Collection* collection,
                     WorkingSet* ws,
                     CanonicalQuery* cq,

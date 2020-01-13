@@ -48,12 +48,12 @@ class RecordCursor;
 class IDHackStage final : public RequiresIndexStage {
 public:
     /** Takes ownership of all the arguments -collection. */
-    IDHackStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    IDHackStage(QueryExecContext* qeCtx,
                 CanonicalQuery* query,
                 WorkingSet* ws,
                 const IndexDescriptor* descriptor);
 
-    IDHackStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    IDHackStage(QueryExecContext* qeCtx,
                 const BSONObj& key,
                 WorkingSet* ws,
                 const IndexDescriptor* descriptor);

@@ -42,7 +42,7 @@ class RecordStoreFastCountStage final : public RequiresCollectionStage {
 public:
     static const char* kStageType;
 
-    RecordStoreFastCountStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    RecordStoreFastCountStage(QueryExecContext* qeCtx,
                               Collection* collection,
                               long long skip,
                               long long limit);

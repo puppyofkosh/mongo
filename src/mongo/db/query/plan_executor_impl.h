@@ -36,6 +36,8 @@
 
 namespace mongo {
 
+class QueryExecContext;
+
 class PlanExecutorImpl : public PlanExecutor {
     PlanExecutorImpl(const PlanExecutorImpl&) = delete;
     PlanExecutorImpl& operator=(const PlanExecutorImpl&) = delete;
@@ -167,6 +169,11 @@ private:
     // object. Note that this pointer can also be null when '_cq' is null. For example a "list
     // collections" query does not need a CanonicalQuery or ExpressionContext.
     boost::intrusive_ptr<ExpressionContext> _expCtx;
+
+    // TODO: There are two pointers for query execution context. TODO explain inner outer plan
+    // executor.
+    std::unique_ptr<QueryExecContext> _ownedQeContext;
+    QueryExecContext* _qeCtx;
 
     std::unique_ptr<WorkingSet> _workingSet;
     std::unique_ptr<QuerySolution> _qs;

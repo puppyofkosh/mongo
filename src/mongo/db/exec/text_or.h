@@ -67,7 +67,7 @@ public:
         kDone,
     };
 
-    TextOrStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    TextOrStage(QueryExecContext* qeCtx,
                 const FTSSpec& ftsSpec,
                 WorkingSet* ws,
                 const MatchExpression* filter,

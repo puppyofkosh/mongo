@@ -48,7 +48,7 @@ class RecordId;
  */
 class QueuedDataStage final : public PlanStage {
 public:
-    QueuedDataStage(const boost::intrusive_ptr<ExpressionContext>& expCtx, WorkingSet* ws);
+    QueuedDataStage(QueryExecContext* qeCtx, WorkingSet* ws);
 
     StageState doWork(WorkingSetID* out) final;
 

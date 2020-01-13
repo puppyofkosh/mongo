@@ -99,7 +99,7 @@ class DeleteStage final : public RequiresMutableCollectionStage {
     DeleteStage& operator=(const DeleteStage&) = delete;
 
 public:
-    DeleteStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    DeleteStage(QueryExecContext* qeCtx,
                 std::unique_ptr<DeleteStageParams> params,
                 WorkingSet* ws,
                 Collection* collection,

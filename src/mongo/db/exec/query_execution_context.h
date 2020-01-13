@@ -1,5 +1,5 @@
 /**
- *    Copyright (C) 2018-present MongoDB, Inc.
+ *    Copyright (C) 2020-present MongoDB, Inc.
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the Server Side Public License, version 1,
@@ -29,33 +29,36 @@
 
 #pragma once
 
-#include "mongo/db/exec/plan_stage.h"
-#include "mongo/db/record_id.h"
+#include <boost/intrusive_ptr.hpp>
+#include <boost/optional.hpp>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "mongo/base/string_data.h"
+#include "mongo/bson/bsonobj.h"
+#include "mongo/db/exec/document_value/document_comparator.h"
+#include "mongo/db/exec/document_value/value_comparator.h"
+#include "mongo/db/namespace_string.h"
+#include "mongo/db/operation_context.h"
+#include "mongo/db/pipeline/aggregation_request.h"
+#include "mongo/db/pipeline/javascript_execution.h"
+#include "mongo/db/pipeline/mongo_process_interface.h"
+#include "mongo/db/pipeline/runtime_constants_gen.h"
+#include "mongo/db/pipeline/variables.h"
+#include "mongo/db/query/collation/collator_interface.h"
+#include "mongo/db/query/datetime/date_time_support.h"
+#include "mongo/db/query/explain_options.h"
+#include "mongo/db/query/tailable_mode.h"
+#include "mongo/db/server_options.h"
+#include "mongo/util/string_map.h"
+#include "mongo/util/uuid.h"
 
 namespace mongo {
 
-/**
- * This stage just returns EOF immediately.
- */
-class EOFStage final : public PlanStage {
-public:
-    EOFStage(QueryExecContext* qeCtx);
-
-    ~EOFStage();
-
-    bool isEOF() final;
-    StageState doWork(WorkingSetID* out) final;
-
-
-    StageType stageType() const final {
-        return STAGE_EOF;
-    }
-
-    std::unique_ptr<PlanStageStats> getStats();
-
-    const SpecificStats* getSpecificStats() const final;
-
-    static const char* kStageType;
+struct QueryExecContext {
+    // TODO: fill this in
+    OperationContext* opCtx;
 };
 
 }  // namespace mongo

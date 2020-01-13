@@ -46,7 +46,7 @@ namespace mongo {
  */
 class CountStage final : public PlanStage {
 public:
-    CountStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    CountStage(QueryExecContext* qeCtx,
                Collection* collection,
                long long limit,
                long long skip,

@@ -48,7 +48,7 @@ namespace mongo {
 class RequiresIndexStage : public RequiresCollectionStage {
 public:
     RequiresIndexStage(const char* stageType,
-                       const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                       QueryExecContext* qeCtx,
                        const IndexDescriptor* indexDescriptor,
                        WorkingSet* workingSet);
 

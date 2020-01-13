@@ -32,6 +32,7 @@
 #include "mongo/db/exec/update_stage.h"
 
 namespace mongo {
+class QueryExecContext;
 
 /**
  * Execution stage for update requests with {upsert:true}. This is a specialized UpdateStage which,
@@ -51,7 +52,7 @@ class UpsertStage final : public UpdateStage {
     UpsertStage& operator=(const UpsertStage&) = delete;
 
 public:
-    UpsertStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    UpsertStage(QueryExecContext* qeCtx,
                 const UpdateStageParams& params,
                 WorkingSet* ws,
                 Collection* collection,

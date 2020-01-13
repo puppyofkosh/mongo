@@ -56,9 +56,9 @@ template <typename CollectionT>
 class RequiresCollectionStageBase : public PlanStage {
 public:
     RequiresCollectionStageBase(const char* stageType,
-                                const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                QueryExecContext* qeCtx,
                                 CollectionT coll)
-        : PlanStage(stageType, expCtx),
+        : PlanStage(stageType, qeCtx),
           _collection(coll),
           _collectionUUID(_collection->uuid()),
           _databaseEpoch(getDatabaseEpoch(_collection)),

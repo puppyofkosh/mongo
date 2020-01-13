@@ -72,12 +72,12 @@ bool shouldRestartDeleteIfNoLongerMatches(const DeleteStageParams* params) {
 // static
 const char* DeleteStage::kStageType = "DELETE";
 
-DeleteStage::DeleteStage(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+DeleteStage::DeleteStage(QueryExecContext* qeCtx,
                          std::unique_ptr<DeleteStageParams> params,
                          WorkingSet* ws,
                          Collection* collection,
                          PlanStage* child)
-    : RequiresMutableCollectionStage(kStageType, expCtx, collection),
+    : RequiresMutableCollectionStage(kStageType, qeCtx, collection),
       _params(std::move(params)),
       _ws(ws),
       _idRetrying(WorkingSet::INVALID_ID),
