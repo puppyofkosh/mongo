@@ -34,14 +34,13 @@
 
 namespace mongo {
 
-/**
- * Previously, there were multiple supported versions of the update language.
- */
 enum class UpdateSemantics {
-    // The update system introduced in v3.6, and is the only supported system. When a single update
-    // adds multiple fields, those fields are added in lexicographic order by field name. This
-    // system introduces support for arrayFilters and $[] syntax.
+    // The update system introduced in v3.6. When a single update adds multiple fields, those
+    // fields are added in lexicographic order by field name. This system introduces support for
+    // arrayFilters and $[] syntax.
     kUpdateNode = 1,
+
+    kPipeline = 2,
 
     // Must be last.
     kNumUpdateSemantics
@@ -55,6 +54,7 @@ enum class UpdateSemantics {
 class LogBuilder {
 public:
     static constexpr StringData kUpdateSemanticsFieldName = "$v"_sd;
+    static constexpr StringData kPipelineFieldName = "$pipeline"_sd;
 
     /** Construct a new LogBuilder. Log entries will be recorded as new children under the
      *  'logRoot' Element, which must be of type mongo::Object and have no children.

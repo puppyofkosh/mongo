@@ -89,6 +89,7 @@
 #include "mongo/db/storage/storage_engine.h"
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/db/transaction_participant.h"
+#include "mongo/db/update/log_builder.h"
 #include "mongo/db/views/view_catalog.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/random.h"
@@ -1230,7 +1231,33 @@ Status applyOperation_inlock(OperationContext* opCtx,
             const bool upsert = alwaysUpsert || op.getUpsert().value_or(false);
             UpdateRequest request(requestNss);
             request.setQuery(updateCriteria);
-            request.setUpdateModification(o);
+            if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
+                // TODO: error codes
+                uassert(ErrorCodes::BadValue,
+                        str::stream() << "no '" << LogBuilder::kPipelineFieldName
+                                      << "' field found in pipeline update oplog entry",
+                        o[LogBuilder::kPipelineFieldName].ok());
+
+                uassert(ErrorCodes::TypeMismatch,
+                        str::stream() << LogBuilder::kPipelineFieldName
+                                      << " field incorrect type in update oplog entry",
+                        o[LogBuilder::kPipelineFieldName].type() == BSONType::Array);
+
+                std::vector<BSONObj> pipeline;
+                BSONObjIterator i(o[LogBuilder::kPipelineFieldName].Obj());
+                while (i.more()) {
+                    BSONElement next = i.next();
+                    uassert(ErrorCodes::TypeMismatch,
+                            str::stream()
+                                << LogBuilder::kPipelineFieldName << " includes non objects",
+                            next.type() == BSONType::Object);
+                    pipeline.push_back(next.embeddedObject());
+                }
+                request.setUpdateModification(pipeline);
+            } else {
+                request.setUpdateModification(o);
+            }
+
             request.setUpsert(upsert);
             request.setFromOplogApplication(true);
 
