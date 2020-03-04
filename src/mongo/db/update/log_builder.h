@@ -62,9 +62,12 @@ public:
     inline LogBuilder(mutablebson::Element logRoot)
         : _logRoot(logRoot),
           _objectReplacementAccumulator(_logRoot),
-          _setAccumulator(_logRoot.getDocument().end()),
-          _unsetAccumulator(_setAccumulator),
-          _updateSemantics(_setAccumulator) {
+
+          // Give these "non-ok" defaults.
+          _pipelineAccumulator(_logRoot.getDocument().end()),
+          _setAccumulator(_pipelineAccumulator),
+          _unsetAccumulator(_pipelineAccumulator),
+          _updateSemantics(_pipelineAccumulator) {
         dassert(logRoot.isType(mongo::Object));
         dassert(!logRoot.hasChildren());
     }
@@ -125,6 +128,9 @@ public:
      */
     Status getReplacementObject(mutablebson::Element* outElt);
 
+    // Return an "array" element that will be treated as a pipeline.
+    Status getPipelineUpdate(mutablebson::Element* outElt);
+
 private:
     // Returns true if the object replacement accumulator is valid and has children, false
     // otherwise.
@@ -136,6 +142,8 @@ private:
 
     mutablebson::Element _logRoot;
     mutablebson::Element _objectReplacementAccumulator;
+    mutablebson::Element _pipelineAccumulator;
+
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
     mutablebson::Element _updateSemantics;

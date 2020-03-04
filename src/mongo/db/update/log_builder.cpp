@@ -50,6 +50,11 @@ inline Status LogBuilder::addToSection(Element newElt, Element* section, const c
                           "LogBuilder: Invalid attempt to add a $set/$unset entry"
                           "to a log with an existing object replacement");
 
+        if (_pipelineAccumulator.ok())
+            return Status(ErrorCodes::IllegalOperation,
+                          "LogBuilder: Invalid attempt to add a $set/$unset entry"
+                          "to a log with an existing pipeline");
+
         mutablebson::Document& doc = _logRoot.getDocument();
 
         // We should not already have an element with the section name under the root.
@@ -70,6 +75,7 @@ inline Status LogBuilder::addToSection(Element newElt, Element* section, const c
         // Invalidate attempts to add an object replacement, now that we have a named
         // section under the root.
         _objectReplacementAccumulator = doc.end();
+        _pipelineAccumulator = doc.end();
     }
 
     // Whatever transpired, we should now have an ok accumulator for the section, and not
@@ -150,7 +156,7 @@ Status LogBuilder::getReplacementObject(Element* outElt) {
     // If the replacement accumulator is not ok, we must have started a $set or $unset
     // already, so an object replacement is not permitted.
     if (!_objectReplacementAccumulator.ok()) {
-        dassert(_setAccumulator.ok() || _unsetAccumulator.ok());
+        dassert(_setAccumulator.ok() || _unsetAccumulator.ok() || _pipelineAccumulator.ok());
         return Status(ErrorCodes::IllegalOperation,
                       "LogBuilder: Invalid attempt to obtain the object replacement slot "
                       "for a log containing $set or $unset entries");
@@ -169,6 +175,42 @@ Status LogBuilder::getReplacementObject(Element* outElt) {
 
     // OK to enqueue object replacement items.
     *outElt = _objectReplacementAccumulator;
+    return Status::OK();
+}
+
+Status LogBuilder::getPipelineUpdate(Element* outElt) {
+    // If the replacement accumulator is not ok, we must have started a $set or $unset
+    // already, so an object replacement is not permitted.
+    if (_setAccumulator.ok() || _unsetAccumulator.ok() || hasObjectReplacement()) {
+        return Status(ErrorCodes::IllegalOperation,
+                      "LogBuilder: Invalid attempt to obtain the pipeline slot "
+                      "for a log containing object replacement, $set or $unset entries");
+    }
+
+    if (_pipelineAccumulator.ok()) {
+        return Status(ErrorCodes::IllegalOperation,
+                      "LogBuilder: Invalid attempt to acquire the pipeline slot "
+                      "in a log with existing pipeline data");
+    }
+
+    if (_updateSemantics.ok()) {
+        return Status(ErrorCodes::IllegalOperation,
+                      "LogBuilder: Invalid attempt to acquire the pipeline slot in a log with "
+                      "an update semantics value");
+    }
+
+    mutablebson::Document& doc = _logRoot.getDocument();
+
+    invariant(!_logRoot[kPipelineFieldName].ok());
+    const Element newElement = doc.makeElementArray(kPipelineFieldName);
+    invariant(newElement.ok());
+    invariant(_logRoot.pushBack(newElement));
+    _pipelineAccumulator = newElement;
+    *outElt = _pipelineAccumulator;
+
+    // Ensure that attempts to do a replacement style update fail.
+    _objectReplacementAccumulator = doc.end();
+
     return Status::OK();
 }
 

@@ -283,19 +283,6 @@ Status UpdateDriver::update(StringData matchedField,
     if (docWasModified) {
         *docWasModified = !applyResult.noop;
     }
-    if (_updateType == UpdateType::kOperator && _logOp && logOpRec) {
-        // If there are binVersion=3.6 mongod nodes in the replica set, they need to be told that
-        // this update is using the "kUpdateNode" version of the update semantics and not the older
-        // update semantics that could be used by a featureCompatibilityVersion=3.4 node.
-        //
-        // TODO (SERVER-32240): Once binVersion <= 3.6 nodes are not supported in a replica set, we
-        // can safely elide this "$v" UpdateSemantics field from oplog entries, because there will
-        // only one supported version, which all nodes will assume is in use.
-        //
-        // We also don't need to specify the semantics for a full document replacement (and there
-        // would be no place to put a "$v" field in the update document).
-        invariant(logBuilder.setUpdateSemantics(UpdateSemantics::kUpdateNode));
-    }
 
     if (_logOp && logOpRec)
         *logOpRec = _logDoc.getObject();

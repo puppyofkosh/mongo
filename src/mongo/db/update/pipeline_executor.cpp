@@ -91,6 +91,134 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
     auto transformedDoc = _pipeline->getNext()->toBson();
     auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
 
+    if (applyParams.logBuilder) {
+        std::vector<std::string> fieldsRemoved;
+        {
+            auto replacementDoc = transformedDoc;
+            auto originalDoc = applyParams.element.getDocument().getObject();
+
+            // Check for noop.
+            if (originalDoc.binaryEqual(replacementDoc)) {
+                return ApplyResult::noopResult();
+            }
+
+            // Remove the contents of the provided document.
+            auto current = applyParams.element.leftChild();
+            while (current.ok()) {
+                // Keep the _id if the replacement document does not have one.
+                if (!transformedDocHasIdField && current.getFieldName() == kIdFieldName) {
+                    current = current.rightSibling();
+                    continue;
+                }
+                fieldsRemoved.push_back(current.getFieldName().toString());
+
+                auto toRemove = current;
+                current = current.rightSibling();
+                invariant(toRemove.remove());
+            }
+
+            // Insert the provided contents instead.
+            for (auto&& elem : replacementDoc) {
+                invariant(applyParams.element.appendElement(elem));
+            }
+
+            // Validate for storage.
+            if (applyParams.validateForStorage) {
+                storage_validation::storageValid(applyParams.element.getDocument());
+            }
+
+            // Check immutable paths.
+            for (auto path = applyParams.immutablePaths.begin();
+                 path != applyParams.immutablePaths.end();
+                 ++path) {
+                // TODO: ian review this in more depth. It's copy-pasted.
+
+                // Find the updated field in the updated document.
+                auto newElem = applyParams.element;
+                for (size_t i = 0; i < (*path)->numParts(); ++i) {
+                    newElem = newElem[(*path)->getPart(i)];
+                    if (!newElem.ok()) {
+                        break;
+                    }
+                    uassert(
+                        ErrorCodes::NotSingleValueField,
+                        str::stream()
+                            << "After applying the update to the document, the (immutable) field '"
+                            << (*path)->dottedField()
+                            << "' was found to be an array or array descendant.",
+                        newElem.getType() != BSONType::Array);
+                }
+
+                auto oldElem =
+                    dotted_path_support::extractElementAtPath(originalDoc, (*path)->dottedField());
+
+                uassert(ErrorCodes::ImmutableField,
+                        str::stream()
+                            << "After applying the update, the '" << (*path)->dottedField()
+                            << "' (required and immutable) field was "
+                               "found to have been removed --"
+                            << originalDoc,
+                        newElem.ok() || !oldElem.ok());
+                if (newElem.ok() && oldElem.ok()) {
+                    uassert(ErrorCodes::ImmutableField,
+                            str::stream()
+                                << "After applying the update, the (immutable) field '"
+                                << (*path)->dottedField() << "' was found to have been altered to "
+                                << newElem.toString(),
+                            newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
+                }
+            }
+        }
+
+        // TODO: This probably doesn't always work.
+        if (auto modifiedPaths = _pipeline->modifiedPaths(); modifiedPaths) {
+            mutablebson::Element pipelineArray = applyParams.logBuilder->getDocument().end();
+            invariant(applyParams.logBuilder->getPipelineUpdate(&pipelineArray));
+
+            std::set<std::string> setFields;
+            BSONObjBuilder dollarSetBuilder;
+            for (auto&& elt : transformedDoc) {
+                if (modifiedPaths->count(elt.fieldName())) {
+                    dollarSetBuilder.append(elt);
+                    setFields.insert(elt.fieldName());
+                }
+            }
+            BSONObj dollarSet = dollarSetBuilder.obj();
+
+            BSONObjBuilder projectBuilder;
+            for (auto&& field : fieldsRemoved) {
+                if (setFields.count(field)) {
+                    continue;
+                }
+                if (modifiedPaths->count(field)) {
+                    projectBuilder.appendBool(field, false);
+                }
+            }
+            BSONObj project = projectBuilder.obj();
+
+            BSONArrayBuilder pipeline;
+            if (!dollarSet.isEmpty()) {
+                pipeline.append(BSON("$set" << dollarSet));
+            }
+
+            if (!project.isEmpty()) {
+                // TODO: Maybe use $unset instead?
+                pipeline.append(BSON("$project" << project));
+            }
+
+            invariant(pipelineArray.setValueArray(pipeline.arr()));
+            invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
+        } else {
+            auto replacementObject = applyParams.logBuilder->getDocument().end();
+            invariant(applyParams.logBuilder->getReplacementObject(&replacementObject));
+            for (auto current = applyParams.element.leftChild(); current.ok();
+                 current = current.rightSibling()) {
+                invariant(replacementObject.appendElement(current.getValue()));
+            }
+        }
+        return ApplyResult();
+    }
+
     return ObjectReplaceExecutor::applyReplacementUpdate(
         applyParams, transformedDoc, transformedDocHasIdField);
 }
