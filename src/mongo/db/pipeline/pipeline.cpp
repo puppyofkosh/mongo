@@ -660,8 +660,8 @@ std::unique_ptr<Pipeline, PipelineDeleter> Pipeline::makePipeline(
     return pipeline;
 }
 
-boost::optional<std::unordered_set<std::string>> Pipeline::modifiedPaths() const {
-    std::unordered_set<std::string> modifiedPaths;
+boost::optional<std::set<std::string>> Pipeline::modifiedPaths() const {
+    std::set<std::string> modifiedPaths;
     using GetModPathReturn = DocumentSource::GetModPathsReturn;
     using Type = DocumentSource::GetModPathsReturn::Type;
     for (auto&& stage : _sources) {

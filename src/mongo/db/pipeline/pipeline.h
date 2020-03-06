@@ -313,7 +313,7 @@ public:
     boost::intrusive_ptr<DocumentSource> popFrontWithNameAndCriteria(
         StringData targetStageName, std::function<bool(const DocumentSource* const)> predicate);
 
-    boost::optional<std::unordered_set<std::string>> modifiedPaths() const;
+    boost::optional<std::set<std::string>> modifiedPaths() const;
 
     /**
      * PipelineD is a "sister" class that has additional functionality for the Pipeline. It exists

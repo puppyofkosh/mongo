@@ -1232,27 +1232,40 @@ Status applyOperation_inlock(OperationContext* opCtx,
             UpdateRequest request(requestNss);
             request.setQuery(updateCriteria);
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
-                // TODO: error codes
-                uassert(ErrorCodes::BadValue,
-                        str::stream() << "no '" << LogBuilder::kPipelineFieldName
-                                      << "' field found in pipeline update oplog entry",
-                        o[LogBuilder::kPipelineFieldName].ok());
-
-                uassert(ErrorCodes::TypeMismatch,
-                        str::stream() << LogBuilder::kPipelineFieldName
-                                      << " field incorrect type in update oplog entry",
-                        o[LogBuilder::kPipelineFieldName].type() == BSONType::Array);
+                // Build a pipeline of the following form:
+                // [{$unset: [...], {$set: {...}}}]
+                std::cout << "ian: update entry is " << o << std::endl;
 
                 std::vector<BSONObj> pipeline;
-                BSONObjIterator i(o[LogBuilder::kPipelineFieldName].Obj());
-                while (i.more()) {
-                    BSONElement next = i.next();
-                    uassert(ErrorCodes::TypeMismatch,
-                            str::stream()
-                                << LogBuilder::kPipelineFieldName << " includes non objects",
-                            next.type() == BSONType::Object);
-                    pipeline.push_back(next.embeddedObject());
+                if (o["$set"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected '$set' to be of type object",
+                            o["$set"].type() == BSONType::Object);
+
+                    BSONObj set = o["$set"].wrap();
+
+                    // TODO: maybe avoid BSON() here and elsewhere.
+                    pipeline.push_back(set);
+                    std::cout << "ian: adding " << pipeline.back() << std::endl;
                 }
+
+                if (o["$unset"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected '$unset' to be of type object",
+                            o["$unset"].type() == BSONType::Object);
+
+                    BSONArrayBuilder unsetBuilder;
+                    BSONObjIterator i(o["$unset"].embeddedObject());
+                    while (i.more()) {
+                        auto elt = i.next();
+                        unsetBuilder.append(elt.fieldName());
+                    }
+                    auto unsetArr = unsetBuilder.arr();
+
+                    pipeline.push_back(BSON("$unset" << unsetArr));
+                    std::cout << "ian: adding " << pipeline.back() << std::endl;
+                }
+
                 request.setUpdateModification(pipeline);
             } else {
                 request.setUpdateModification(o);

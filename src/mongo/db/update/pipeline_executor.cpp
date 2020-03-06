@@ -172,41 +172,67 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
 
         // TODO: This probably doesn't always work.
         if (auto modifiedPaths = _pipeline->modifiedPaths(); modifiedPaths) {
-            mutablebson::Element pipelineArray = applyParams.logBuilder->getDocument().end();
-            invariant(applyParams.logBuilder->getPipelineUpdate(&pipelineArray));
+            for (auto p : *modifiedPaths) {
+                std::cout << "ian: modified path " << p << std::endl;
+            }
 
             std::set<std::string> setFields;
-            BSONObjBuilder dollarSetBuilder;
             for (auto&& elt : transformedDoc) {
-                if (modifiedPaths->count(elt.fieldName())) {
-                    dollarSetBuilder.append(elt);
+                auto next = modifiedPaths->lower_bound(elt.fieldName());
+                std::cout << "inspecting field " << elt.fieldName() << std::endl;
+
+                // Remove null terminator.
+                const auto eltFieldNameSize = elt.fieldNameSize() - 1;
+
+                // Case 1 : This is not a modified path.
+                if (next == modifiedPaths->end()) {
+                    std::cout << "ian no next modified path none\n";
+                    continue;
+                } else if (*next == elt.fieldName()) {
+                    std::cout << "ian exact match\n";
+                    // This path exactly, is modified.
+                    setFields.insert(elt.fieldName());
+                    invariant(applyParams.logBuilder->addToSetsWithNewFieldName(*next, elt));
+                } else if (str::startsWith((*next).c_str(), elt.fieldName()) &&
+                           (*next).size() > static_cast<size_t>(eltFieldNameSize) &&
+                           (*next)[eltFieldNameSize] == '.') {
+                    std::cout << "ian prefix match w " << *next << std::endl;
+                    // Some subfield of this path is modified.
+
+                    const char* pathPtrBegin = (*next).c_str();
+                    const char* pathPtrRemaining = pathPtrBegin;
+                    BSONElement valElt = dotted_path_support::extractElementAtPathOrArrayAlongPath(
+                        transformedDoc, pathPtrRemaining  // modified
+                    );
+
+                    if (valElt.eoo()) {
+                        // The modified path does not exist in the document.
+                        // TODO: test this case
+                        continue;
+                    }
+
+                    StringData pathPrefix(pathPtrBegin,
+                                          *pathPtrRemaining == '\0'
+                                              ? std::strlen(pathPtrBegin)
+                                              : pathPtrRemaining - pathPtrBegin - 1);
+                    std::cout << "ian: path Pref is " << pathPrefix << std::endl;
+
+                    // 2) Add to $set.
+                    invariant(
+                        applyParams.logBuilder->addToSetsWithNewFieldName(pathPrefix, valElt));
                     setFields.insert(elt.fieldName());
                 }
             }
-            BSONObj dollarSet = dollarSetBuilder.obj();
 
-            BSONObjBuilder projectBuilder;
             for (auto&& field : fieldsRemoved) {
                 if (setFields.count(field)) {
                     continue;
                 }
                 if (modifiedPaths->count(field)) {
-                    projectBuilder.appendBool(field, false);
+                    invariant(applyParams.logBuilder->addToUnsets(field));
                 }
             }
-            BSONObj project = projectBuilder.obj();
 
-            BSONArrayBuilder pipeline;
-            if (!dollarSet.isEmpty()) {
-                pipeline.append(BSON("$set" << dollarSet));
-            }
-
-            if (!project.isEmpty()) {
-                // TODO: Maybe use $unset instead?
-                pipeline.append(BSON("$project" << project));
-            }
-
-            invariant(pipelineArray.setValueArray(pipeline.arr()));
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
         } else {
             auto replacementObject = applyParams.logBuilder->getDocument().end();
