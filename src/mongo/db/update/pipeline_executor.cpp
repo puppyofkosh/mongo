@@ -34,6 +34,7 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/pipeline/document_source_queue.h"
 #include "mongo/db/pipeline/lite_parsed_pipeline.h"
+#include "mongo/db/update/document_differ.h"
 #include "mongo/db/update/object_replace_executor.h"
 #include "mongo/db/update/storage_validation.h"
 
@@ -41,6 +42,9 @@ namespace mongo {
 
 namespace {
 constexpr StringData kIdFieldName = "_id"_sd;
+
+struct DocumentDiff {};
+
 }  // namespace
 
 PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -90,6 +94,8 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
     queueStage->emplace_back(Document{applyParams.element.getDocument().getObject()});
     auto transformedDoc = _pipeline->getNext()->toBson();
     auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
+
+    auto originalDoc = applyParams.element.getDocument().getObject();
 
     if (applyParams.logBuilder) {
         std::vector<std::string> fieldsRemoved;
@@ -170,69 +176,17 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
             }
         }
 
-        // TODO: This probably doesn't always work.
-        if (auto modifiedPaths = _pipeline->modifiedPaths(); modifiedPaths) {
-            for (auto p : *modifiedPaths) {
-                std::cout << "ian: modified path " << p << std::endl;
+        auto diff = doc_diff::DocumentDiff::computeDiff(originalDoc, transformedDoc);
+
+        if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize())) {
+            for (auto&& [fieldRef, elt] : diff.toSet()) {
+                invariant(
+                    applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.dottedField(), elt));
             }
 
-            std::set<std::string> setFields;
-            for (auto&& elt : transformedDoc) {
-                auto next = modifiedPaths->lower_bound(elt.fieldName());
-                std::cout << "inspecting field " << elt.fieldName() << std::endl;
-
-                // Remove null terminator.
-                const auto eltFieldNameSize = elt.fieldNameSize() - 1;
-
-                // Case 1 : This is not a modified path.
-                if (next == modifiedPaths->end()) {
-                    std::cout << "ian no next modified path none\n";
-                    continue;
-                } else if (*next == elt.fieldName()) {
-                    std::cout << "ian exact match\n";
-                    // This path exactly, is modified.
-                    setFields.insert(elt.fieldName());
-                    invariant(applyParams.logBuilder->addToSetsWithNewFieldName(*next, elt));
-                } else if (str::startsWith((*next).c_str(), elt.fieldName()) &&
-                           (*next).size() > static_cast<size_t>(eltFieldNameSize) &&
-                           (*next)[eltFieldNameSize] == '.') {
-                    std::cout << "ian prefix match w " << *next << std::endl;
-                    // Some subfield of this path is modified.
-
-                    const char* pathPtrBegin = (*next).c_str();
-                    const char* pathPtrRemaining = pathPtrBegin;
-                    BSONElement valElt = dotted_path_support::extractElementAtPathOrArrayAlongPath(
-                        transformedDoc, pathPtrRemaining  // modified
-                    );
-
-                    if (valElt.eoo()) {
-                        // The modified path does not exist in the document.
-                        // TODO: test this case
-                        continue;
-                    }
-
-                    StringData pathPrefix(pathPtrBegin,
-                                          *pathPtrRemaining == '\0'
-                                              ? std::strlen(pathPtrBegin)
-                                              : pathPtrRemaining - pathPtrBegin - 1);
-                    std::cout << "ian: path Pref is " << pathPrefix << std::endl;
-
-                    // 2) Add to $set.
-                    invariant(
-                        applyParams.logBuilder->addToSetsWithNewFieldName(pathPrefix, valElt));
-                    setFields.insert(elt.fieldName());
-                }
+            for (auto&& fieldRef : diff.toRemove()) {
+                invariant(applyParams.logBuilder->addToUnsets(fieldRef.dottedField()));
             }
-
-            for (auto&& field : fieldsRemoved) {
-                if (setFields.count(field)) {
-                    continue;
-                }
-                if (modifiedPaths->count(field)) {
-                    invariant(applyParams.logBuilder->addToUnsets(field));
-                }
-            }
-
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
         } else {
             auto replacementObject = applyParams.logBuilder->getDocument().end();
