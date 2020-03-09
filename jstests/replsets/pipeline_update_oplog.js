@@ -81,6 +81,13 @@ testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}},
                      {_id: id, subObj: {a: 1, b: 2, c: "foo"}},
                      true);
 
+// Add subfield and remove top level field.
+id = generateId();
+testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}, toRemove: "foo"},
+                     [{$project: {subObj: 1}}, {$set: {"subObj.c": "foo"}}],
+                     {_id: id, subObj: {a: 1, b: 2, c: "foo"}},
+                     true);
+
 // Inclusion projection dropping a field (cannot be handled by static analysis).
 id = generateId();
 testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}},
