@@ -1234,7 +1234,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
                 // Build a pipeline of the following form:
                 // [{$unset: [...], {$set: {...}}}]
-                std::cout << "ian: update entry is " << o << std::endl;
+                std::cout << "update entry is " << o << std::endl;
 
                 std::vector<BSONObj> pipeline;
                 if (o["$set"].ok()) {
@@ -1243,10 +1243,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
                             o["$set"].type() == BSONType::Object);
 
                     BSONObj set = o["$set"].wrap();
-
-                    // TODO: maybe avoid BSON() here and elsewhere.
                     pipeline.push_back(set);
-                    std::cout << "ian: adding " << pipeline.back() << std::endl;
                 }
 
                 if (o["$unset"].ok()) {
@@ -1263,7 +1260,6 @@ Status applyOperation_inlock(OperationContext* opCtx,
                     auto unsetArr = unsetBuilder.arr();
 
                     pipeline.push_back(BSON("$unset" << unsetArr));
-                    std::cout << "ian: adding " << pipeline.back() << std::endl;
                 }
 
                 request.setUpdateModification(pipeline);

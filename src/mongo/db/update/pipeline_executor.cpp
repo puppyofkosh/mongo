@@ -42,9 +42,6 @@ namespace mongo {
 
 namespace {
 constexpr StringData kIdFieldName = "_id"_sd;
-
-struct DocumentDiff {};
-
 }  // namespace
 
 PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,

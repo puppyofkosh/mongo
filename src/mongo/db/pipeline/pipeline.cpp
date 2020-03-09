@@ -659,18 +659,4 @@ std::unique_ptr<Pipeline, PipelineDeleter> Pipeline::makePipeline(
 
     return pipeline;
 }
-
-boost::optional<std::set<std::string>> Pipeline::modifiedPaths() const {
-    std::set<std::string> modifiedPaths;
-    using GetModPathReturn = DocumentSource::GetModPathsReturn;
-    using Type = DocumentSource::GetModPathsReturn::Type;
-    for (auto&& stage : _sources) {
-        auto modPathsInfo = stage->getModifiedPaths();
-        if (modPathsInfo.type != Type::kFiniteSet) {
-            return boost::none;
-        }
-        modifiedPaths.insert(modPathsInfo.paths.begin(), modPathsInfo.paths.end());
-    }
-    return modifiedPaths;
-}
 }  // namespace mongo

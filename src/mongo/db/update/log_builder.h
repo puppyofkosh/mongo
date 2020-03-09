@@ -34,10 +34,13 @@
 
 namespace mongo {
 
+/**
+ * Previously, there were multiple supported versions of the update language.
+ */
 enum class UpdateSemantics {
-    // The update system introduced in v3.6. When a single update adds multiple fields, those
-    // fields are added in lexicographic order by field name. This system introduces support for
-    // arrayFilters and $[] syntax.
+    // The update system introduced in v3.6, and is the only supported system. When a single update
+    // adds multiple fields, those fields are added in lexicographic order by field name. This
+    // system introduces support for arrayFilters and $[] syntax.
     kUpdateNode = 1,
 
     kPipeline = 2,
@@ -54,7 +57,6 @@ enum class UpdateSemantics {
 class LogBuilder {
 public:
     static constexpr StringData kUpdateSemanticsFieldName = "$v"_sd;
-    static constexpr StringData kPipelineFieldName = "$pipeline"_sd;
 
     /** Construct a new LogBuilder. Log entries will be recorded as new children under the
      *  'logRoot' Element, which must be of type mongo::Object and have no children.
@@ -62,12 +64,9 @@ public:
     inline LogBuilder(mutablebson::Element logRoot)
         : _logRoot(logRoot),
           _objectReplacementAccumulator(_logRoot),
-
-          // Give these "non-ok" defaults.
-          _pipelineAccumulator(_logRoot.getDocument().end()),
-          _setAccumulator(_pipelineAccumulator),
-          _unsetAccumulator(_pipelineAccumulator),
-          _updateSemantics(_pipelineAccumulator) {
+          _setAccumulator(_logRoot.getDocument().end()),
+          _unsetAccumulator(_setAccumulator),
+          _updateSemantics(_setAccumulator) {
         dassert(logRoot.isType(mongo::Object));
         dassert(!logRoot.hasChildren());
     }
@@ -128,9 +127,6 @@ public:
      */
     Status getReplacementObject(mutablebson::Element* outElt);
 
-    // Return an "array" element that will be treated as a pipeline.
-    Status getPipelineUpdate(mutablebson::Element* outElt);
-
 private:
     // Returns true if the object replacement accumulator is valid and has children, false
     // otherwise.
@@ -142,8 +138,6 @@ private:
 
     mutablebson::Element _logRoot;
     mutablebson::Element _objectReplacementAccumulator;
-    mutablebson::Element _pipelineAccumulator;
-
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
     mutablebson::Element _updateSemantics;
