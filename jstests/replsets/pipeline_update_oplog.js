@@ -74,6 +74,12 @@ testUpdateReplicates({_id: id, x: 4, subObj: {a: 1, b: 2}},
                      {_id: id, x: 4, subObj: {a: "foo", b: 2}, y: 1},
                      true);
 
+id = generateId();
+testUpdateReplicates({_id: id, x: 4, subObj: {a: NumberLong(1), b: 2}},
+                     [{$set: {"subObj.a": 1, y: 1}}],
+                     {_id: id, x: 4, subObj: {a: 1, b: 2}, y: 1},
+                     true);
+
 // Adding a subfield.
 id = generateId();
 testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}},

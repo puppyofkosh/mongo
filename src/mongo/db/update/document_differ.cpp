@@ -46,7 +46,7 @@ DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
         auto postElt = *postIt;
 
         if (preElt.fieldNameStringData() == postElt.fieldNameStringData()) {
-            if (preElt.woCompare(postElt) == 0) {
+            if (preElt.binaryEqual(postElt)) {
                 // They're identical. Move on.
             } else if (preElt.type() == BSONType::Object && postElt.type() == BSONType::Object) {
                 // Both are objects, but not identical. We can compute the diff and merge it.
