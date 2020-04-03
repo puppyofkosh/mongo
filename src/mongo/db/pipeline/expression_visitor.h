@@ -162,7 +162,7 @@ template <typename AccumulatorState>
 class ExpressionFromAccumulator;
 
 class ExpressionInternalRemoveTombstones;
-    
+
 /**
  * This is a base class to allow for traversal of an aggregation expression tree. It implements the
  * visitor pattern, in which every derived class from Expression implements an accept() method,

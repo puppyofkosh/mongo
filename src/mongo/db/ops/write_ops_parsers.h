@@ -36,7 +36,7 @@
 
 namespace mongo {
 class Pipeline;
-    
+
 namespace write_ops {
 
 struct DeltaUpdate {
@@ -73,7 +73,7 @@ public:
     UpdateModification() = default;
     UpdateModification(BSONElement update);
     UpdateModification(DeltaUpdate p);
-    
+
     UpdateModification(std::vector<BSONObj> pipeline);
     // This constructor exists only to provide a fast-path for constructing classic-style updates.
     UpdateModification(const BSONObj& update);

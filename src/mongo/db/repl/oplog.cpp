@@ -1261,15 +1261,13 @@ Status applyOperation_inlock(OperationContext* opCtx,
                             str::stream() << "Expected '$unset' to be of type object",
                             o["$unset"].type() == BSONType::Object);
 
-                    for(auto&& f : o["$unset"].embeddedObject()) {
+                    for (auto&& f : o["$unset"].embeddedObject()) {
                         unsets.push_back(f.fieldName());
                     }
                 }
 
-                request.setUpdateModification(write_ops::DeltaUpdate{
-                        std::move(sets),
-                            std::move(unsets),
-                            std::move(creates)});
+                request.setUpdateModification(
+                    write_ops::DeltaUpdate{std::move(sets), std::move(unsets), std::move(creates)});
             } else {
                 request.setUpdateModification(o);
             }

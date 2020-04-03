@@ -132,6 +132,13 @@ testUpdateReplicates({_id: id, x: kGiantStr, arrField: [{x: 1}, {x: 2}]},
                      {_id: id, x: kGiantStr, arrField: [{x: 5}, {x: 5}]},
                      true);
 
+// Reorder fields with replaceRoot. (This requires internalRemoveTombstones to be used)
+id = generateId();
+    testUpdateReplicates({_id: id, padding: kGiantStr, x: "foo", y: "bar"},
+                         [{$replaceRoot: {newRoot: {padding: kGiantStr, y: "bar", x: "foo"}}}],
+                         {_id: id, padding: kGiantStr, y: "bar", x: "foo"},
+                     true);
+
 // TODO remove
 print("ian: oplog");
 const oplog = primary.getDB("local").getCollection("oplog.rs");

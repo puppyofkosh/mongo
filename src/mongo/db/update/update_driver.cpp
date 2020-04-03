@@ -35,13 +35,15 @@
 #include "mongo/bson/mutable/algorithm.h"
 #include "mongo/bson/mutable/document.h"
 #include "mongo/db/bson/dotted_path_support.h"
-#include "mongo/db/field_ref.h"
 #include "mongo/db/exec/add_fields_projection_executor.h"
 #include "mongo/db/exec/exclusion_projection_executor.h"
+#include "mongo/db/field_ref.h"
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
-#include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/pipeline/document_source_single_document_transformation.h"
+#include "mongo/db/pipeline/document_source_replace_root.h"
+#include "mongo/db/pipeline/expression.h"
+#include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/modifier_table.h"
@@ -58,14 +60,12 @@ using pathsupport::EqualityMatches;
 namespace {
 
 std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const write_ops::DeltaUpdate& du) {
+    const boost::intrusive_ptr<ExpressionContext>& expCtx, const write_ops::DeltaUpdate& du) {
 
     auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
     for (auto&& pair : du.set) {
         auto expression = ExpressionConstant::create(expCtx, pair.second);
-        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first),
-                                                 std::move(expression));
+        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first), std::move(expression));
     }
 
 
@@ -74,15 +74,29 @@ std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
 
     auto unsetExec = std::make_unique<projection_executor::ExclusionProjectionExecutor>(
         expCtx, ProjectionPolicies{});
-    for (auto && s : du.unset) {
+    for (auto&& s : du.unset) {
         unsetExec->getRoot()->addProjectionForPath(FieldPath(s));
     }
 
     auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
         expCtx, std::move(unsetExec), "$unset", false);
-    
-    return Pipeline::create({unsetDs, setDs}, expCtx);
-    
+
+
+    boost::intrusive_ptr<Expression> removeTombstoneExpr = make_intrusive<ExpressionInternalRemoveTombstones>(
+        expCtx,
+        ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
+    auto replaceRoot =
+        make_intrusive<DocumentSourceSingleDocumentTransformation>(
+            expCtx,
+            std::make_unique<ReplaceRootTransformation>(
+                expCtx,
+                removeTombstoneExpr,
+                ReplaceRootTransformation::UserSpecifiedName::kReplaceRoot),
+            "$replaceRoot",
+            false
+            );
+
+    return Pipeline::create({unsetDs, replaceRoot, setDs}, expCtx);
 }
 
 StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {
@@ -198,8 +212,8 @@ void UpdateDriver::parse(
                 arrayFilters.empty());
 
         auto pipeline = convertDeltaToPipeline(_expCtx, updateMod.getDeltaUpdate());
-        
-        _updateType = UpdateType::kPipeline;        
+
+        _updateType = UpdateType::kPipeline;
         _updateExecutor = std::make_unique<PipelineExecutor>(_expCtx, std::move(pipeline));
         return;
     }

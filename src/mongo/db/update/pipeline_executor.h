@@ -56,7 +56,7 @@ public:
 
     explicit PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
                               std::unique_ptr<Pipeline, PipelineDeleter> pipeline);
-    
+
     /**
      * Replaces the document that 'applyParams.element' belongs to with 'val'. If 'val' does not
      * contain an _id, the _id from the original document is preserved. 'applyParams.element' must

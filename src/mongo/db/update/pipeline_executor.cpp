@@ -49,7 +49,7 @@ void initPipeline(const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipelin
         auto stageConstraints = stage->constraints();
         uassert(ErrorCodes::InvalidOptions,
                 str::stream() << stage->getSourceName()
-                << " is not allowed to be used within an update",
+                              << " is not allowed to be used within an update",
                 stageConstraints.isAllowedWithinUpdatePipeline);
 
         invariant(stageConstraints.requiredPosition ==
@@ -90,13 +90,11 @@ PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>
 }
 
 PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
-                                       std::unique_ptr<Pipeline, PipelineDeleter> pipeline)
-    :_expCtx(expCtx),
-     _pipeline(std::move(pipeline))
-{
+                                   std::unique_ptr<Pipeline, PipelineDeleter> pipeline)
+    : _expCtx(expCtx), _pipeline(std::move(pipeline)) {
     initPipeline(expCtx, _pipeline.get());
 }
-    
+
 UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParams) const {
     DocumentSourceQueue* queueStage = static_cast<DocumentSourceQueue*>(_pipeline->peekFront());
     queueStage->emplace_back(Document{applyParams.element.getDocument().getObject()});

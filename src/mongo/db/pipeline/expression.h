@@ -2867,6 +2867,7 @@ public:
     using ExpressionRegex::ExpressionRegex;
 };
 
+// No parser registered.
 class ExpressionInternalRemoveTombstones final : public Expression {
 public:
     ExpressionInternalRemoveTombstones(const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -2877,9 +2878,8 @@ public:
         using namespace fmt::literals;
 
         auto preImage = _children[0]->evaluate(root, variables);
-        uassert(ErrorCodes::BadValue, // TODO: error code
-                "pre-image can only be an object, but got {}"_format(
-                    typeName(preImage.getType())),
+        uassert(ErrorCodes::BadValue,  // TODO: error code
+                "pre-image can only be an object, but got {}"_format(typeName(preImage.getType())),
                 preImage.getType() == BSONType::Object);
 
         Document d = preImage.getDocument();
@@ -2889,7 +2889,7 @@ public:
             auto pair = iter.next();
             md.addField(pair.first, pair.second);
         }
-        
+
         return Value{md.freeze()};
     }
 
@@ -2898,7 +2898,9 @@ public:
     }
 
     Value serialize(bool explain) const final {
-        MONGO_UNREACHABLE;
+        // Can't be UNREACHABLE because DocumentSourceSingleDocumentTransformation attempts
+        // to serialize at doDispose()...
+        return Value();
     }
 
     boost::intrusive_ptr<Expression> optimize() final {

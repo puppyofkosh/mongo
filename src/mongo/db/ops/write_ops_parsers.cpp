@@ -237,7 +237,7 @@ write_ops::UpdateModification::UpdateModification(write_ops::DeltaUpdate d) {
     _type = Type::kDelta;
     _deltaUpdate = std::move(d);
 }
-    
+
 write_ops::UpdateModification write_ops::UpdateModification::parseFromBSON(BSONElement elem) {
     return UpdateModification(elem);
 }
