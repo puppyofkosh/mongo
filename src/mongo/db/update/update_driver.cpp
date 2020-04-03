@@ -36,8 +36,12 @@
 #include "mongo/bson/mutable/document.h"
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/field_ref.h"
+#include "mongo/db/exec/add_fields_projection_executor.h"
+#include "mongo/db/exec/exclusion_projection_executor.h"
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
+#include "mongo/db/pipeline/pipeline.h"
+#include "mongo/db/pipeline/document_source_single_document_transformation.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/modifier_table.h"
@@ -52,6 +56,34 @@ namespace mongo {
 using pathsupport::EqualityMatches;
 
 namespace {
+
+std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const write_ops::DeltaUpdate& du) {
+
+    auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
+    for (auto&& pair : du.set) {
+        auto expression = ExpressionConstant::create(expCtx, pair.second);
+        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first),
+                                                 std::move(expression));
+    }
+
+
+    auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        expCtx, std::move(setExec), "$set", false);
+
+    auto unsetExec = std::make_unique<projection_executor::ExclusionProjectionExecutor>(
+        expCtx, ProjectionPolicies{});
+    for (auto && s : du.unset) {
+        unsetExec->getRoot()->addProjectionForPath(FieldPath(s));
+    }
+
+    auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        expCtx, std::move(unsetExec), "$unset", false);
+    
+    return Pipeline::create({unsetDs, setDs}, expCtx);
+    
+}
 
 StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {
     if (element.type() != BSONType::NumberInt && element.type() != BSONType::NumberLong) {
@@ -159,6 +191,18 @@ void UpdateDriver::parse(
     }
 
     uassert(51198, "Constant values may only be specified for pipeline updates", !constants);
+
+    if (updateMod.type() == write_ops::UpdateModification::Type::kDelta) {
+        uassert(ErrorCodes::FailedToParse,
+                "arrayFilters may not be specified for delta updates",
+                arrayFilters.empty());
+
+        auto pipeline = convertDeltaToPipeline(_expCtx, updateMod.getDeltaUpdate());
+        
+        _updateType = UpdateType::kPipeline;        
+        _updateExecutor = std::make_unique<PipelineExecutor>(_expCtx, std::move(pipeline));
+        return;
+    }
 
     // Check if the update expression is a full object replacement.
     if (isDocReplacement(updateMod)) {

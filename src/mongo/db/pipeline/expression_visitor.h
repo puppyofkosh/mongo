@@ -161,6 +161,8 @@ class AccumulatorMergeObjects;
 template <typename AccumulatorState>
 class ExpressionFromAccumulator;
 
+class ExpressionInternalRemoveTombstones;
+    
 /**
  * This is a base class to allow for traversal of an aggregation expression tree. It implements the
  * visitor pattern, in which every derived class from Expression implements an accept() method,
@@ -297,6 +299,7 @@ public:
     virtual void visit(ExpressionInternalFindSlice*) = 0;
     virtual void visit(ExpressionInternalFindPositional*) = 0;
     virtual void visit(ExpressionInternalFindElemMatch*) = 0;
+    virtual void visit(ExpressionInternalRemoveTombstones*) = 0;
 };
 
 }  // namespace mongo

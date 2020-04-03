@@ -42,6 +42,23 @@ namespace mongo {
 
 namespace {
 constexpr StringData kIdFieldName = "_id"_sd;
+
+void initPipeline(const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* pipeline) {
+    // Validate the update pipeline.
+    for (auto&& stage : pipeline->getSources()) {
+        auto stageConstraints = stage->constraints();
+        uassert(ErrorCodes::InvalidOptions,
+                str::stream() << stage->getSourceName()
+                << " is not allowed to be used within an update",
+                stageConstraints.isAllowedWithinUpdatePipeline);
+
+        invariant(stageConstraints.requiredPosition ==
+                  StageConstraints::PositionRequirement::kNone);
+        invariant(!stageConstraints.isIndependentOfAnyCollection);
+    }
+    pipeline->addInitialSource(DocumentSourceQueue::create(expCtx));
+}
+
 }  // namespace
 
 PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -69,23 +86,17 @@ PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>
 
     _expCtx->setResolvedNamespaces(resolvedNamespaces);
     _pipeline = Pipeline::parse(pipeline, _expCtx);
-
-    // Validate the update pipeline.
-    for (auto&& stage : _pipeline->getSources()) {
-        auto stageConstraints = stage->constraints();
-        uassert(ErrorCodes::InvalidOptions,
-                str::stream() << stage->getSourceName()
-                              << " is not allowed to be used within an update",
-                stageConstraints.isAllowedWithinUpdatePipeline);
-
-        invariant(stageConstraints.requiredPosition ==
-                  StageConstraints::PositionRequirement::kNone);
-        invariant(!stageConstraints.isIndependentOfAnyCollection);
-    }
-
-    _pipeline->addInitialSource(DocumentSourceQueue::create(expCtx));
+    initPipeline(expCtx, _pipeline.get());
 }
 
+PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                       std::unique_ptr<Pipeline, PipelineDeleter> pipeline)
+    :_expCtx(expCtx),
+     _pipeline(std::move(pipeline))
+{
+    initPipeline(expCtx, _pipeline.get());
+}
+    
 UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParams) const {
     DocumentSourceQueue* queueStage = static_cast<DocumentSourceQueue*>(_pipeline->peekFront());
     queueStage->emplace_back(Document{applyParams.element.getDocument().getObject()});

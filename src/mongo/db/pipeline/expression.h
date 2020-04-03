@@ -2866,4 +2866,52 @@ public:
 
     using ExpressionRegex::ExpressionRegex;
 };
+
+class ExpressionInternalRemoveTombstones final : public Expression {
+public:
+    ExpressionInternalRemoveTombstones(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                       const boost::intrusive_ptr<Expression>& child)
+        : Expression{expCtx, {child}} {}
+
+    Value evaluate(const Document& root, Variables* variables) const final {
+        using namespace fmt::literals;
+
+        auto preImage = _children[0]->evaluate(root, variables);
+        uassert(ErrorCodes::BadValue, // TODO: error code
+                "pre-image can only be an object, but got {}"_format(
+                    typeName(preImage.getType())),
+                preImage.getType() == BSONType::Object);
+
+        Document d = preImage.getDocument();
+        MutableDocument md;
+        auto iter = d.fieldIterator();
+        while (iter.more()) {
+            auto pair = iter.next();
+            md.addField(pair.first, pair.second);
+        }
+        
+        return Value{md.freeze()};
+    }
+
+    void acceptVisitor(ExpressionVisitor* visitor) final {
+        return visitor->visit(this);
+    }
+
+    Value serialize(bool explain) const final {
+        MONGO_UNREACHABLE;
+    }
+
+    boost::intrusive_ptr<Expression> optimize() final {
+        invariant(_children.size() == 1);
+        _children[0]->optimize();
+        return this;
+    }
+
+protected:
+    void _doAddDependencies(DepsTracker* deps) const final {
+        for (const auto& child : _children) {
+            child->addDependencies(deps);
+        }
+    }
+};
 }  // namespace mongo

@@ -233,6 +233,11 @@ write_ops::UpdateModification::UpdateModification(const BSONObj& update) {
 write_ops::UpdateModification::UpdateModification(std::vector<BSONObj> pipeline)
     : _type{Type::kPipeline}, _pipeline{std::move(pipeline)} {}
 
+write_ops::UpdateModification::UpdateModification(write_ops::DeltaUpdate d) {
+    _type = Type::kDelta;
+    _deltaUpdate = std::move(d);
+}
+    
 write_ops::UpdateModification write_ops::UpdateModification::parseFromBSON(BSONElement elem) {
     return UpdateModification(elem);
 }

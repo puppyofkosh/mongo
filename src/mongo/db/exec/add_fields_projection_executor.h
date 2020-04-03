@@ -57,6 +57,15 @@ public:
                               ProjectionPolicies::ComputedFieldsPolicy::kAllowComputedFields}),
           _root(new InclusionNode(_policies)) {}
 
+    // Internal callers only. Beware. TODO: Maybe check that the policies match.
+    AddFieldsProjectionExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                std::unique_ptr<InclusionNode> root)
+        : ProjectionExecutor(expCtx,
+                             {ProjectionPolicies::DefaultIdPolicy::kIncludeId,
+                              ProjectionPolicies::ArrayRecursionPolicy::kRecurseNestedArrays,
+                              ProjectionPolicies::ComputedFieldsPolicy::kAllowComputedFields}),
+          _root(std::move(root)) {}
+
     /**
      * Creates the data needed to perform an AddFields.
      * Verifies that there are no conflicting paths in the specification.
@@ -70,6 +79,10 @@ public:
 
     const InclusionNode& getRoot() const {
         return *_root;
+    }
+
+    InclusionNode* getRoot() {
+        return _root.get();
     }
 
     /**

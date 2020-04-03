@@ -1233,17 +1233,27 @@ Status applyOperation_inlock(OperationContext* opCtx,
             request.setQuery(updateCriteria);
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
                 // Build a pipeline of the following form:
-                // [{$unset: [...], {$set: {...}}}]
+                // [{$unset: [...], {$replaceRoot: {}}, {$set: {...}}}]
                 std::cout << "update entry is " << o << std::endl;
 
+                std::vector<write_ops::DeltaUpdate::KVPair> sets;
+                std::vector<std::string> unsets;
+                std::vector<write_ops::DeltaUpdate::KVPair> creates;
+
+                auto expCtx = make_intrusive<ExpressionContext>(opCtx, nullptr, requestNss);
+
                 std::vector<BSONObj> pipeline;
+                // TODO: Rename to s.
                 if (o["$set"].ok()) {
                     uassert(ErrorCodes::BadValue,
                             str::stream() << "Expected '$set' to be of type object",
                             o["$set"].type() == BSONType::Object);
 
-                    BSONObj set = o["$set"].wrap();
-                    pipeline.push_back(set);
+                    BSONObj set = o["$set"].embeddedObject();
+
+                    for (auto&& f : set) {
+                        sets.push_back({f.fieldName(), Value(f)});
+                    }
                 }
 
                 if (o["$unset"].ok()) {
@@ -1251,18 +1261,15 @@ Status applyOperation_inlock(OperationContext* opCtx,
                             str::stream() << "Expected '$unset' to be of type object",
                             o["$unset"].type() == BSONType::Object);
 
-                    BSONArrayBuilder unsetBuilder;
-                    BSONObjIterator i(o["$unset"].embeddedObject());
-                    while (i.more()) {
-                        auto elt = i.next();
-                        unsetBuilder.append(elt.fieldName());
+                    for(auto&& f : o["$unset"].embeddedObject()) {
+                        unsets.push_back(f.fieldName());
                     }
-                    auto unsetArr = unsetBuilder.arr();
-
-                    pipeline.push_back(BSON("$unset" << unsetArr));
                 }
 
-                request.setUpdateModification(pipeline);
+                request.setUpdateModification(write_ops::DeltaUpdate{
+                        std::move(sets),
+                            std::move(unsets),
+                            std::move(creates)});
             } else {
                 request.setUpdateModification(o);
             }
