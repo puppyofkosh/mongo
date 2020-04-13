@@ -1232,15 +1232,11 @@ Status applyOperation_inlock(OperationContext* opCtx,
             UpdateRequest request(requestNss);
             request.setQuery(updateCriteria);
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
-                // Build a pipeline of the following form:
-                // [{$unset: [...], {$replaceRoot: {}}, {$set: {...}}}]
                 std::cout << "update entry is " << o << std::endl;
 
                 std::vector<write_ops::DeltaUpdate::KVPair> sets;
                 std::vector<std::string> unsets;
                 std::vector<write_ops::DeltaUpdate::KVPair> creates;
-
-                auto expCtx = make_intrusive<ExpressionContext>(opCtx, nullptr, requestNss);
 
                 std::vector<BSONObj> pipeline;
                 // TODO: Rename to s.
