@@ -28,7 +28,7 @@ const rst = new ReplSetTest({nodes: 2, nodeOpts: {binVersion: latest, noCleanDat
 
     // Check that the oplog entry uses the new format.
     const oplogRes =
-          rst.getPrimary().getDB("local")["oplog.rs"].find().sort({ts: -1}).limit(1).toArray();
+        rst.getPrimary().getDB("local")["oplog.rs"].find().sort({ts: -1}).limit(1).toArray();
     assert.eq(oplogRes.length, 1);
     assert.eq(oplogRes[0].o.$v, 2);
 

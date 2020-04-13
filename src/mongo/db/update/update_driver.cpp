@@ -40,8 +40,8 @@
 #include "mongo/db/field_ref.h"
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
-#include "mongo/db/pipeline/document_source_single_document_transformation.h"
 #include "mongo/db/pipeline/document_source_replace_root.h"
+#include "mongo/db/pipeline/document_source_single_document_transformation.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/server_options.h"
@@ -82,19 +82,17 @@ std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
         expCtx, std::move(unsetExec), "$unset", false);
 
 
-    boost::intrusive_ptr<Expression> removeTombstoneExpr = make_intrusive<ExpressionInternalRemoveTombstones>(
+    boost::intrusive_ptr<Expression> removeTombstoneExpr =
+        make_intrusive<ExpressionInternalRemoveTombstones>(
+            expCtx, ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
+    auto replaceRoot = make_intrusive<DocumentSourceSingleDocumentTransformation>(
         expCtx,
-        ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
-    auto replaceRoot =
-        make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        std::make_unique<ReplaceRootTransformation>(
             expCtx,
-            std::make_unique<ReplaceRootTransformation>(
-                expCtx,
-                removeTombstoneExpr,
-                ReplaceRootTransformation::UserSpecifiedName::kReplaceRoot),
-            "$replaceRoot",
-            false
-            );
+            removeTombstoneExpr,
+            ReplaceRootTransformation::UserSpecifiedName::kReplaceRoot),
+        "$replaceRoot",
+        false);
 
     return Pipeline::create({unsetDs, replaceRoot, setDs}, expCtx);
 }
