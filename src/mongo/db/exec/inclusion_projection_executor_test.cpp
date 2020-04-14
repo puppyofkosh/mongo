@@ -1086,26 +1086,5 @@ TEST_F(InclusionProjectionExecutionTestWithoutFallBackToDefault,
                        AssertionException,
                        51752);
 }
-
-TEST_F(InclusionProjectionExecutionTestWithFallBackToDefault, Temp) {
-    const boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
-
-    auto rt = std::make_unique<projection_executor::InclusionNode>(ProjectionPolicies{});
-
-    auto arrNode =
-        std::make_unique<projection_executor::ArrayProjectionNode>(ProjectionPolicies{}, "tmp");
-    auto* arrChild = arrNode->addChild(
-        0, std::make_unique<projection_executor::InclusionNode>(ProjectionPolicies{}));
-
-    arrChild->addProjectionForPath("c");
-    arrChild->addExpressionForPath("e", ExpressionConstant::create(expCtx, Value("foobar"_sd)));
-
-    rt->addDirectChild("b", std::move(arrNode));
-
-    Document doc(fromjson("{a: 1, b: [{c: 1, d: 1}, {c: 2}, {c: 3}]}"));
-    auto output = rt->applyToDocument(doc);
-    std::cout << "ian: after proj " << output << std::endl;
-}
-
 }  // namespace fast_path_projection_only_tests
 }  // namespace mongo::projection_executor

@@ -88,21 +88,14 @@ boost::intrusive_ptr<Expression> ProjectionNode::getExpressionForPath(const Fiel
 ProjectionNode* ProjectionNode::addOrGetChild(const std::string& field) {
     makeOptimizationsStale();
     auto child = getChild(field);
-    return child ? child : addChild(field, makeChild(field));
+    return child ? child : addChild(field);
 }
 
-ProjectionNode* ProjectionNode::addDirectChild(const std::string& field,
-                                               std::unique_ptr<ProjectionNode> child) {
-    makeOptimizationsStale();
-    return addChild(field, std::move(child));
-}
-
-ProjectionNode* ProjectionNode::addChild(const std::string& field,
-                                         std::unique_ptr<ProjectionNode> child) {
+ProjectionNode* ProjectionNode::addChild(const std::string& field) {
     makeOptimizationsStale();
     invariant(!str::contains(field, "."));
     _orderToProcessAdditionsAndChildren.push_back(field);
-    auto insertedPair = _children.emplace(std::make_pair(field, std::move(child)));
+    auto insertedPair = _children.emplace(std::make_pair(field, makeChild(field)));
     return insertedPair.first->second.get();
 }
 
@@ -116,7 +109,9 @@ Document ProjectionNode::applyToDocument(const Document& inputDoc) const {
     MutableDocument outputDoc{initializeOutputDocument(inputDoc)};
     applyProjections(inputDoc, &outputDoc);
 
-    applyExpressions(inputDoc, &outputDoc);
+    if (_subtreeContainsComputedFields) {
+        applyExpressions(inputDoc, &outputDoc);
+    }
 
     // Make sure that we always pass through any metadata present in the input doc.
     if (inputDoc.metadata()) {
