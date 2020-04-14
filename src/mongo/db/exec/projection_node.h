@@ -84,6 +84,11 @@ public:
     ProjectionNode* addOrGetChild(const std::string& field);
 
     /**
+     * Adds an already-created child.
+     */
+    ProjectionNode* addDirectChild(const std::string& field, std::unique_ptr<ProjectionNode> child);
+
+    /**
      * Applies all projections and expressions, if applicable, and returns the resulting document.
      */
     virtual Document applyToDocument(const Document& inputDoc) const;
@@ -132,6 +137,14 @@ public:
     void serialize(boost::optional<ExplainOptions::Verbosity> explain,
                    MutableDocument* output) const;
 
+    //
+    // Ideally these would not be public, but it's necessary for our strange inheritance hierchy.
+    //
+    // Helpers for the 'applyProjections' and 'applyExpressions' methods. Applies the transformation
+    // recursively to each element of any arrays, and ensures primitives are handled appropriately.
+    virtual Value applyExpressionsToValue(const Document& root, Value inputVal) const;
+    virtual Value applyProjectionsToValue(Value inputVal) const;
+
 protected:
     // Returns a unique_ptr to a new instance of the implementing class for the given 'fieldName'.
     virtual std::unique_ptr<ProjectionNode> makeChild(const std::string& fieldName) const = 0;
@@ -175,13 +188,8 @@ private:
     //    {a: [{b: 1}, {b: 2}], d: [{}, {}]}
     void applyProjections(const Document& inputDoc, MutableDocument* outputDoc) const;
 
-    // Helpers for the 'applyProjections' and 'applyExpressions' methods. Applies the transformation
-    // recursively to each element of any arrays, and ensures primitives are handled appropriately.
-    Value applyExpressionsToValue(const Document& root, Value inputVal) const;
-    Value applyProjectionsToValue(Value inputVal) const;
-
     // Adds a new ProjectionNode as a child. 'field' cannot be dotted.
-    ProjectionNode* addChild(const std::string& field);
+    ProjectionNode* addChild(const std::string& field, std::unique_ptr<ProjectionNode> child);
 
     // Returns nullptr if no such child exists.
     ProjectionNode* getChild(const std::string& field) const;
