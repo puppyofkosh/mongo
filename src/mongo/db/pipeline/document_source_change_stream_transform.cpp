@@ -244,10 +244,32 @@ Document DocumentSourceChangeStreamTransform::applyTransformation(const Document
                                repl::OplogEntry::kObjectFieldName,
                                BSONType::Object);
                 Document opObject = input[repl::OplogEntry::kObjectFieldName].getDocument();
-                Value updatedFields = opObject["$set"];
-                Value removedFields = opObject["$unset"];
 
-                // Extract the field names of $unset document.
+                // Check oplog section version.
+                Value updatedFields;
+                Value removedFields;
+                auto version = opObject.getField("$v");
+                if (!version.missing() && version.getType() == BSONType::NumberInt &&
+                    version.getInt() == 2) {
+                    removedFields = opObject["d"];
+                    Value upsertedFields = opObject["u"];
+                    Value insertedFields = opObject["i"];
+
+                    // Combine 'upserted' and 'inserted' fields.
+                    MutableDocument combineInserts(upsertedFields.getDocument());
+                    Document inserted = insertedFields.getDocument();
+                    FieldIterator itr = inserted.fieldIterator();
+                    while (itr.more()) {
+                        auto elem = itr.next();
+                        combineInserts.addField(elem.first, elem.second);
+                    }
+                    updatedFields = combineInserts.freezeToValue();
+                } else {
+                    updatedFields = opObject["$set"];
+                    removedFields = opObject["$unset"];
+                }
+
+                // Extract the field names of $unset/remove document.
                 vector<Value> removedFieldsVector;
                 if (removedFields.getType() == BSONType::Object) {
                     auto iter = removedFields.getDocument().fieldIterator();

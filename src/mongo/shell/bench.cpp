@@ -1192,6 +1192,8 @@ void BenchRunOp::executeOnce(DBClientBase* conn,
                                 pipelineBuilder.doneFast();
                                 break;
                             }
+                            default:
+                                MONGO_UNREACHABLE;
                         }
                         singleUpdate.append("multi", this->multi);
                         singleUpdate.append("upsert", this->upsert);

@@ -34,6 +34,7 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/pipeline/document_source_queue.h"
 #include "mongo/db/pipeline/lite_parsed_pipeline.h"
+#include "mongo/db/update/document_differ.h"
 #include "mongo/db/update/object_replace_executor.h"
 #include "mongo/db/update/storage_validation.h"
 
@@ -41,6 +42,23 @@ namespace mongo {
 
 namespace {
 constexpr StringData kIdFieldName = "_id"_sd;
+
+void initPipeline(const boost::intrusive_ptr<ExpressionContext>& expCtx, Pipeline* pipeline) {
+    // Validate the update pipeline.
+    for (auto&& stage : pipeline->getSources()) {
+        auto stageConstraints = stage->constraints();
+        uassert(ErrorCodes::InvalidOptions,
+                str::stream() << stage->getSourceName()
+                              << " is not allowed to be used within an update",
+                stageConstraints.isAllowedWithinUpdatePipeline);
+
+        invariant(stageConstraints.requiredPosition ==
+                  StageConstraints::PositionRequirement::kNone);
+        invariant(!stageConstraints.isIndependentOfAnyCollection);
+    }
+    pipeline->addInitialSource(DocumentSourceQueue::create(expCtx));
+}
+
 }  // namespace
 
 PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
@@ -68,21 +86,13 @@ PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>
 
     _expCtx->setResolvedNamespaces(resolvedNamespaces);
     _pipeline = Pipeline::parse(pipeline, _expCtx);
+    initPipeline(expCtx, _pipeline.get());
+}
 
-    // Validate the update pipeline.
-    for (auto&& stage : _pipeline->getSources()) {
-        auto stageConstraints = stage->constraints();
-        uassert(ErrorCodes::InvalidOptions,
-                str::stream() << stage->getSourceName()
-                              << " is not allowed to be used within an update",
-                stageConstraints.isAllowedWithinUpdatePipeline);
-
-        invariant(stageConstraints.requiredPosition ==
-                  StageConstraints::PositionRequirement::kNone);
-        invariant(!stageConstraints.isIndependentOfAnyCollection);
-    }
-
-    _pipeline->addInitialSource(DocumentSourceQueue::create(expCtx));
+PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                   std::unique_ptr<Pipeline, PipelineDeleter> pipeline)
+    : _expCtx(expCtx), _pipeline(std::move(pipeline)) {
+    initPipeline(expCtx, _pipeline.get());
 }
 
 UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParams) const {
@@ -90,6 +100,115 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
     queueStage->emplace_back(Document{applyParams.element.getDocument().getObject()});
     auto transformedDoc = _pipeline->getNext()->toBson();
     auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
+
+    auto originalDoc = applyParams.element.getDocument().getObject();
+
+    if (applyParams.logBuilder) {
+        std::vector<std::string> fieldsRemoved;
+        {
+            auto replacementDoc = transformedDoc;
+            auto originalDoc = applyParams.element.getDocument().getObject();
+
+            // Check for noop.
+            if (originalDoc.binaryEqual(replacementDoc)) {
+                return ApplyResult::noopResult();
+            }
+
+            // Remove the contents of the provided document.
+            auto current = applyParams.element.leftChild();
+            while (current.ok()) {
+                // Keep the _id if the replacement document does not have one.
+                if (!transformedDocHasIdField && current.getFieldName() == kIdFieldName) {
+                    current = current.rightSibling();
+                    continue;
+                }
+                fieldsRemoved.push_back(current.getFieldName().toString());
+
+                auto toRemove = current;
+                current = current.rightSibling();
+                invariant(toRemove.remove());
+            }
+
+            // Insert the provided contents instead.
+            for (auto&& elem : replacementDoc) {
+                invariant(applyParams.element.appendElement(elem));
+            }
+
+            // Validate for storage.
+            if (applyParams.validateForStorage) {
+                storage_validation::storageValid(applyParams.element.getDocument());
+            }
+
+            // Check immutable paths.
+            for (auto path = applyParams.immutablePaths.begin();
+                 path != applyParams.immutablePaths.end();
+                 ++path) {
+                // TODO: ian review this in more depth. It's copy-pasted.
+
+                // Find the updated field in the updated document.
+                auto newElem = applyParams.element;
+                for (size_t i = 0; i < (*path)->numParts(); ++i) {
+                    newElem = newElem[(*path)->getPart(i)];
+                    if (!newElem.ok()) {
+                        break;
+                    }
+                    uassert(
+                        ErrorCodes::NotSingleValueField,
+                        str::stream()
+                            << "After applying the update to the document, the (immutable) field '"
+                            << (*path)->dottedField()
+                            << "' was found to be an array or array descendant.",
+                        newElem.getType() != BSONType::Array);
+                }
+
+                auto oldElem =
+                    dotted_path_support::extractElementAtPath(originalDoc, (*path)->dottedField());
+
+                uassert(ErrorCodes::ImmutableField,
+                        str::stream()
+                            << "After applying the update, the '" << (*path)->dottedField()
+                            << "' (required and immutable) field was "
+                               "found to have been removed --"
+                            << originalDoc,
+                        newElem.ok() || !oldElem.ok());
+                if (newElem.ok() && oldElem.ok()) {
+                    uassert(ErrorCodes::ImmutableField,
+                            str::stream()
+                                << "After applying the update, the (immutable) field '"
+                                << (*path)->dottedField() << "' was found to have been altered to "
+                                << newElem.toString(),
+                            newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
+                }
+            }
+        }
+
+        auto diff = doc_diff::DocumentDiff::computeDiff(originalDoc, transformedDoc);
+
+        if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize())) {
+            for (auto&& [fieldRef, elt] : diff.toUpsert()) {
+                invariant(
+                    applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.dottedField(), elt));
+            }
+
+            for (auto&& fieldRef : diff.toDelete()) {
+                invariant(applyParams.logBuilder->addToUnsets(fieldRef.dottedField()));
+            }
+
+            for (auto&& [fieldRef, elt] : diff.toInsert()) {
+                invariant(applyParams.logBuilder->addToCreates(fieldRef.dottedField(), elt));
+            }
+
+            invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
+        } else {
+            auto replacementObject = applyParams.logBuilder->getDocument().end();
+            invariant(applyParams.logBuilder->getReplacementObject(&replacementObject));
+            for (auto current = applyParams.element.leftChild(); current.ok();
+                 current = current.rightSibling()) {
+                invariant(replacementObject.appendElement(current.getValue()));
+            }
+        }
+        return ApplyResult();
+    }
 
     return ObjectReplaceExecutor::applyReplacementUpdate(
         applyParams, transformedDoc, transformedDocHasIdField);

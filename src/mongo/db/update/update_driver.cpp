@@ -35,9 +35,16 @@
 #include "mongo/bson/mutable/algorithm.h"
 #include "mongo/bson/mutable/document.h"
 #include "mongo/db/bson/dotted_path_support.h"
+#include "mongo/db/exec/add_fields_projection_executor.h"
+#include "mongo/db/exec/exclusion_projection_executor.h"
 #include "mongo/db/field_ref.h"
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
+#include "mongo/db/pipeline/document_source_replace_root.h"
+#include "mongo/db/pipeline/document_source_single_document_transformation.h"
+#include "mongo/db/pipeline/expression.h"
+#include "mongo/db/pipeline/expression_internal_remove_field_tombstones.h"
+#include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/modifier_table.h"
@@ -52,6 +59,52 @@ namespace mongo {
 using pathsupport::EqualityMatches;
 
 namespace {
+
+std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx, const write_ops::DeltaUpdate& du) {
+
+    auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
+    for (auto&& pair : du.set) {
+        auto expression = ExpressionConstant::create(expCtx, pair.second);
+        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first), std::move(expression));
+    }
+
+    // fields in $create region get added to both the set and unset executors.
+    for (auto&& pair : du.create) {
+        auto expression = ExpressionConstant::create(expCtx, pair.second);
+        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first), std::move(expression));
+    }
+
+    auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        expCtx, std::move(setExec), "$set", false);
+
+    auto unsetExec = std::make_unique<projection_executor::ExclusionProjectionExecutor>(
+        expCtx, ProjectionPolicies{});
+    for (auto&& s : du.unset) {
+        unsetExec->getRoot()->addProjectionForPath(FieldPath(s));
+    }
+    for (auto&& pair : du.create) {
+        unsetExec->getRoot()->addProjectionForPath(FieldPath(pair.first));
+    }
+
+    auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        expCtx, std::move(unsetExec), "$unset", false);
+
+    // TODO  for each field in du.create add it to both set/unset execs.
+    boost::intrusive_ptr<Expression> removeTombstoneExpr =
+        make_intrusive<ExpressionInternalRemoveFieldTombstones>(
+            expCtx, ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
+    auto replaceRoot = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+        expCtx,
+        std::make_unique<ReplaceRootTransformation>(
+            expCtx,
+            removeTombstoneExpr,
+            ReplaceRootTransformation::UserSpecifiedName::kReplaceRoot),
+        "$replaceRoot",
+        false);
+
+    return Pipeline::create({unsetDs, replaceRoot, setDs}, expCtx);
+}
 
 StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {
     if (element.type() != BSONType::NumberInt && element.type() != BSONType::NumberLong) {
@@ -159,6 +212,18 @@ void UpdateDriver::parse(
     }
 
     uassert(51198, "Constant values may only be specified for pipeline updates", !constants);
+
+    if (updateMod.type() == write_ops::UpdateModification::Type::kDelta) {
+        uassert(ErrorCodes::FailedToParse,
+                "arrayFilters may not be specified for delta updates",
+                arrayFilters.empty());
+
+        auto pipeline = convertDeltaToPipeline(_expCtx, updateMod.getDeltaUpdate());
+
+        _updateType = UpdateType::kPipeline;
+        _updateExecutor = std::make_unique<PipelineExecutor>(_expCtx, std::move(pipeline));
+        return;
+    }
 
     // Check if the update expression is a full object replacement.
     if (isDocReplacement(updateMod)) {
@@ -282,19 +347,6 @@ Status UpdateDriver::update(StringData matchedField,
     }
     if (docWasModified) {
         *docWasModified = !applyResult.noop;
-    }
-    if (_updateType == UpdateType::kOperator && _logOp && logOpRec) {
-        // If there are binVersion=3.6 mongod nodes in the replica set, they need to be told that
-        // this update is using the "kUpdateNode" version of the update semantics and not the older
-        // update semantics that could be used by a featureCompatibilityVersion=3.4 node.
-        //
-        // TODO (SERVER-32240): Once binVersion <= 3.6 nodes are not supported in a replica set, we
-        // can safely elide this "$v" UpdateSemantics field from oplog entries, because there will
-        // only one supported version, which all nodes will assume is in use.
-        //
-        // We also don't need to specify the semantics for a full document replacement (and there
-        // would be no place to put a "$v" field in the update document).
-        invariant(logBuilder.setUpdateSemantics(UpdateSemantics::kUpdateNode));
     }
 
     if (_logOp && logOpRec)

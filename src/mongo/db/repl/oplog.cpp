@@ -90,6 +90,7 @@
 #include "mongo/db/storage/storage_engine.h"
 #include "mongo/db/storage/storage_options.h"
 #include "mongo/db/transaction_participant.h"
+#include "mongo/db/update/log_builder.h"
 #include "mongo/db/views/view_catalog.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/random.h"
@@ -1263,7 +1264,52 @@ Status applyOperation_inlock(OperationContext* opCtx,
             const bool upsert = alwaysUpsert || upsertOplogEntry;
             UpdateRequest request(requestNss);
             request.setQuery(updateCriteria);
-            request.setUpdateModification(o);
+            if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
+                std::cout << "update entry is " << o << std::endl;
+
+                std::vector<write_ops::DeltaUpdate::KVPair> sets;
+                std::vector<std::string> unsets;
+                std::vector<write_ops::DeltaUpdate::KVPair> creates;
+
+                std::vector<BSONObj> pipeline;
+                if (o["u"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected 'u' to be of type object",
+                            o["u"].type() == BSONType::Object);
+
+                    BSONObj set = o["u"].embeddedObject();
+
+                    for (auto&& f : set) {
+                        sets.push_back({f.fieldName(), Value(f)});
+                    }
+                }
+
+                if (o["d"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected 'd' to be of type object",
+                            o["d"].type() == BSONType::Object);
+
+                    for (auto&& f : o["d"].embeddedObject()) {
+                        unsets.push_back(f.fieldName());
+                    }
+                }
+
+                if (o["i"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected 'i' to be of type object",
+                            o["i"].type() == BSONType::Object);
+
+                    for (auto&& f : o["i"].embeddedObject()) {
+                        creates.push_back({f.fieldName(), Value(f)});
+                    }
+                }
+
+                request.setUpdateModification(
+                    write_ops::DeltaUpdate{std::move(sets), std::move(unsets), std::move(creates)});
+            } else {
+                request.setUpdateModification(o);
+            }
+
             request.setUpsert(upsert);
             request.setFromOplogApplication(true);
 

@@ -35,7 +35,16 @@
 #include "mongo/db/exec/document_value/value.h"
 
 namespace mongo {
+class Pipeline;
+
 namespace write_ops {
+
+struct DeltaUpdate {
+    using KVPair = std::pair<std::string, Value>;
+    std::vector<KVPair> set;
+    std::vector<std::string> unset;
+    std::vector<KVPair> create;
+};
 
 // Conservative per array element overhead. This value was calculated as 1 byte (element type) + 5
 // bytes (max string encoding of the array index encoded as string and the maximum key is 99999) + 1
@@ -55,7 +64,7 @@ void writeMultiDeleteProperty(bool isMulti, StringData fieldName, BSONObjBuilder
 
 class UpdateModification {
 public:
-    enum class Type { kClassic, kPipeline };
+    enum class Type { kClassic, kPipeline, kDelta };
 
     static StringData typeToString(Type type) {
         return (type == Type::kClassic ? "Classic"_sd : "Pipeline"_sd);
@@ -63,6 +72,8 @@ public:
 
     UpdateModification() = default;
     UpdateModification(BSONElement update);
+    UpdateModification(DeltaUpdate p);
+
     UpdateModification(std::vector<BSONObj> pipeline);
     // This constructor exists only to provide a fast-path for constructing classic-style updates.
     UpdateModification(const BSONObj& update);
@@ -110,6 +121,11 @@ public:
         return *_pipeline;
     }
 
+    const DeltaUpdate& getDeltaUpdate() const {
+        invariant(_type == Type::kDelta);
+        return *_deltaUpdate;
+    }
+
     std::string toString() const {
         StringBuilder sb;
         sb << "{type: " << typeToString(_type) << ", update: ";
@@ -127,6 +143,7 @@ private:
     Type _type = Type::kClassic;
     boost::optional<BSONObj> _classicUpdate;
     boost::optional<std::vector<BSONObj>> _pipeline;
+    boost::optional<DeltaUpdate> _deltaUpdate;
 };
 
 }  // namespace write_ops

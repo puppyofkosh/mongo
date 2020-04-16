@@ -72,6 +72,10 @@ public:
         return *_root;
     }
 
+    InclusionNode* getRoot() {
+        return _root.get();
+    }
+
     /**
      * Parses the addFields specification given by 'spec', populating internal data structures.
      */

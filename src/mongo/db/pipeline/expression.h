@@ -2866,4 +2866,5 @@ public:
 
     using ExpressionRegex::ExpressionRegex;
 };
+
 }  // namespace mongo

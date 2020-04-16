@@ -43,6 +43,8 @@ enum class UpdateSemantics {
     // system introduces support for arrayFilters and $[] syntax.
     kUpdateNode = 1,
 
+    kPipeline = 2,
+
     // Must be last.
     kNumUpdateSemantics
 };
@@ -64,6 +66,7 @@ public:
           _objectReplacementAccumulator(_logRoot),
           _setAccumulator(_logRoot.getDocument().end()),
           _unsetAccumulator(_setAccumulator),
+          _createAccumulator(_unsetAccumulator),
           _updateSemantics(_setAccumulator) {
         dassert(logRoot.isType(mongo::Object));
         dassert(!logRoot.hasChildren());
@@ -113,6 +116,12 @@ public:
     Status addToUnsets(StringData path);
 
     /**
+     * Add the given Element as a new entry in the '$set' section of the log. If a $create
+     * section does not yet exist, it will be created.
+     */
+    Status addToCreates(StringData name, const BSONElement& val);
+
+    /**
      * Add a "$v" field to the log. Fails if there is already a "$v" field.
      */
     Status setUpdateSemantics(UpdateSemantics updateSemantics);
@@ -138,6 +147,7 @@ private:
     mutablebson::Element _objectReplacementAccumulator;
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
+    mutablebson::Element _createAccumulator;
     mutablebson::Element _updateSemantics;
 };
 
