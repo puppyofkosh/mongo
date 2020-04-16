@@ -565,5 +565,184 @@ TEST(AddFieldsProjectionExecutorExecutionTest, AlwaysKeepsMetadataFromOriginalDo
     expectedDoc.copyMetaDataFrom(inputDoc);
     ASSERT_DOCUMENT_EQ(result, expectedDoc.freeze());
 }
+
+TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeSimple) {
+    boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
+    AddFieldsProjectionExecutor addition(expCtx);
+
+    // addFields spec: {a.$[1]: 999}
+
+    // The "$[i]" syntax is invented for the sake of example and not actually supported
+    // anywhere. a.$[i] means "index 'i' of array 'a'".
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(1)}}, ExpressionConstant::create(expCtx, Value(999)));
+
+    // Simple/success case.
+    {
+        Document input(fromjson("{a: [1, 2, 3]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [1, 999, 3]}")));
+    }
+
+    // Case where a is length 1.
+    {
+        Document input(fromjson("{a: [0]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, 999]}")));
+    }
+
+    // Case where a is empty.
+    {
+        Document input(fromjson("{a: []}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [null, 999]}")));
+    }
+
+    // Case where a is an object and not an array.
+    {
+        Document input(fromjson("{a: {foo: 1}}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [null, 999]}")));
+    }
+
+    // Case where a is not object or array.
+    {
+        Document input(fromjson("{a: 1}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [null, 999]}")));
+    }
+}
+
+TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeNestedEndingInFieldName) {
+    boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
+    AddFieldsProjectionExecutor addition(expCtx);
+
+    // addFields spec: {a.$[2].b.$[1].c: 999}
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(2), "b", size_t(1), "c"}},
+        ExpressionConstant::create(expCtx, Value(999)));
+
+    // Simple/success case.
+    {
+        Document input(fromjson("{a: [0, 0, {b: [0, {c: 1, d: 0}, 0]}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, 0, {b: [0, {c: 999, d: 0}, 0]}]}")));
+    }
+
+    // Case where we append to the array.
+    {
+        Document input(fromjson("{a: [0, 1]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, 1, {b: [null, {c: 999}]}]}")));
+    }
+
+    // Case where it's necessary to create + pad the top-level array.
+    {
+        Document input(fromjson("{a: {foo: 1, bar: 1}}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [null, null, {b: [null, {c: 999}]}]}")));
+    }
+
+    // Case where it's necessary to create the array at path "a.1.b"
+    {
+        Document input(fromjson("{a: [0, 0, {b: 0}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, 0, {b: [null, {c: 999}]}]}")));
+    }
+
+    // Case where we need to create the 'b' field without changing other fields.
+    {
+        Document input(fromjson("{a: [0, 1, {foo: 1}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output,
+                           Document(fromjson("{a: [0, 1, {foo: 1, b: [null, {c: 999}]}]}")));
+    }
+}
+
+TEST(AddFieldsProjectionExecutorExecutionTest, MultipleArrayNodeNestedEndingInFieldName) {
+    boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
+    AddFieldsProjectionExecutor addition(expCtx);
+
+    // addFields spec:
+    // {
+    //  "a.$[1].b.$[2].c": 998,
+    //  "a.$[2].b.$[1].c": 999,
+    //  "a.$[2].b.$[3].c": 997
+    // }
+
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(1), "b", size_t(2), "c"}},
+        ExpressionConstant::create(expCtx, Value(998)));
+
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(2), "b", size_t(1), "c"}},
+        ExpressionConstant::create(expCtx, Value(999)));
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(2), "b", size_t(3), "c"}},
+        ExpressionConstant::create(expCtx, Value(997)));
+
+    // Simple/success case.
+    {
+        Document input(fromjson("{a: [0, 1, {b: [{c: 0}, {c: 0}, {c: 0}, {c: 0}]}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output,
+                           Document(fromjson("{a: [0, {b: [null, null, {c: 998}]}, {b: [{c: 0}, "
+                                             "{c: 999}, {c: 0}, {c: 997}]}]}")));
+    }
+
+    // Case where it's necessary to create + pad the top-level array.
+    {
+        Document input(fromjson("{a: {foo: 1, bar: 1}}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output,
+                           Document(fromjson("{a: [null, {b: [null, null, {c: 998}]}, {b: [null, "
+                                             "{c: 999}, null, {c: 997}]}]}")));
+    }
+
+    // Case where we append to the innermost arrays.
+    {
+        Document input(fromjson("{a: [0, {b: [null, null, {}]}, {b: [null, {}, null, {}]}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(
+            output,
+            Document(fromjson(
+                "{a: [0, {b: [null, null, {c: 998}]}, {b: [null, {c: 999}, null, {c: 997}]}]}")));
+    }
+}
+
+TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeNestedEndingInArrayIndex) {
+    boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
+    AddFieldsProjectionExecutor addition(expCtx);
+
+    // addFields spec: {a.$[1].b.$[0].c.$[1]: 999}
+    addition.getRoot().addExpressionForArrayIndexPath(
+        ArrayIndexPath{{"a", size_t(1), "b", size_t(0), "c", size_t(1)}},
+        ExpressionConstant::create(expCtx, Value(999)));
+
+    // Simple case where we set an array element.
+    {
+        Document input(fromjson("{a: [0, {b: [{c: [0, 0]}]}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, {b: [{c: [0, 999]}]}]}")));
+    }
+
+    // Case where we create the array from nothing.
+    {
+        Document input(fromjson("{}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [null, {b: [{c: [null, 999]}]}]}")));
+    }
+
+    // Case where we append to the innermost array.
+    {
+        Document input(fromjson("{a: [0, {b: [{c: [0]}]}]}"));
+        Document output = addition.applyProjection(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [0, {b: [{c: [0, 999]}]}]}")));
+    }
+}
+
+// TODO: More tests!! Also, use better field names in the tests. Maybe some example with users
+// and addresses or something.
+
 }  // namespace
 }  // namespace mongo::projection_executor

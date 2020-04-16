@@ -34,22 +34,125 @@
 #include "mongo/db/query/projection_policies.h"
 
 namespace mongo::projection_executor {
-/**
- * A node used to define the parsed structure of a projection. Each ProjectionNode represents one
- * 'level' of the parsed specification. The root ProjectionNode represents all top level projections
- * or additions, with any child ProjectionNodes representing dotted or nested projections or
- * additions.
- *
- * ProjectionNode is an abstract base class which implements all the generic construction, traversal
- * and execution functionality common to different projection types. Each derived class need only
- * provide a minimal set of virtual function implementations dictating, for instance, how the
- * projection should behave upon reaching a leaf node.
- */
-class ProjectionNode {
-public:
-    ProjectionNode(ProjectionPolicies policies, std::string pathToNode = "");
 
-    virtual ~ProjectionNode() = default;
+/**
+ * Represents a path which may include array indexes. For example on a document
+ * {a: [{b: "foo"}, ...]}
+ *
+ * "foo" is at the path ["a", 0, "b"].
+ *
+ * Maybe some day this will be a "real" class but for now we're going to dump it in this namespace
+ * and worry about where to put it later.
+ */
+struct ArrayIndexPath {
+    // Each component is either a number (array index) or string (field name).
+    using Component = std::variant<size_t, std::string>;
+
+    std::vector<Component> components;
+
+    ArrayIndexPath(std::vector<Component> comp) : components(std::move(comp)) {
+        invariant(!components.empty());
+    }
+};
+
+/**
+ * Unowned "view" class for ArrayIndexPath. Useful for recursion.
+ */
+struct ArrayIndexPathView {
+    using Component = ArrayIndexPath::Component;
+
+    const Component* const components;
+    const size_t size;
+
+    ArrayIndexPathView(const ArrayIndexPath& p)
+        : components(p.components.data()), size(p.components.size()) {}
+
+    ArrayIndexPathView tail() const {
+        invariant(size > 1);
+        return {components + 1, size - 1};
+    }
+
+private:
+    ArrayIndexPathView(const Component* c, size_t sz) : components(c), size(sz) {}
+};
+
+/**
+ * The inheritance tree:
+ *
+ *                          ProjectionNodeBase
+ *       ProjectionNodeDocument            ProjectionNodeArray
+ *  InclusionNode   ExclusionNode
+ */
+
+/**
+ * A node used to define the parsed structure of a projection. Each node represents one 'level' of
+ * the parsed specification. The root node represents all top level projections or additions, with
+ * any child node representing dotted or nested projections or additions.
+ *
+ * ProjectionNodeBase is an abstract base class for applying a projection to a non-atomic type
+ * (right now just documents and arrays).
+ */
+class ProjectionNodeBase {
+public:
+    ProjectionNodeBase(ProjectionPolicies policies, std::string pathToNode = "");
+    virtual ~ProjectionNodeBase() = default;
+
+    /**
+     * Reports dependencies on any fields that are required by this projection.
+     */
+    virtual void reportDependencies(DepsTracker* deps) const = 0;
+
+    /**
+     * Recursively report all paths that are referenced by this projection.
+     */
+    virtual void reportProjectedPaths(std::set<std::string>* preservedPaths) const = 0;
+
+    /**
+     * Recursively reports all computed paths in this projection, adding them into 'computedPaths'.
+     *
+     * Computed paths that are identified as the result of a simple rename are instead filled out in
+     * 'renamedPaths'. Each entry in 'renamedPaths' maps from the path's new name to its old name
+     * prior to application of this projection.
+     */
+    virtual void reportComputedPaths(std::set<std::string>* computedPaths,
+                                     StringMap<std::string>* renamedPaths) const = 0;
+
+    const std::string& getPath() const {
+        return _pathToNode;
+    }
+
+    virtual void optimize() = 0;
+
+    virtual Value applyExpressionsToValue(const Document& root, Value inputVal) const = 0;
+    virtual Value applyProjectionsToValue(Value inputVal) const = 0;
+
+protected:
+    ProjectionPolicies _policies;
+    std::string _pathToNode;
+};
+
+class ProjectionNodeArray;
+
+/**
+ * Abstract base class for a projection that gets applied to a document (as opposed to an array).
+ *
+ * Derived classes need only implement a small set of methods which define what the behavior of
+ * "projecting" (inclusion or exclusion) a field is.
+ */
+class ProjectionNodeDocument : public ProjectionNodeBase {
+public:
+    ProjectionNodeDocument(ProjectionPolicies policies, std::string pathToNode = "")
+        : ProjectionNodeBase(policies, std::move(pathToNode)) {}
+
+    /**
+     * Applies all projections and expressions, if applicable, and returns the resulting document.
+     */
+    virtual Document applyToDocument(const Document& inputDoc) const;
+
+    /**
+     * Recursively evaluates all expressions in the projection, writing the results to 'outputDoc'.
+     */
+    void applyExpressions(const Document& root, MutableDocument* outputDoc) const;
 
     /**
      * Recursively adds 'path' into the tree as a projected field, creating any child nodes if
@@ -60,6 +163,12 @@ public:
      * added a computed field "a".
      */
     void addProjectionForPath(const FieldPath& path);
+
+    /**
+     * Similar to above, but the path may include array indexes. ProjectionNodeArrays will be added
+     * to the tree as necessary.
+     */
+    void addProjectionForArrayIndexPath(const ArrayIndexPathView& arrPath);
 
     /**
      * Get the expression for the given path. Returns null if no expression for the given path is
@@ -78,30 +187,17 @@ public:
     void addExpressionForPath(const FieldPath& path, boost::intrusive_ptr<Expression> expr);
 
     /**
+     * Similar to above, but the path may include array indexes.
+     */
+    void addExpressionForArrayIndexPath(const ArrayIndexPathView& arrPath,
+                                        boost::intrusive_ptr<Expression> expr);
+
+    /**
      * Creates the child if it doesn't already exist. 'field' is not allowed to be dotted. Returns
      * the child node if it already exists, or the newly-created child otherwise.
      */
-    ProjectionNode* addOrGetChild(const std::string& field);
-
-    /**
-     * Applies all projections and expressions, if applicable, and returns the resulting document.
-     */
-    virtual Document applyToDocument(const Document& inputDoc) const;
-
-    /**
-     * Recursively evaluates all expressions in the projection, writing the results to 'outputDoc'.
-     */
-    void applyExpressions(const Document& root, MutableDocument* outputDoc) const;
-
-    /**
-     * Reports dependencies on any fields that are required by this projection.
-     */
-    virtual void reportDependencies(DepsTracker* deps) const = 0;
-
-    /**
-     * Recursively report all paths that are referenced by this projection.
-     */
-    void reportProjectedPaths(std::set<std::string>* preservedPaths) const;
+    ProjectionNodeDocument* addOrGetChild(const std::string& field);
+    ProjectionNodeArray* addOrGetArrayChild(const std::string& field);
 
     /**
      * Return an optional number, x, which indicates that it is safe to stop reading the document
@@ -111,30 +207,27 @@ public:
         return boost::none;
     }
 
-    /**
-     * Recursively reports all computed paths in this projection, adding them into 'computedPaths'.
-     *
-     * Computed paths that are identified as the result of a simple rename are instead filled out in
-     * 'renamedPaths'. Each entry in 'renamedPaths' maps from the path's new name to its old name
-     * prior to application of this projection.
-     */
     void reportComputedPaths(std::set<std::string>* computedPaths,
-                             StringMap<std::string>* renamedPaths) const;
+                             StringMap<std::string>* renamedPaths) const override;
+    void reportProjectedPaths(std::set<std::string>* preservedPaths) const override;
 
-    const std::string& getPath() const {
-        return _pathToNode;
-    }
+    void optimize() override;
 
-    void optimize();
 
     Document serialize(boost::optional<ExplainOptions::Verbosity> explain) const;
 
     void serialize(boost::optional<ExplainOptions::Verbosity> explain,
                    MutableDocument* output) const;
 
+    // Helpers for the 'applyProjections' and 'applyExpressions' methods. Applies the transformation
+    // recursively to each element of any arrays, and ensures primitives are handled appropriately.
+    Value applyExpressionsToValue(const Document& root, Value inputVal) const override;
+    Value applyProjectionsToValue(Value inputVal) const override;
+
 protected:
     // Returns a unique_ptr to a new instance of the implementing class for the given 'fieldName'.
-    virtual std::unique_ptr<ProjectionNode> makeChild(const std::string& fieldName) const = 0;
+    virtual std::unique_ptr<ProjectionNodeDocument> makeChild(
+        const std::string& fieldName) const = 0;
 
     // Returns the initial document to which the current level of the projection should be applied.
     // For an inclusion projection this will be an empty document, to which we will add the fields
@@ -153,11 +246,9 @@ protected:
     // Writes the given value to the output doc, replacing the existing value of 'field' if present.
     virtual void outputProjectedField(StringData field, Value val, MutableDocument* outDoc) const;
 
-    stdx::unordered_map<std::string, std::unique_ptr<ProjectionNode>> _children;
+    stdx::unordered_map<std::string, std::unique_ptr<ProjectionNodeBase>> _children;
     stdx::unordered_map<std::string, boost::intrusive_ptr<Expression>> _expressions;
     stdx::unordered_set<std::string> _projectedFields;
-    ProjectionPolicies _policies;
-    std::string _pathToNode;
 
     // Whether this node or any child of this node contains a computed field.
     bool _subtreeContainsComputedFields{false};
@@ -167,7 +258,7 @@ private:
     // copies over enough information to preserve the structure of the incoming document for the
     // fields this projection cares about.
     //
-    // For example, given a ProjectionNode tree representing this projection:
+    // For example, given a ProjectionNodeDocument tree representing this projection:
     //    {a: {b: 1, c: <exp>}, "d.e": <exp>}
     // Calling applyProjections() with an 'inputDoc' of
     //    {a: [{b: 1, d: 1}, {b: 2, d: 2}], d: [{e: 1, f: 1}, {e: 1, f: 1}]}
@@ -175,16 +266,13 @@ private:
     //    {a: [{b: 1}, {b: 2}], d: [{}, {}]}
     void applyProjections(const Document& inputDoc, MutableDocument* outputDoc) const;
 
-    // Helpers for the 'applyProjections' and 'applyExpressions' methods. Applies the transformation
-    // recursively to each element of any arrays, and ensures primitives are handled appropriately.
-    Value applyExpressionsToValue(const Document& root, Value inputVal) const;
-    Value applyProjectionsToValue(Value inputVal) const;
+    // Adds a new ProjectionNodeDocument as a child. 'field' cannot be dotted.
+    ProjectionNodeDocument* addChild(const std::string& field);
+    ProjectionNodeArray* addArrayChild(const std::string& field);
 
-    // Adds a new ProjectionNode as a child. 'field' cannot be dotted.
-    ProjectionNode* addChild(const std::string& field);
 
     // Returns nullptr if no such child exists.
-    ProjectionNode* getChild(const std::string& field) const;
+    ProjectionNodeBase* getChild(const std::string& field) const;
 
     /**
      * Indicates that metadata computed by previous calls to optimize() is now stale and must be
@@ -201,8 +289,8 @@ private:
     // For example, for the specification {a: <expression>, "b.c": <expression>, d: <expression>},
     // we need to add the top level fields in the order "a", then "b", then "d". This ordering
     // information needs to be tracked separately, since "a" and "d" will be tracked via
-    // '_expressions', and "b.c" will be tracked as a child ProjectionNode in '_children'. For the
-    // example above, '_orderToProcessAdditionsAndChildren' would be ["a", "b", "d"].
+    // '_expressions', and "b.c" will be tracked as a child ProjectionNodeDocument in '_children'.
+    // For the example above, '_orderToProcessAdditionsAndChildren' would be ["a", "b", "d"].
     std::vector<std::string> _orderToProcessAdditionsAndChildren;
 
     // Maximum number of fields that need to be projected. This allows for an "early" return
@@ -210,4 +298,211 @@ private:
     // stored here to avoid re-computation for each document.
     boost::optional<size_t> _maxFieldsToProject;
 };
+
+/**
+ * Class which represents a projection tree applied to an array. May
+ * --Set individual elements of the array to the result of an expression.
+ * --Apply other sub-projections to elements of an array which are documents.
+ *
+ * If applying projections and a non-array is encountered, the value will not be changed.
+ *
+ * If applying expressions and a non-array is encountered, it will be turned into an array. If the
+ * array is too short (e.g. the node has an expression for element 5, but the array is length 2),
+ * it will be padded with 'null' values.
+ */
+class ProjectionNodeArray : public ProjectionNodeBase {
+public:
+    using MakeNodeFn = std::function<std::unique_ptr<ProjectionNodeDocument>()>;
+
+    ProjectionNodeArray(ProjectionPolicies policies, std::string pathToNode = "")
+        : ProjectionNodeBase(policies, std::move(pathToNode)) {}
+
+    /**
+     * Reports dependencies on any fields that are required by this projection.
+     */
+    void reportDependencies(DepsTracker* deps) const override {
+        deps->fields.insert(_pathToNode);
+
+        for (auto&& expr : _expressions) {
+            expr.second->addDependencies(deps);
+        }
+
+        for (auto&& child : _children) {
+            child.second->reportDependencies(deps);
+        }
+    }
+
+    /**
+     * Recursively report all paths that are referenced by this projection.
+     */
+    void reportProjectedPaths(std::set<std::string>* preservedPaths) const override {
+        // We do nothing here.
+
+        // The deps tracker is not capable of tracking paths that go beneath arrays (e.g. it cannot
+        // track the path a.0.b, where 'a' is an array). As a "coarse" solution to this, we report
+        // that the field this ProjectionNodeArray represents is entirely "computed".
+    }
+
+    /**
+     * Recursively reports all computed paths in this projection, adding them into 'computedPaths'.
+     */
+    void reportComputedPaths(std::set<std::string>* computedPaths,
+                             StringMap<std::string>* renamedPaths) const override {
+        // Report this entire path as computed.
+        computedPaths->insert(_pathToNode);
+    }
+
+    void optimize() override {
+        for (auto&& expr : _expressions) {
+            _expressions[expr.first] = expr.second->optimize();
+        }
+
+        for (auto&& child : _children) {
+            child.second->optimize();
+        }
+    }
+
+    /**
+     * Apply all expressions in this tree to given Value and return a new Value to take its place.
+     *
+     * Returns an array even if the input Value is not an array.
+     */
+    Value applyExpressionsToValue(const Document& root, Value inputVal) const override {
+        std::vector<Value> vec;
+        if (inputVal.getType() == BSONType::Array) {
+            vec = inputVal.getArray();
+        }
+
+        // Pad the vector with nulls.
+        if (vec.size() < _maxInd + 1) {
+            vec.reserve(_maxInd + 1);
+            for (size_t i = vec.size(); i <= _maxInd; ++i) {
+                vec.push_back(Value(NullLabeler{}));
+            }
+        }
+
+        for (auto ind : _orderToProcessAdditionsAndChildren) {
+            if (auto it = _expressions.find(ind); it != _expressions.end()) {
+                vec[ind] =
+                    it->second->evaluate(root, &it->second->getExpressionContext()->variables);
+            } else {
+                auto childIt = _children.find(ind);
+                invariant(childIt != _children.end());
+                vec[ind] = childIt->second->applyExpressionsToValue(root, std::move(vec[ind]));
+            }
+        }
+
+        return Value(vec);
+    }
+
+    /**
+     * Apply child node projections to given Value, if it is an array.
+     */
+    Value applyProjectionsToValue(Value inputVal) const override {
+        if (inputVal.getType() != BSONType::Array) {
+            // NOTE: This represents the case where you have a projection like a.$[0].b and a
+            // document {a: "foo"}. What should we do here? Erroring would be nice, but
+            // unfortunately, is not acceptable for oplog application. Instead we just have this
+            // leave the value alone.
+            return transformSkippedValueForOutput(inputVal);
+        }
+
+        auto vec = inputVal.getArray();
+
+        for (auto ind : _orderToProcessAdditionsAndChildren) {
+            if (ind >= vec.size()) {
+                continue;
+            }
+
+            if (auto childIt = _children.find(ind); childIt != _children.end()) {
+                vec[ind] = childIt->second->applyProjectionsToValue(std::move(vec[ind]));
+            }
+        }
+        return Value(vec);
+    }
+
+    //
+    // The below methods are used for constructing trees of projection nodes. While these methods
+    // are declared public so that sibling classes may call them, it's not recommended that outside
+    // callers use them.
+    //
+
+    void addProjectionForArrayIndexPath(const ArrayIndexPathView& path,
+                                        const MakeNodeFn& makeChild) {
+        // We don't allow "projections" on array elements, so the path cannot end with an array
+        // element.
+        invariant(path.size > 1);
+        invariant(std::holds_alternative<size_t>(path.components[0]));
+
+        size_t ind = std::get<size_t>(path.components[0]);
+        auto childIter = _children.find(ind);
+        if (childIter == _children.end()) {
+            _children[ind] = makeChild();
+            _maxInd = std::max(_maxInd, ind);
+            _orderToProcessAdditionsAndChildren.push_back(ind);
+            childIter = _children.find(ind);
+        }
+
+        childIter->second->addProjectionForArrayIndexPath(path.tail());
+    }
+
+    void addExpressionForArrayIndexPath(const ArrayIndexPathView& path,
+                                        boost::intrusive_ptr<Expression> expr,
+                                        const MakeNodeFn& makeChild) {
+        invariant(std::holds_alternative<size_t>(path.components[0]));
+        size_t ind = std::get<size_t>(path.components[0]);
+
+        if (path.size == 1) {
+            _expressions[ind] = expr;
+            _maxInd = std::max(ind, _maxInd);
+            _orderToProcessAdditionsAndChildren.push_back(ind);
+            return;
+        }
+
+        auto childIter = _children.find(ind);
+        if (childIter == _children.end()) {
+            auto pair = _children.insert({ind, makeChild()});
+            _maxInd = std::max(ind, _maxInd);
+            _orderToProcessAdditionsAndChildren.push_back(ind);
+            invariant(pair.second);
+            childIter = pair.first;
+        }
+
+        childIter->second->addExpressionForArrayIndexPath(path.tail(), expr);
+    }
+
+    ProjectionNodeDocument* addChild(size_t ind, std::unique_ptr<ProjectionNodeDocument> node) {
+        invariant(!_expressions.count(ind));
+
+        auto ret = _children.insert({ind, std::move(node)});
+        // New element should have been inserted.
+        invariant(ret.second);
+        return ret.first->second.get();
+    }
+
+private:
+    Value transformSkippedValueForOutput(Value in) const {
+        // If we like, this can be forked off and we can have different behavior in this case.
+        return in;
+    }
+
+    //
+    // The keys for these maps must not overlap.
+    //
+
+    // Map from array index -> Expression.
+    std::map<size_t, boost::intrusive_ptr<Expression>> _expressions;
+
+    // Map from array index -> child projection.
+    // Note that each child is a ProjectionNodeDocument NOT a ProjectionNodeBase. We do not allow
+    // traversal of arrays directly nested within arrays.
+    std::map<size_t, std::unique_ptr<ProjectionNodeDocument>> _children;
+
+    // We do the transformations in the order they were requested, rather than in array-index order.
+    // This is to match the behavior of Document projections.
+    // NOTE: Do we really have to do this? Probably not.
+    std::vector<size_t> _orderToProcessAdditionsAndChildren;
+    size_t _maxInd = 0;
+};
+
 }  // namespace mongo::projection_executor

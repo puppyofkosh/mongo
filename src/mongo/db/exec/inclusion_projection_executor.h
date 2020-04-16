@@ -41,13 +41,13 @@ namespace mongo::projection_executor {
  * level inclusions or additions, with any child InclusionNodes representing dotted or nested
  * inclusions or additions.
  */
-class InclusionNode : public ProjectionNode {
+class InclusionNode : public ProjectionNodeDocument {
 public:
     InclusionNode(ProjectionPolicies policies, std::string pathToNode = "")
-        : ProjectionNode(policies, std::move(pathToNode)) {}
+        : ProjectionNodeDocument(policies, std::move(pathToNode)) {}
 
     InclusionNode* addOrGetChild(const std::string& field) {
-        return static_cast<InclusionNode*>(ProjectionNode::addOrGetChild(field));
+        return static_cast<InclusionNode*>(ProjectionNodeDocument::addOrGetChild(field));
     }
 
     void reportDependencies(DepsTracker* deps) const final {
@@ -81,7 +81,7 @@ protected:
     void outputProjectedField(StringData field, Value val, MutableDocument* outputDoc) const final {
         outputDoc->addField(field, val);
     }
-    std::unique_ptr<ProjectionNode> makeChild(const std::string& fieldName) const override {
+    std::unique_ptr<ProjectionNodeDocument> makeChild(const std::string& fieldName) const override {
         return std::make_unique<InclusionNode>(
             _policies, FieldPath::getFullyQualifiedPath(_pathToNode, fieldName));
     }
@@ -118,7 +118,7 @@ public:
     Document applyToDocument(const Document& inputDoc) const final;
 
 protected:
-    std::unique_ptr<ProjectionNode> makeChild(const std::string& fieldName) const final {
+    std::unique_ptr<ProjectionNodeDocument> makeChild(const std::string& fieldName) const final {
         return std::make_unique<FastPathEligibleInclusionNode>(
             _policies, FieldPath::getFullyQualifiedPath(_pathToNode, fieldName));
     }

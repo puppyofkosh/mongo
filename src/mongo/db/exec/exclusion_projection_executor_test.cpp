@@ -515,5 +515,55 @@ TEST(ExclusionProjectionExecutionTest, ShouldNotRetainNestedArraysIfNoRecursionN
 
     ASSERT_DOCUMENT_EQ(result, expectedResult);
 }
+
+TEST(ExclusionProjectionExecutionTest, RemoveFieldAtArrayPath) {
+    const boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
+    const ProjectionPolicies policies{};
+    auto root = std::make_unique<ExclusionNode>(policies);
+
+    // Projection spec: {a.$[0].b: 0}
+    root->addProjectionForArrayIndexPath(ArrayIndexPath{{"a", size_t(0), "b"}});
+
+    // Simple case.
+    {
+        Document input(fromjson("{a: [{b: 1, c: 1}, {b: 1, c: 1}]}"));
+        Document output = root->applyToDocument(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [{c: 1}, {b: 1, c: 1}]}")));
+    }
+
+    // The case where 'a' is an object instead of an array.
+
+    // What the behavior should be is an interesting question, especially in the context of oplog
+    // entries and idempotency. There's a reasonable argument for saying that this should actually
+    // turn 'a' into an array and create an empty object in the 0th position.
+    {
+        Document input(fromjson("{a: {foo: 1}}"));
+        Document output = root->applyToDocument(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: {foo: 1}}")));
+    }
+
+    // The case where 'a' is neither an object nor an array.
+    {
+        Document input(fromjson("{a: 1}"));
+        Document output = root->applyToDocument(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: 1}")));
+    }
+
+    // Case where a is an array but the 0th element isn't an object.
+    {
+        Document input(fromjson("{a: [3]}"));
+        Document output = root->applyToDocument(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: [3]}")));
+    }
+
+    // Case where a is an array but there is no 0th element (it's empty).
+    {
+        Document input(fromjson("{a: []}"));
+        Document output = root->applyToDocument(input);
+        ASSERT_DOCUMENT_EQ(output, Document(fromjson("{a: []}")));
+    }
+}
+
+// TODO: More tests!!
 }  // namespace
 }  // namespace mongo::projection_executor

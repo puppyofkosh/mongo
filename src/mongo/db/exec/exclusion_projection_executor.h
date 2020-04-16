@@ -41,13 +41,13 @@ namespace mongo::projection_executor {
  * represents one 'level' of the parsed specification. The root ExclusionNode represents all top
  * level exclusions, with any child ExclusionNodes representing dotted or nested exclusions.
  */
-class ExclusionNode final : public ProjectionNode {
+class ExclusionNode final : public ProjectionNodeDocument {
 public:
     ExclusionNode(ProjectionPolicies policies, std::string pathToNode = "")
-        : ProjectionNode(policies, std::move(pathToNode)) {}
+        : ProjectionNodeDocument(policies, std::move(pathToNode)) {}
 
     ExclusionNode* addOrGetChild(const std::string& field) {
-        return static_cast<ExclusionNode*>(ProjectionNode::addOrGetChild(field));
+        return static_cast<ExclusionNode*>(ProjectionNodeDocument::addOrGetChild(field));
     }
 
     void reportDependencies(DepsTracker* deps) const final {
@@ -64,7 +64,7 @@ public:
     }
 
 protected:
-    std::unique_ptr<ProjectionNode> makeChild(const std::string& fieldName) const final {
+    std::unique_ptr<ProjectionNodeDocument> makeChild(const std::string& fieldName) const final {
         return std::make_unique<ExclusionNode>(
             _policies, FieldPath::getFullyQualifiedPath(_pathToNode, fieldName));
     }
