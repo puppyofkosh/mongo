@@ -139,6 +139,10 @@ private:
                                           const BSONObj& post,
                                           const ArrayIndexPath& prefix);
 
+    static DocumentDiff diffArrays(const BSONObj& pre,
+                                   const BSONObj& post,
+                                   const ArrayIndexPath& prefix);
+
     std::vector<ArrayIndexPath> _toDelete;
     std::vector<std::pair<ArrayIndexPath, BSONElement>> _toUpsert;
     std::vector<std::pair<ArrayIndexPath, BSONElement>> _toInsert;

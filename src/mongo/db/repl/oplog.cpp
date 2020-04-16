@@ -1265,7 +1265,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
             UpdateRequest request(requestNss);
             request.setQuery(updateCriteria);
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
-                std::cout << "update entry is " << o << std::endl;
+                std::cout << "ian: update entry is " << o << std::endl;
 
                 std::vector<write_ops::DeltaUpdate::KVPair> sets;
                 std::vector<std::string> unsets;

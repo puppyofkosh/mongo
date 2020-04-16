@@ -33,6 +33,76 @@
 
 namespace mongo {
 namespace doc_diff {
+DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
+                                      const BSONObj& post,
+                                      const ArrayIndexPath& prefix) {
+    BSONObjIterator preIt(pre);
+    BSONObjIterator postIt(post);
+
+    DocumentDiff ret;
+
+    size_t index = 0;
+    for (; preIt.more() && postIt.more(); ++index) {
+        auto preElt = preIt.next();
+        auto postElt = postIt.next();
+
+        // Check they have the same index.
+        uassert(ErrorCodes::BadValue, // TODO: error code
+                  "Invalid BSON Array",
+                  preElt.fieldNameStringData() == postElt.fieldNameStringData());
+        // Check that there aren't missing indexes.
+        uassert(ErrorCodes::BadValue,
+                "Invalid BSON Array",
+                std::to_string(index) == preElt.fieldNameStringData());
+
+        if (preElt.binaryEqual(postElt)) {
+            // They're identical so move on.
+            continue;
+        } else if (preElt.type() == BSONType::Object && postElt.type() == BSONType::Object) {
+            // They're not identical but they're both objects, so we can diff them.
+            ArrayIndexPath newPrefix(prefix);
+            newPrefix.append(index);
+            auto diff = DocumentDiff::computeDiffHelper(preElt.embeddedObject(),
+                                                        postElt.embeddedObject(),
+                                                        newPrefix);
+
+            // TODO: Check if diff is bigger than postElt. For now I'm leaving this out to make
+            // testing easier for me.
+            ret.merge(std::move(diff));
+        } else {
+            // Record as an overwrite.
+            ArrayIndexPath newFr(prefix);
+            newFr.append(index);
+            ret._toUpsert.push_back({std::move(newFr), postElt});            
+        }
+    }
+
+    while (preIt.more()) {
+        invariant(!postIt.more());
+
+        // TODO: Check that 'index' matches the field name of the array.
+
+        // TODO: think about this!
+    }
+
+    while (postIt.more()) {
+        invariant(!preIt.more());
+        auto newElem = postIt.next();
+
+        uassert(ErrorCodes::BadValue,
+                "Invalid BSON Array",
+                std::to_string(index) == newElem.fieldNameStringData());
+        ++index;
+                
+        // Record as an insert.
+        ArrayIndexPath insertFr(prefix);
+        insertFr.append(index);
+        ret._toInsert.push_back({insertFr, newElem});
+    }
+
+    return ret;
+}
+    
 DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
                                              const BSONObj& post,
                                              const ArrayIndexPath& prefix) {
@@ -59,7 +129,15 @@ DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
                 // record this as a simple "set" of the subfield rather than a diff of it.
                 // TODO: Write a test for this.
                 ret.merge(std::move(subDiff));
-//            } else if (preElt.type() == BSONType::Array && postElt.type() == BSONType::Array) {
+            } else if (preElt.type() == BSONType::Array && postElt.type() == BSONType::Array) {
+                ArrayIndexPath newPrefix(prefix);
+                newPrefix.append(preElt.fieldName());
+                auto arrDiff = diffArrays(preElt.embeddedObject(),
+                                          postElt.embeddedObject(),
+                                          newPrefix);
+                // TODO: For real implementation consider writing a DiffBuilder class and maybe
+                // make this merging stuff more efficient.
+                ret.merge(std::move(arrDiff));
             } else {
                 // Record this as an overwrite.
                 ArrayIndexPath newFr(prefix);

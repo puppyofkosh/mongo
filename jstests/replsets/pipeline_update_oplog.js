@@ -170,6 +170,23 @@ testUpdateReplicates(
     {_id: id, padding: kGiantStr, a: 1, b: {c: 2, d: {e: 10, d: 2}, a: 5, b: 3}, z: 7},
     true);
 
+    // Arrays.
+
+    // Modify a random element of an array.
+id = generateId();
+testUpdateReplicates(
+    {_id: id, padding: kGiantStr, a: [1, 2, 3, 4, 5]},
+    [{$set: {a: [1,2,999, 4, 5]}}],
+    {_id: id, padding: kGiantStr, a: [1,2,999,4,5]},
+    true);
+
+// TODO: change an object inside an array
+
+// TODO: mega nested case
+
+// TODO: Extend an array
+// TODO: Shorten an array
+    
 // TODO remove
 print("ian: oplog");
 const oplog = primary.getDB("local").getCollection("oplog.rs");

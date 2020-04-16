@@ -187,15 +187,15 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
         if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize())) {
             for (auto&& [fieldRef, elt] : diff.toUpsert()) {
                 invariant(
-                    applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.dottedField(), elt));
+                    applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.toString(), elt));
             }
 
             for (auto&& fieldRef : diff.toDelete()) {
-                invariant(applyParams.logBuilder->addToUnsets(fieldRef.dottedField()));
+                invariant(applyParams.logBuilder->addToUnsets(fieldRef.toString()));
             }
 
             for (auto&& [fieldRef, elt] : diff.toInsert()) {
-                invariant(applyParams.logBuilder->addToCreates(fieldRef.dottedField(), elt));
+                invariant(applyParams.logBuilder->addToCreates(fieldRef.toString(), elt));
             }
 
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
