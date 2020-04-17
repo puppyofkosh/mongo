@@ -60,6 +60,8 @@ public:
     }
 
     Value serialize(bool explain) const final {
+        // NOTE: This is only implemented because DocumentSourceSingleDocumentTransformation (used
+        // for $replaceRoot) requires that serialize() be implemented.
         return Value();
     }
 

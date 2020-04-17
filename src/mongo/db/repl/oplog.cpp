@@ -42,6 +42,7 @@
 #include <vector>
 
 #include "mongo/bson/util/bson_extract.h"
+#include "mongo/db/array_index_path.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_manager.h"
@@ -1268,7 +1269,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
                 std::cout << "ian: update entry is " << o << std::endl;
 
                 std::vector<write_ops::DeltaUpdate::KVPair> sets;
-                std::vector<std::string> unsets;
+                std::vector<ArrayIndexPath> unsets;
                 std::vector<write_ops::DeltaUpdate::KVPair> creates;
 
                 std::vector<BSONObj> pipeline;
@@ -1280,7 +1281,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
                     BSONObj set = o["u"].embeddedObject();
 
                     for (auto&& f : set) {
-                        sets.push_back({f.fieldName(), Value(f)});
+                        sets.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), Value(f)});
                     }
                 }
 
@@ -1290,7 +1291,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
                             o["d"].type() == BSONType::Object);
 
                     for (auto&& f : o["d"].embeddedObject()) {
-                        unsets.push_back(f.fieldName());
+                        unsets.push_back(ArrayIndexPath::parseUnsafe(f.fieldName()));
                     }
                 }
 
@@ -1300,7 +1301,7 @@ Status applyOperation_inlock(OperationContext* opCtx,
                             o["i"].type() == BSONType::Object);
 
                     for (auto&& f : o["i"].embeddedObject()) {
-                        creates.push_back({f.fieldName(), Value(f)});
+                        creates.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), Value(f)});
                     }
                 }
 

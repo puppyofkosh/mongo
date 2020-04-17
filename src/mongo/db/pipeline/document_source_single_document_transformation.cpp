@@ -47,11 +47,13 @@ DocumentSourceSingleDocumentTransformation::DocumentSourceSingleDocumentTransfor
     const intrusive_ptr<ExpressionContext>& pExpCtx,
     std::unique_ptr<TransformerInterface> parsedTransform,
     const StringData name,
-    bool isIndependentOfAnyCollection)
+    bool isIndependentOfAnyCollection,
+    bool serializeOnDispose)
     : DocumentSource(name, pExpCtx),
       _parsedTransform(std::move(parsedTransform)),
       _name(name.toString()),
-      _isIndependentOfAnyCollection(isIndependentOfAnyCollection) {}
+      _isIndependentOfAnyCollection(isIndependentOfAnyCollection),
+      _serializeOnDispose(serializeOnDispose) {}
 
 const char* DocumentSourceSingleDocumentTransformation::getSourceName() const {
     return _name.c_str();
@@ -76,7 +78,9 @@ intrusive_ptr<DocumentSource> DocumentSourceSingleDocumentTransformation::optimi
 void DocumentSourceSingleDocumentTransformation::doDispose() {
     if (_parsedTransform) {
         // Cache the stage options document in case this stage is serialized after disposing.
-        _cachedStageOptions = _parsedTransform->serializeTransformation(pExpCtx->explain);
+        if (_serializeOnDispose) {
+            _cachedStageOptions = _parsedTransform->serializeTransformation(pExpCtx->explain);
+        }
         _parsedTransform.reset();
     }
 }

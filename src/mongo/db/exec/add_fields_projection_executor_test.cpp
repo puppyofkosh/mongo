@@ -574,7 +574,7 @@ TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeSimple) {
 
     // The "$[i]" syntax is invented for the sake of example and not actually supported
     // anywhere. a.$[i] means "index 'i' of array 'a'".
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(1)}}, ExpressionConstant::create(expCtx, Value(999)));
 
     // Simple/success case.
@@ -618,7 +618,7 @@ TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeNestedEndingInFieldName)
     AddFieldsProjectionExecutor addition(expCtx);
 
     // addFields spec: {a.$[2].b.$[1].c: 999}
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(2), "b", size_t(1), "c"}},
         ExpressionConstant::create(expCtx, Value(999)));
 
@@ -670,14 +670,14 @@ TEST(AddFieldsProjectionExecutorExecutionTest, MultipleArrayNodeNestedEndingInFi
     //  "a.$[2].b.$[3].c": 997
     // }
 
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(1), "b", size_t(2), "c"}},
         ExpressionConstant::create(expCtx, Value(998)));
 
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(2), "b", size_t(1), "c"}},
         ExpressionConstant::create(expCtx, Value(999)));
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(2), "b", size_t(3), "c"}},
         ExpressionConstant::create(expCtx, Value(997)));
 
@@ -715,7 +715,7 @@ TEST(AddFieldsProjectionExecutorExecutionTest, ArrayNodeNestedEndingInArrayIndex
     AddFieldsProjectionExecutor addition(expCtx);
 
     // addFields spec: {a.$[1].b.$[0].c.$[1]: 999}
-    addition.getRoot().addExpressionForArrayIndexPath(
+    addition.getRoot()->addExpressionForArrayIndexPath(
         ArrayIndexPath{{"a", size_t(1), "b", size_t(0), "c", size_t(1)}},
         ExpressionConstant::create(expCtx, Value(999)));
 

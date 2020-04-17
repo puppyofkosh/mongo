@@ -47,9 +47,9 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
         auto postElt = postIt.next();
 
         // Check they have the same index.
-        uassert(ErrorCodes::BadValue, // TODO: error code
-                  "Invalid BSON Array",
-                  preElt.fieldNameStringData() == postElt.fieldNameStringData());
+        uassert(ErrorCodes::BadValue,  // TODO: error code
+                "Invalid BSON Array",
+                preElt.fieldNameStringData() == postElt.fieldNameStringData());
         // Check that there aren't missing indexes.
         uassert(ErrorCodes::BadValue,
                 "Invalid BSON Array",
@@ -62,18 +62,20 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
             // They're not identical but they're both objects, so we can diff them.
             ArrayIndexPath newPrefix(prefix);
             newPrefix.append(index);
-            auto diff = DocumentDiff::computeDiffHelper(preElt.embeddedObject(),
-                                                        postElt.embeddedObject(),
-                                                        newPrefix);
+            auto diff = DocumentDiff::computeDiffHelper(
+                preElt.embeddedObject(), postElt.embeddedObject(), newPrefix);
 
             // TODO: Check if diff is bigger than postElt. For now I'm leaving this out to make
             // testing easier for me.
             ret.merge(std::move(diff));
         } else {
+            // SUBTLE: We record these as "upsert" operations instead of "inserts" because we do not
+            // want to move the field to the end, we simply want to change its value.
+
             // Record as an overwrite.
             ArrayIndexPath newFr(prefix);
             newFr.append(index);
-            ret._toUpsert.push_back({std::move(newFr), postElt});            
+            ret._toUpsert.push_back({std::move(newFr), postElt});
         }
     }
 
@@ -92,17 +94,17 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
         uassert(ErrorCodes::BadValue,
                 "Invalid BSON Array",
                 std::to_string(index) == newElem.fieldNameStringData());
+
+        ArrayIndexPath path(prefix);
+        path.append(index);
+        ret._toUpsert.push_back({path, newElem});
+
         ++index;
-                
-        // Record as an insert.
-        ArrayIndexPath insertFr(prefix);
-        insertFr.append(index);
-        ret._toInsert.push_back({insertFr, newElem});
     }
 
     return ret;
 }
-    
+
 DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
                                              const BSONObj& post,
                                              const ArrayIndexPath& prefix) {
@@ -132,9 +134,8 @@ DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
             } else if (preElt.type() == BSONType::Array && postElt.type() == BSONType::Array) {
                 ArrayIndexPath newPrefix(prefix);
                 newPrefix.append(preElt.fieldName());
-                auto arrDiff = diffArrays(preElt.embeddedObject(),
-                                          postElt.embeddedObject(),
-                                          newPrefix);
+                auto arrDiff =
+                    diffArrays(preElt.embeddedObject(), postElt.embeddedObject(), newPrefix);
                 // TODO: For real implementation consider writing a DiffBuilder class and maybe
                 // make this merging stuff more efficient.
                 ret.merge(std::move(arrDiff));
@@ -201,13 +202,13 @@ std::string DocumentDiff::toStringDebug() const {
     }
 
     for (auto&& s : _toUpsert) {
-        ret += str::stream() << "insert: "
-                             << s.first.debugString() << " " << s.second.toString(false) << "\n";
+        ret += str::stream() << "insert: " << s.first.debugString() << " "
+                             << s.second.toString(false) << "\n";
     }
 
     for (auto&& s : _toInsert) {
-        ret += str::stream() << "create: " << s.first.debugString()
-                             << " " << s.second.toString(false) << "\n";
+        ret += str::stream() << "create: " << s.first.debugString() << " "
+                             << s.second.toString(false) << "\n";
     }
 
     return ret;

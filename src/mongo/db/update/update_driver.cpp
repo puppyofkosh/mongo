@@ -62,33 +62,33 @@ namespace {
 
 std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, const write_ops::DeltaUpdate& du) {
-
     auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
     for (auto&& pair : du.set) {
         auto expression = ExpressionConstant::create(expCtx, pair.second);
-        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first), std::move(expression));
+        setExec->getRoot()->addExpressionForArrayIndexPath(pair.first, std::move(expression));
     }
 
     // fields in $create region get added to both the set and unset executors.
     for (auto&& pair : du.create) {
         auto expression = ExpressionConstant::create(expCtx, pair.second);
-        setExec->getRoot()->addExpressionForPath(FieldPath(pair.first), std::move(expression));
+        setExec->getRoot()->addExpressionForArrayIndexPath(pair.first, std::move(expression));
     }
 
+    const bool serializeOnDispose = false;
     auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-        expCtx, std::move(setExec), "$set", false);
+        expCtx, std::move(setExec), "$set", false, serializeOnDispose);
 
     auto unsetExec = std::make_unique<projection_executor::ExclusionProjectionExecutor>(
         expCtx, ProjectionPolicies{});
     for (auto&& s : du.unset) {
-        unsetExec->getRoot()->addProjectionForPath(FieldPath(s));
+        unsetExec->getRoot()->addProjectionForArrayIndexPath(s);
     }
     for (auto&& pair : du.create) {
-        unsetExec->getRoot()->addProjectionForPath(FieldPath(pair.first));
+        unsetExec->getRoot()->addProjectionForArrayIndexPath(pair.first);
     }
 
     auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-        expCtx, std::move(unsetExec), "$unset", false);
+        expCtx, std::move(unsetExec), "$unset", false, serializeOnDispose);
 
     // TODO  for each field in du.create add it to both set/unset execs.
     boost::intrusive_ptr<Expression> removeTombstoneExpr =

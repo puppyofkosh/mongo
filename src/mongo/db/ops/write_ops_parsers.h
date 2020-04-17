@@ -32,6 +32,7 @@
 #include "mongo/base/string_data.h"
 #include "mongo/bson/bsonelement.h"
 #include "mongo/bson/bsonobjbuilder.h"
+#include "mongo/db/array_index_path.h"
 #include "mongo/db/exec/document_value/value.h"
 
 namespace mongo {
@@ -40,9 +41,9 @@ class Pipeline;
 namespace write_ops {
 
 struct DeltaUpdate {
-    using KVPair = std::pair<std::string, Value>;
+    using KVPair = std::pair<ArrayIndexPath, Value>;
     std::vector<KVPair> set;
-    std::vector<std::string> unset;
+    std::vector<ArrayIndexPath> unset;
     std::vector<KVPair> create;
 };
 

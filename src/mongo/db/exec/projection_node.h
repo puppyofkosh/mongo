@@ -31,51 +31,10 @@
 
 #include "mongo/db/exec/projection_executor.h"
 
+#include "mongo/db/array_index_path.h"
 #include "mongo/db/query/projection_policies.h"
 
 namespace mongo::projection_executor {
-
-/**
- * Represents a path which may include array indexes. For example on a document
- * {a: [{b: "foo"}, ...]}
- *
- * "foo" is at the path ["a", 0, "b"].
- *
- * Maybe some day this will be a "real" class but for now we're going to dump it in this namespace
- * and worry about where to put it later.
- */
-struct ArrayIndexPath {
-    // Each component is either a number (array index) or string (field name).
-    using Component = std::variant<size_t, std::string>;
-
-    std::vector<Component> components;
-
-    ArrayIndexPath(std::vector<Component> comp) : components(std::move(comp)) {
-        invariant(!components.empty());
-    }
-};
-
-/**
- * Unowned "view" class for ArrayIndexPath. Useful for recursion.
- */
-struct ArrayIndexPathView {
-    using Component = ArrayIndexPath::Component;
-
-    const Component* const components;
-    const size_t size;
-
-    ArrayIndexPathView(const ArrayIndexPath& p)
-        : components(p.components.data()), size(p.components.size()) {}
-
-    ArrayIndexPathView tail() const {
-        invariant(size > 1);
-        return {components + 1, size - 1};
-    }
-
-private:
-    ArrayIndexPathView(const Component* c, size_t sz) : components(c), size(sz) {}
-};
-
 /**
  * The inheritance tree:
  *
@@ -432,9 +391,9 @@ public:
         // We don't allow "projections" on array elements, so the path cannot end with an array
         // element.
         invariant(path.size > 1);
-        invariant(std::holds_alternative<size_t>(path.components[0]));
+        invariant(stdx::holds_alternative<size_t>(path.components[0]));
 
-        size_t ind = std::get<size_t>(path.components[0]);
+        size_t ind = stdx::get<size_t>(path.components[0]);
         auto childIter = _children.find(ind);
         if (childIter == _children.end()) {
             _children[ind] = makeChild();
@@ -449,8 +408,8 @@ public:
     void addExpressionForArrayIndexPath(const ArrayIndexPathView& path,
                                         boost::intrusive_ptr<Expression> expr,
                                         const MakeNodeFn& makeChild) {
-        invariant(std::holds_alternative<size_t>(path.components[0]));
-        size_t ind = std::get<size_t>(path.components[0]);
+        invariant(stdx::holds_alternative<size_t>(path.components[0]));
+        size_t ind = stdx::get<size_t>(path.components[0]);
 
         if (path.size == 1) {
             _expressions[ind] = expr;

@@ -54,7 +54,12 @@ public:
         const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
         std::unique_ptr<TransformerInterface> parsedTransform,
         const StringData name,
-        bool independentOfAnyCollection);
+        bool independentOfAnyCollection,
+
+        // Indicates whether the stage should serialize the transform when disposed.
+        // If set to false, the caller will not be able to serialize this class after
+        // dispose is called.
+        bool serializeOnDispose = false);
 
     // virtuals from DocumentSource
     const char* getSourceName() const final;
@@ -114,6 +119,8 @@ private:
     // Cached stage options in case this DocumentSource is disposed before serialized (e.g. explain
     // with a sort which will auto-dispose of the pipeline).
     Document _cachedStageOptions;
+
+    bool _serializeOnDispose;
 };
 
 }  // namespace mongo

@@ -71,6 +71,7 @@ function testUpdateReplicates(document, pipeline, expectedPostImage, expectUpdat
     checkOplogEntry(primary, expectUpdateOplogEntry);
 }
 
+const oplog = primary.getDB("local").getCollection("oplog.rs");
 let id;
 
 // Removing fields.
@@ -170,26 +171,49 @@ testUpdateReplicates(
     {_id: id, padding: kGiantStr, a: 1, b: {c: 2, d: {e: 10, d: 2}, a: 5, b: 3}, z: 7},
     true);
 
-    // Arrays.
+// Arrays.
 
-    // Modify a random element of an array.
+// Modify a random element of an array.
 id = generateId();
-testUpdateReplicates(
-    {_id: id, padding: kGiantStr, a: [1, 2, 3, 4, 5]},
-    [{$set: {a: [1,2,999, 4, 5]}}],
-    {_id: id, padding: kGiantStr, a: [1,2,999,4,5]},
-    true);
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3, 4, 5]},
+                     [{$set: {a: [1, 2, 999, 4, 5]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2, 999, 4, 5]},
+                     true);
+let oplogEntry = oplog.find().sort({ts: -1}).limit(1).toArray()[0];
+assert.eq(oplogEntry.o, {$v: 2, u: {"a.$[2]": 999}});
 
-// TODO: change an object inside an array
+// Modify an object inside an array.
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3, {b: 1}, 5]},
+                     [{$set: {a: [1, 2, 3, {b: 2}, 5]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2, 3, {b: 2}, 5]},
+                     true);
 
-// TODO: mega nested case
+// object inside an array inside an object inside an array
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3, {b: [{c: 1}]}, 5]},
+                     [{$set: {a: [1, 2, 3, {b: [{c: 999}]}, 5]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2, 3, {b: [{c: 999}]}, 5]},
+                     true);
 
-// TODO: Extend an array
-// TODO: Shorten an array
-    
+// Case where we append to an array.
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3]},
+                     [{$set: {a: [1, 2, 3, 4, 5]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2, 3, 4, 5]},
+                     true);
+
+// Case where we make an array shorter.
+// TODO: Think about this!!
+// id = generateId();
+// testUpdateReplicates(
+//     {_id: id, padding: kGiantStr, a: [1, 2, 3]},
+//     [{$set: {a: [1,2,3,4,5]}}],
+//     {_id: id, padding: kGiantStr, a: [1,2]},
+//     true);
+
 // TODO remove
 print("ian: oplog");
-const oplog = primary.getDB("local").getCollection("oplog.rs");
 printjson(oplog.find().sort({"ts": -1}).toArray());
 
 rst.stopSet();

@@ -33,68 +33,12 @@
 #include <vector>
 
 #include "mongo/bson/bsonobj.h"
-#include "mongo/db/field_ref.h"
+#include "mongo/db/array_index_path.h"
 #include "mongo/stdx/variant.h"
 
 namespace mongo {
 
 namespace doc_diff {
-
-class ArrayIndexPath {
-public:
-    using Component = stdx::variant<size_t, std::string>;
-
-    void append(Component c) {
-        _components.push_back(std::move(c));
-    }
-
-    const std::vector<Component>& components() const {
-        return _components;
-    }
-
-    std::string debugString() const {
-        return toString();
-    }
-
-    std::string toString() const {
-        // TODO: This syntax is fake.
-        std::string s;
-        for (size_t i = 0; i < _components.size(); ++i) {
-            const auto& c = _components[i];
-            if (stdx::holds_alternative<size_t>(c)) {
-                s += "$[" + std::to_string(stdx::get<size_t>(c)) + "]";
-            } else {
-                s += stdx::get<std::string>(c);
-            }
-
-            if (i + 1 != _components.size()) {
-                s += ".";
-            }
-        }
-        return s;
-    }
-
-    size_t approximateSizeInBytes() const {
-        // TODO: Someday we need to do this well, but not today.
-        return debugString().size();
-    }
-
-    bool operator==(const ArrayIndexPath& o) const {
-        if (_components.size() != o._components.size()) {
-            return false;
-        }
-        for (size_t i = 0; i < _components.size(); ++i) {
-            if (_components[i] != o._components[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-private:
-
-    std::vector<Component> _components;
-};
-    
 // The BSONObjs from which this is constructed must outlive the Diff itself.
 class DocumentDiff {
 public:

@@ -54,8 +54,8 @@ void ProjectionNodeDocument::addProjectionForPath(const FieldPath& path) {
 void ProjectionNodeDocument::addProjectionForArrayIndexPath(const ArrayIndexPathView& path) {
     makeOptimizationsStale();
     invariant(path.size > 0);
-    invariant(std::holds_alternative<std::string>(*path.components));
-    const std::string& field = std::get<std::string>(*path.components);
+    invariant(stdx::holds_alternative<std::string>(*path.components));
+    const std::string& field = stdx::get<std::string>(*path.components);
 
     if (path.size == 1) {
         _projectedFields.insert(field);
@@ -63,7 +63,7 @@ void ProjectionNodeDocument::addProjectionForArrayIndexPath(const ArrayIndexPath
     }
 
     // which type of child to make depends on the next component.
-    bool arrayChild = std::holds_alternative<size_t>(path.components[1]);
+    bool arrayChild = stdx::holds_alternative<size_t>(path.components[1]);
     if (arrayChild) {
         ProjectionNodeArray* child = addOrGetArrayChild(field);
 
@@ -108,8 +108,8 @@ void ProjectionNodeDocument::addExpressionForArrayIndexPath(const ArrayIndexPath
     invariant(_policies.computedFieldsPolicy == ComputedFieldsPolicy::kAllowComputedFields);
     _subtreeContainsComputedFields = true;
 
-    invariant(std::holds_alternative<std::string>(path.components[0]));
-    const auto field = std::get<std::string>(path.components[0]);
+    invariant(stdx::holds_alternative<std::string>(path.components[0]));
+    const auto field = stdx::get<std::string>(path.components[0]);
 
     if (path.size == 1) {
         _expressions[field] = expr;
@@ -117,7 +117,7 @@ void ProjectionNodeDocument::addExpressionForArrayIndexPath(const ArrayIndexPath
         return;
     }
 
-    bool arrayChild = std::holds_alternative<size_t>(path.components[1]);
+    bool arrayChild = stdx::holds_alternative<size_t>(path.components[1]);
     if (arrayChild) {
         ProjectionNodeArray* node = addOrGetArrayChild(field);
         node->addExpressionForArrayIndexPath(
