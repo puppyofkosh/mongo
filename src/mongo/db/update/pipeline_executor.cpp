@@ -198,6 +198,10 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
                 invariant(applyParams.logBuilder->addToCreates(fieldRef.toString(), elt));
             }
 
+            for (auto&& [fieldRef, newSize] : diff.toResize()) {
+                invariant(applyParams.logBuilder->addToResizes(fieldRef.toString(), newSize));
+            }
+
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
         } else {
             auto replacementObject = applyParams.logBuilder->getDocument().end();

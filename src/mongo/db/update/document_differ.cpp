@@ -79,12 +79,12 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
         }
     }
 
-    while (preIt.more()) {
+    if (preIt.more()) {
         invariant(!postIt.more());
 
-        // TODO: Check that 'index' matches the field name of the array.
-
-        // TODO: think about this!
+        // We need to delete all these elements. So we resize (truncate) the array.
+        ret._toResize.push_back({prefix, index});
+        return ret;
     }
 
     while (postIt.more()) {
@@ -193,6 +193,7 @@ void DocumentDiff::merge(DocumentDiff&& other) {
     _toUpsert.insert(_toUpsert.end(), other._toUpsert.begin(), other._toUpsert.end());
     _toDelete.insert(_toDelete.end(), other._toDelete.begin(), other._toDelete.end());
     _toInsert.insert(_toInsert.end(), other._toInsert.begin(), other._toInsert.end());
+    _toResize.insert(_toResize.end(), other._toResize.begin(), other._toResize.end());
 }
 
 std::string DocumentDiff::toStringDebug() const {

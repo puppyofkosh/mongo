@@ -60,6 +60,35 @@ using pathsupport::EqualityMatches;
 
 namespace {
 
+std::list<boost::intrusive_ptr<DocumentSource>> buildResizeSets(
+    const boost::intrusive_ptr<ExpressionContext>& expCtx,
+    const std::vector<std::pair<ArrayIndexPath, size_t>>& resizes) {
+    const bool serializeOnDispose = false;
+
+    // Fields in resize have their own set executor because $$ROOT always evaluates to the
+    // pre-image. Each resize turns into a $set of the form {path.to.$[i].resized.array:
+    // {$internalResizeArr:
+    //                                 {$internalArrayIndexPath: path.to.$[i].resized.array}}}.
+
+    std::list<boost::intrusive_ptr<DocumentSource>> out;
+    for (auto&& pair : resizes) {
+        auto root = ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState);
+        auto fieldPath = make_intrusive<ExpressionInternalArrayIndexPath>(expCtx, root, pair.first);
+        auto resizeArray =
+            make_intrusive<ExpressionInternalResizeArray>(expCtx, pair.second, fieldPath);
+
+        auto exec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
+        exec->getRoot()->addExpressionForArrayIndexPath(pair.first, resizeArray);
+
+        auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
+            expCtx, std::move(exec), "$set", false, serializeOnDispose);
+
+        out.push_back(std::move(setDs));
+    }
+
+    return out;
+}
+
 std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
     const boost::intrusive_ptr<ExpressionContext>& expCtx, const write_ops::DeltaUpdate& du) {
     auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
@@ -90,7 +119,6 @@ std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
     auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
         expCtx, std::move(unsetExec), "$unset", false, serializeOnDispose);
 
-    // TODO  for each field in du.create add it to both set/unset execs.
     boost::intrusive_ptr<Expression> removeTombstoneExpr =
         make_intrusive<ExpressionInternalRemoveFieldTombstones>(
             expCtx, ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
@@ -103,7 +131,10 @@ std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
         "$replaceRoot",
         false);
 
-    return Pipeline::create({unsetDs, replaceRoot, setDs}, expCtx);
+    auto resizeSources = buildResizeSets(expCtx, du.resizes);
+    std::list<boost::intrusive_ptr<DocumentSource>> out{unsetDs, replaceRoot, setDs};
+    out.insert(out.end(), resizeSources.begin(), resizeSources.end());
+    return Pipeline::create(out, expCtx);
 }
 
 StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {

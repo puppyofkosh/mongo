@@ -31,6 +31,9 @@
 
 #include "mongo/db/pipeline/expression.h"
 
+#include "mongo/db/array_index_path.h"
+#include "mongo/util/visit_helper.h"
+
 namespace mongo {
 /**
  * An internal expression used to remove 'tombstone' values, that is, missing values which are
@@ -95,4 +98,136 @@ private:
         return Value(output.freeze());
     }
 };
+
+/**
+ * Traverses an array index path and gets the value. Like ExpressionFieldPath but goes through
+ * single array elements.
+ */
+class ExpressionInternalArrayIndexPath final : public Expression {
+public:
+    explicit ExpressionInternalArrayIndexPath(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                              const boost::intrusive_ptr<Expression>& child,
+                                              ArrayIndexPath path)
+        : Expression{expCtx, {std::move(child)}}, _path(path) {}
+
+    Value evaluate(const Document& root, Variables* variables) const final {
+        auto targetVal = _children[0]->evaluate(root, variables);
+        uassert(ErrorCodes::BadValue,
+                str::stream() << "$_internalArrayIndexPath requires a document "
+                                 "input, found: "
+                              << typeName(targetVal.getType()),
+                targetVal.getType() == BSONType::Object);
+
+        return traversePath(targetVal, _path);
+    }
+
+    Value serialize(bool explain) const final {
+        // NOTE: This is only implemented because DocumentSourceSingleDocumentTransformation (used
+        // for $replaceRoot) requires that serialize() be implemented.
+        return Value();
+    }
+
+    boost::intrusive_ptr<Expression> optimize() final {
+        invariant(_children.size() == 1);
+        _children[0] = _children[0]->optimize();
+        return this;
+    }
+
+    void acceptVisitor(ExpressionVisitor* visitor) final {
+        return visitor->visit(this);
+    }
+
+protected:
+    void _doAddDependencies(DepsTracker* deps) const final {
+        invariant(_children.size() == 1);
+        _children[0]->addDependencies(deps);
+    }
+
+private:
+    static Value traversePath(Value val, ArrayIndexPathView pathView) {
+        Value next =
+            stdx::visit(visit_helper::Overloaded{[&val](size_t ind) -> Value {
+                                                     if (val.getType() != BSONType::Array) {
+                                                         return Value();
+                                                     }
+
+                                                     const auto& vec = val.getArray();
+                                                     if (ind >= vec.size()) {
+                                                         return Value();
+                                                     }
+                                                     return vec[ind];
+                                                 },
+                                                 [&val](const std::string& field) -> Value {
+                                                     if (val.getType() != BSONType::Object) {
+                                                         return Value();
+                                                     }
+
+                                                     return val.getDocument()[field];
+                                                 }},
+                        pathView.components[0]);
+
+        if (next.missing() || pathView.size == 1) {
+            return next;
+        }
+        return traversePath(next, pathView.tail());
+    }
+
+    ArrayIndexPath _path;
+};
+
+/**
+ * Takes one child, which may return any Value. If the child produces an array, resizes the array
+ * to be size N (padding with nulls if growing the array). If the child produces a non-array,
+ * returns an array of exact size N with all nulls.
+ */
+class ExpressionInternalResizeArray final : public Expression {
+public:
+    explicit ExpressionInternalResizeArray(const boost::intrusive_ptr<ExpressionContext>& expCtx,
+                                           size_t newSize,
+                                           boost::intrusive_ptr<Expression> child)
+        : Expression{expCtx, {std::move(child)}}, _newSize(newSize) {}
+
+    Value evaluate(const Document& root, Variables* variables) const final {
+        auto targetVal = _children[0]->evaluate(root, variables);
+
+        std::vector<Value> vec;
+        if (targetVal.getType() == BSONType::Array) {
+            vec = targetVal.getArray();
+        }
+
+        // TODO: Not the most efficient...that's a problem for another day though.
+        while (vec.size() < _newSize) {
+            vec.push_back(Value(NullLabeler{}));
+        }
+        vec.resize(_newSize);
+
+        return Value(vec);
+    }
+
+    Value serialize(bool explain) const final {
+        // NOTE: This is only implemented because DocumentSourceSingleDocumentTransformation (used
+        // for $replaceRoot) requires that serialize() be implemented.
+        return Value();
+    }
+
+    boost::intrusive_ptr<Expression> optimize() final {
+        invariant(_children.size() == 1);
+        _children[0] = _children[0]->optimize();
+        return this;
+    }
+
+    void acceptVisitor(ExpressionVisitor* visitor) final {
+        return visitor->visit(this);
+    }
+
+protected:
+    void _doAddDependencies(DepsTracker* deps) const final {
+        invariant(_children.size() == 1);
+        _children[0]->addDependencies(deps);
+    }
+
+private:
+    size_t _newSize;
+};
+
 }  // namespace mongo

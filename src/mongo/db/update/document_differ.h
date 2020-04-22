@@ -58,6 +58,10 @@ public:
         return _toInsert;
     }
 
+    const std::vector<std::pair<ArrayIndexPath, size_t>>& toResize() const {
+        return _toResize;
+    }
+
     std::string toStringDebug() const;
 
     size_t computeApproxSize() const {
@@ -90,6 +94,10 @@ private:
     std::vector<ArrayIndexPath> _toDelete;
     std::vector<std::pair<ArrayIndexPath, BSONElement>> _toUpsert;
     std::vector<std::pair<ArrayIndexPath, BSONElement>> _toInsert;
+
+    // Path to arrays that need to be resized along with new size.
+    // TODO: Should I call this "truncations"??
+    std::vector<std::pair<ArrayIndexPath, size_t>> _toResize;
 };
 
 };  // namespace doc_diff

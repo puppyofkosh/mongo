@@ -34,7 +34,7 @@ function checkOplogEntry(node, expectUpdateOplogEntry) {
     if (expectUpdateOplogEntry) {
         assert.eq(res[0].o.$v, 2, res[0]);
         assert.eq(typeof (res[0].o.d) == "object" || typeof (res[0].o.u) == "object" ||
-                      typeof (res[0].o.i) == "object",
+                      typeof (res[0].o.i) == "object" || typeof (res[0].o.r) == "object",
                   true,
                   res[0]);
 
@@ -205,12 +205,29 @@ testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3]},
 
 // Case where we make an array shorter.
 // TODO: Think about this!!
-// id = generateId();
-// testUpdateReplicates(
-//     {_id: id, padding: kGiantStr, a: [1, 2, 3]},
-//     [{$set: {a: [1,2,3,4,5]}}],
-//     {_id: id, padding: kGiantStr, a: [1,2]},
-//     true);
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 3]},
+                     [{$set: {a: [1, 2]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2]},
+                     true);
+
+// Change element of array AND shorten it
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, {b: 10}, 3]},
+                     [{$set: {a: [1, {b: 9}]}}],
+                     {_id: id, padding: kGiantStr, a: [1, {b: 9}]},
+                     true);
+
+// Remove element from the middle of an array.
+// Should still use a delta, and only rewrite the last parts of the array.
+// TODO: This may fail with the early return optimization. Use bigger elements if that happens.
+id = generateId();
+testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 999, 3, 4]},
+                     [{$set: {a: [1, 2, 3, 4]}}],
+                     {_id: id, padding: kGiantStr, a: [1, 2, 3, 4]},
+                     true);
+
+// TODO: nested nested nested
 
 // TODO remove
 print("ian: oplog");

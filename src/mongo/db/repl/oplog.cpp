@@ -1305,8 +1305,21 @@ Status applyOperation_inlock(OperationContext* opCtx,
                     }
                 }
 
-                request.setUpdateModification(
-                    write_ops::DeltaUpdate{std::move(sets), std::move(unsets), std::move(creates)});
+                std::vector<std::pair<ArrayIndexPath, size_t>> resizes;
+                if (o["r"].ok()) {
+                    uassert(ErrorCodes::BadValue,
+                            str::stream() << "Expected resize region to be of type object",
+                            o["r"].type() == BSONType::Object);
+                    for (auto&& f : o["r"].embeddedObject()) {
+                        uassert(ErrorCodes::BadValue,
+                                str::stream() << "Expected new size to be long",
+                                f.type() == BSONType::NumberLong);
+                        resizes.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), f.Long()});
+                    }
+                }
+
+                request.setUpdateModification(write_ops::DeltaUpdate{
+                    std::move(sets), std::move(unsets), std::move(creates), std::move(resizes)});
             } else {
                 request.setUpdateModification(o);
             }

@@ -35,10 +35,10 @@ namespace mongo {
 using mutablebson::Element;
 
 namespace {
-// TODO shorten these
 const char kDelete[] = "d";
 const char kUpsert[] = "u";
 const char kInsert[] = "i";
+const char kResize[] = "r";
 }  // namespace
 
 constexpr StringData LogBuilder::kUpdateSemanticsFieldName;
@@ -139,6 +139,14 @@ Status LogBuilder::addToCreates(StringData name, const BSONElement& val) {
     return addToSection(elemToCreate, &_createAccumulator, kInsert);
 }
 
+Status LogBuilder::addToResizes(StringData name, size_t newSize) {
+    mutablebson::Element elemToCreate =
+        _logRoot.getDocument().makeElementLong(name, static_cast<int64_t>(newSize));
+
+    // TODO: Is this ever expected to be not ok??
+    invariant(elemToCreate.ok());
+    return addToSection(elemToCreate, &_resizeAccumulator, kResize);
+}
 
 Status LogBuilder::setUpdateSemantics(UpdateSemantics updateSemantics) {
     if (hasObjectReplacement()) {

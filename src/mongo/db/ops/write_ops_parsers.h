@@ -45,6 +45,7 @@ struct DeltaUpdate {
     std::vector<KVPair> set;
     std::vector<ArrayIndexPath> unset;
     std::vector<KVPair> create;
+    std::vector<std::pair<ArrayIndexPath, size_t>> resizes;
 };
 
 // Conservative per array element overhead. This value was calculated as 1 byte (element type) + 5

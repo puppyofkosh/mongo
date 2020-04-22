@@ -64,9 +64,12 @@ public:
     inline LogBuilder(mutablebson::Element logRoot)
         : _logRoot(logRoot),
           _objectReplacementAccumulator(_logRoot),
+          // All of these accumulators start off empty
           _setAccumulator(_logRoot.getDocument().end()),
           _unsetAccumulator(_setAccumulator),
-          _createAccumulator(_unsetAccumulator),
+          _createAccumulator(_setAccumulator),
+          _resizeAccumulator(_setAccumulator),
+          // Initialize to empty
           _updateSemantics(_setAccumulator) {
         dassert(logRoot.isType(mongo::Object));
         dassert(!logRoot.hasChildren());
@@ -116,10 +119,15 @@ public:
     Status addToUnsets(StringData path);
 
     /**
-     * Add the given Element as a new entry in the '$set' section of the log. If a $create
+     * Add the given Element as a new entry in the 'insert' section of the log. If an insert
      * section does not yet exist, it will be created.
      */
     Status addToCreates(StringData name, const BSONElement& val);
+
+    /**
+     * Indicate that the given array element should be resized to the new size.
+     */
+    Status addToResizes(StringData name, size_t newSize);
 
     /**
      * Add a "$v" field to the log. Fails if there is already a "$v" field.
@@ -148,6 +156,7 @@ private:
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
     mutablebson::Element _createAccumulator;
+    mutablebson::Element _resizeAccumulator;
     mutablebson::Element _updateSemantics;
 };
 
