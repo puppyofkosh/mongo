@@ -30,16 +30,19 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/update/document_differ.h"
+#include "mongo/util/string_map.h"
 
 namespace mongo {
 namespace doc_diff {
-DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
-                                      const BSONObj& post,
-                                      const ArrayIndexPath& prefix) {
+void computeDiffHelper(const BSONObj& pre,
+                       const BSONObj& post,
+                       OplogDiffBuilder* builder);
+    
+void diffArrays(const BSONObj& pre,
+                const BSONObj& post,
+                OplogDiffBuilder* builder) {
     BSONObjIterator preIt(pre);
     BSONObjIterator postIt(post);
-
-    DocumentDiff ret;
 
     size_t index = 0;
     for (; preIt.more() && postIt.more(); ++index) {
@@ -59,32 +62,33 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
             // They're identical so move on.
             continue;
         } else if (preElt.type() == BSONType::Object && postElt.type() == BSONType::Object) {
-            // They're not identical but they're both objects, so we can diff them.
-            ArrayIndexPath newPrefix(prefix);
-            newPrefix.append(index);
-            auto diff = DocumentDiff::computeDiffHelper(
-                preElt.embeddedObject(), postElt.embeddedObject(), newPrefix);
+            builder->appendIndex(index);
+
+            builder->b().appendChar(Marker::kDiffMarker);
+
+            {
+                OplogDiffBuilder sub = builder->subStart();
+                computeDiffHelper(preElt.embeddedObject(), postElt.embeddedObject(), &sub);
+            }
 
             // TODO: Check if diff is bigger than postElt. For now I'm leaving this out to make
             // testing easier for me.
-            ret.merge(std::move(diff));
         } else {
+            builder->appendIndex(index);
             // SUBTLE: We record these as "upsert" operations instead of "inserts" because we do not
             // want to move the field to the end, we simply want to change its value.
 
-            // Record as an overwrite.
-            ArrayIndexPath newFr(prefix);
-            newFr.append(index);
-            ret._toUpsert.push_back({std::move(newFr), postElt});
+            builder->b().appendChar(Marker::kUpdateMarker);
+            builder->appendElt(postElt);
         }
     }
 
     if (preIt.more()) {
-        invariant(!postIt.more());
-
         // We need to delete all these elements. So we resize (truncate) the array.
-        ret._toResize.push_back({prefix, index});
-        return ret;
+        builder->b().appendChar(Marker::kResizeMarker);
+        builder->b().appendNum(static_cast<unsigned>(index));
+        
+        invariant(!postIt.more());
     }
 
     while (postIt.more()) {
@@ -94,24 +98,24 @@ DocumentDiff DocumentDiff::diffArrays(const BSONObj& pre,
         uassert(ErrorCodes::BadValue,
                 "Invalid BSON Array",
                 std::to_string(index) == newElem.fieldNameStringData());
-
-        ArrayIndexPath path(prefix);
-        path.append(index);
-        ret._toUpsert.push_back({path, newElem});
+        builder->appendIndex(index);
+        builder->b().appendChar(Marker::kInsertMarker);
+        builder->appendElt(newElem);
 
         ++index;
     }
 
-    return ret;
+    builder->b().appendChar(0);
 }
 
-DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
-                                             const BSONObj& post,
-                                             const ArrayIndexPath& prefix) {
+void computeDiffHelper(const BSONObj& pre,
+                       const BSONObj& post,
+                       OplogDiffBuilder* builder) {
     BSONObjIterator preIt(pre);
     BSONObjIterator postIt(post);
 
-    DocumentDiff ret;
+    // We cannot write the list of fields to remove right away.
+    StringDataSet fieldsToRemove;
 
     while (preIt.more() && postIt.more()) {
         auto preElt = *preIt;
@@ -121,98 +125,82 @@ DocumentDiff DocumentDiff::computeDiffHelper(const BSONObj& pre,
             if (preElt.binaryEqual(postElt)) {
                 // They're identical. Move on.
             } else if (preElt.type() == BSONType::Object && postElt.type() == BSONType::Object) {
-                // Both are objects, but not identical. We can compute the diff and merge it.
-                ArrayIndexPath newPrefix(prefix);
-                newPrefix.append(preElt.fieldName());
-                DocumentDiff subDiff =
-                    computeDiffHelper(preElt.embeddedObject(), postElt.embeddedObject(), newPrefix);
+                // Technically this is safe since we know the StringData points to a
+                // null-terminated string. Though we read off the end of the string data, we don't
+                // read off the end of the backing string.
+                builder->appendFieldName(preElt.fieldNameStringData());
+                
+                // Then record the diff for the subobj.
+                builder->b().appendChar(Marker::kDiffMarker);
+
+                {
+                    OplogDiffBuilder sub(builder->subStart());
+                    computeDiffHelper(preElt.embeddedObject(), postElt.embeddedObject(), &sub);
+                }
 
                 // TODO: compute rough size of the diff. If it is bigger than postElt, we should
-                // record this as a simple "set" of the subfield rather than a diff of it.
-                // TODO: Write a test for this.
-                ret.merge(std::move(subDiff));
+                // record this as a simple "set" of the subfield rather than a diff of it. This
+                // will require adding functionality to the diff builder.
+                // TODO: Write a test for  this.
             } else if (preElt.type() == BSONType::Array && postElt.type() == BSONType::Array) {
-                ArrayIndexPath newPrefix(prefix);
-                newPrefix.append(preElt.fieldName());
-                auto arrDiff =
-                    diffArrays(preElt.embeddedObject(), postElt.embeddedObject(), newPrefix);
-                // TODO: For real implementation consider writing a DiffBuilder class and maybe
-                // make this merging stuff more efficient.
-                ret.merge(std::move(arrDiff));
+                builder->appendFieldName(preElt.fieldNameStringData());
+
+                builder->b().appendChar(Marker::kDiffMarker);
+                {
+                    OplogDiffBuilder sub(builder->subStart());
+                    diffArrays(preElt.embeddedObject(), postElt.embeddedObject(), &sub);
+                }
             } else {
-                // Record this as an overwrite.
-                ArrayIndexPath newFr(prefix);
-                newFr.append({postElt.fieldName()});
-                ret._toUpsert.push_back({std::move(newFr), postElt});
+                builder->appendFieldName(preElt.fieldNameStringData());
+
+                // Record as an "update": the field changes value but retains its position in the
+                // document.
+                builder->b().appendChar(Marker::kUpdateMarker);
+                // This is inefficient
+                builder->appendElt(postElt);
             }
 
             preIt.next();
             postIt.next();
         } else {
-            // Record this as a deletion.
-            ArrayIndexPath remove(prefix);
-            remove.append(preElt.fieldName());
-            ret._toDelete.push_back({std::move(remove)});
+            fieldsToRemove.insert(preElt.fieldNameStringData());
             preIt.next();
         }
     }
 
     // Record remaining fields in preElt as removals.
     while (preIt.more()) {
-        ArrayIndexPath remove(prefix);
-        remove.append((*preIt).fieldName());
-        ret._toDelete.push_back({std::move(remove)});
+        fieldsToRemove.insert((*preIt).fieldNameStringData());
         preIt.next();
     }
 
     while (postIt.more()) {
-        // Record these as creates.
-        ArrayIndexPath insertFr(prefix);
-        insertFr.append((*postIt).fieldName());
-        ret._toInsert.push_back({insertFr, (*postIt)});
-        // If a field exists in the insert region, ensure that it doesn't also exist in the remove
-        // region.
-        // TODO: In real version make sure this isn't n^2.
-        for (auto itr = ret._toDelete.cbegin(); itr != ret._toDelete.cend(); itr++) {
-            if (insertFr == (*itr)) {
-                ret._toDelete.erase(itr);
-                break;
-            }
-        }
+        // Record these as inserts, indicating they should be put at the end of the object.
+        StringData fieldName = (*postIt).fieldName();
+        builder->appendFieldName(fieldName);
+        builder->b().appendChar(Marker::kInsertMarker);
+        builder->appendElt(*postIt);
+        
+        // If we're inserting a field at the end, make sure we don't also record it as a field to
+        // delete.
+        fieldsToRemove.erase((*postIt).fieldNameStringData());
+
         postIt.next();
     }
 
-    return ret;
+    for (auto && f : fieldsToRemove) {
+        builder->appendFieldName(f);
+        builder->b().appendChar(Marker::kExcludeMarker);
+    }
+    
+    builder->b().appendChar(0);
 }
 
-DocumentDiff DocumentDiff::computeDiff(const BSONObj& pre, const BSONObj& post) {
-    return computeDiffHelper(pre, post, ArrayIndexPath{});
-}
-
-void DocumentDiff::merge(DocumentDiff&& other) {
-    _toUpsert.insert(_toUpsert.end(), other._toUpsert.begin(), other._toUpsert.end());
-    _toDelete.insert(_toDelete.end(), other._toDelete.begin(), other._toDelete.end());
-    _toInsert.insert(_toInsert.end(), other._toInsert.begin(), other._toInsert.end());
-    _toResize.insert(_toResize.end(), other._toResize.begin(), other._toResize.end());
-}
-
-std::string DocumentDiff::toStringDebug() const {
-    std::string ret;
-    for (auto&& r : _toDelete) {
-        ret += "remove: " + r.debugString() + "\n";
-    }
-
-    for (auto&& s : _toUpsert) {
-        ret += str::stream() << "insert: " << s.first.debugString() << " "
-                             << s.second.toString(false) << "\n";
-    }
-
-    for (auto&& s : _toInsert) {
-        ret += str::stream() << "create: " << s.first.debugString() << " "
-                             << s.second.toString(false) << "\n";
-    }
-
-    return ret;
+OplogDiff computeDiff(const BSONObj& pre, const BSONObj& post) {
+    BufBuilder storage;
+    OplogDiffBuilder builder(storage);
+    computeDiffHelper(pre, post, &builder);
+    return builder.finish();
 }
 }  // namespace doc_diff
 };  // namespace mongo

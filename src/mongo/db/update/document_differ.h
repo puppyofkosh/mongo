@@ -34,71 +34,14 @@
 
 #include "mongo/bson/bsonobj.h"
 #include "mongo/db/array_index_path.h"
+#include "mongo/db/update/oplog_diff.h"
 #include "mongo/stdx/variant.h"
 
 namespace mongo {
 
 namespace doc_diff {
-// The BSONObjs from which this is constructed must outlive the Diff itself.
-class DocumentDiff {
-public:
-    static DocumentDiff computeDiff(const BSONObj& pre, const BSONObj& post);
 
-    void merge(DocumentDiff&& other);
-
-    const std::vector<ArrayIndexPath>& toDelete() const {
-        return _toDelete;
-    }
-
-    const std::vector<std::pair<ArrayIndexPath, BSONElement>>& toUpsert() const {
-        return _toUpsert;
-    }
-
-    const std::vector<std::pair<ArrayIndexPath, BSONElement>>& toInsert() const {
-        return _toInsert;
-    }
-
-    const std::vector<std::pair<ArrayIndexPath, size_t>>& toResize() const {
-        return _toResize;
-    }
-
-    std::string toStringDebug() const;
-
-    size_t computeApproxSize() const {
-        size_t sum = 0;
-        for (auto&& f : _toDelete) {
-            sum += f.approximateSizeInBytes();
-        }
-
-        for (auto&& [fr, elt] : _toUpsert) {
-            sum += fr.approximateSizeInBytes();
-            sum += elt.size();
-        }
-
-        for (auto&& [fr, elt] : _toInsert) {
-            sum += fr.approximateSizeInBytes();
-            sum += elt.size();
-        }
-        return sum;
-    }
-
-private:
-    static DocumentDiff computeDiffHelper(const BSONObj& pre,
-                                          const BSONObj& post,
-                                          const ArrayIndexPath& prefix);
-
-    static DocumentDiff diffArrays(const BSONObj& pre,
-                                   const BSONObj& post,
-                                   const ArrayIndexPath& prefix);
-
-    std::vector<ArrayIndexPath> _toDelete;
-    std::vector<std::pair<ArrayIndexPath, BSONElement>> _toUpsert;
-    std::vector<std::pair<ArrayIndexPath, BSONElement>> _toInsert;
-
-    // Path to arrays that need to be resized along with new size.
-    // TODO: Should I call this "truncations"??
-    std::vector<std::pair<ArrayIndexPath, size_t>> _toResize;
-};
+OplogDiff computeDiff(const BSONObj& pre, const BSONObj& post);
 
 };  // namespace doc_diff
 

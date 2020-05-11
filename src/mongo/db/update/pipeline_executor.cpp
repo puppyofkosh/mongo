@@ -29,6 +29,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <iomanip>
+
 #include "mongo/db/update/pipeline_executor.h"
 
 #include "mongo/db/bson/dotted_path_support.h"
@@ -182,25 +184,38 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
             }
         }
 
-        auto diff = doc_diff::DocumentDiff::computeDiff(originalDoc, transformedDoc);
+        auto diff = doc_diff::computeDiff(originalDoc, transformedDoc);
 
-        if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize())) {
-            for (auto&& [fieldRef, elt] : diff.toUpsert()) {
-                invariant(
-                    applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.toString(), elt));
-            }
+        std::cout << "ian: diff is ";
+        for (size_t i = 0; i < diff.len(); ++i) {
+            const unsigned char next = static_cast<unsigned char>(diff.raw()[i]);
+            std::cout << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(next) << std::dec << " ";
+        }
+        std::cout << std::dec << std::endl;
+        
+        auto dbg = doc_diff::diffToDebugBSON(diff);
+        std::cout << "ian: dbg " << dbg << std::endl;
 
-            for (auto&& fieldRef : diff.toDelete()) {
-                invariant(applyParams.logBuilder->addToUnsets(fieldRef.toString()));
-            }
+        // TODO: Re-enable this branch.
+        if (false) {
+            //if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize()) && false) {
+            // TODO: Set logBuilder's diff field.
+            // for (auto&& [fieldRef, elt] : diff.toUpsert()) {
+            //     invariant(
+            //         applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.toString(), elt));
+            // }
 
-            for (auto&& [fieldRef, elt] : diff.toInsert()) {
-                invariant(applyParams.logBuilder->addToCreates(fieldRef.toString(), elt));
-            }
+            // for (auto&& fieldRef : diff.toDelete()) {
+            //     invariant(applyParams.logBuilder->addToUnsets(fieldRef.toString()));
+            // }
 
-            for (auto&& [fieldRef, newSize] : diff.toResize()) {
-                invariant(applyParams.logBuilder->addToResizes(fieldRef.toString(), newSize));
-            }
+            // for (auto&& [fieldRef, elt] : diff.toInsert()) {
+            //     invariant(applyParams.logBuilder->addToCreates(fieldRef.toString(), elt));
+            // }
+
+            // for (auto&& [fieldRef, newSize] : diff.toResize()) {
+            //     invariant(applyParams.logBuilder->addToResizes(fieldRef.toString(), newSize));
+            // }
 
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
         } else {
