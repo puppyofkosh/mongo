@@ -44,6 +44,9 @@ void diffArrays(const BSONObj& pre,
     BSONObjIterator preIt(pre);
     BSONObjIterator postIt(post);
 
+    // Indicate this is the diff of an array.
+    builder->b().appendChar(Marker::kArrayDiffMarker);
+    
     size_t index = 0;
     for (; preIt.more() && postIt.more(); ++index) {
         auto preElt = preIt.next();
@@ -64,8 +67,7 @@ void diffArrays(const BSONObj& pre,
         } else if (preElt.type() == BSONType::Object && postElt.type() == BSONType::Object) {
             builder->appendIndex(index);
 
-            builder->b().appendChar(Marker::kDiffMarker);
-
+            builder->b().appendChar(Marker::kSubDiffMarker);
             {
                 OplogDiffBuilder sub = builder->subStart();
                 computeDiffHelper(preElt.embeddedObject(), postElt.embeddedObject(), &sub);
@@ -114,6 +116,9 @@ void computeDiffHelper(const BSONObj& pre,
     BSONObjIterator preIt(pre);
     BSONObjIterator postIt(post);
 
+    // Indicate this is a diff of an object.
+    builder->b().appendChar(Marker::kObjDiffMarker);
+
     // We cannot write the list of fields to remove right away.
     StringDataSet fieldsToRemove;
 
@@ -131,7 +136,7 @@ void computeDiffHelper(const BSONObj& pre,
                 builder->appendFieldName(preElt.fieldNameStringData());
                 
                 // Then record the diff for the subobj.
-                builder->b().appendChar(Marker::kDiffMarker);
+                builder->b().appendChar(Marker::kSubDiffMarker);
 
                 {
                     OplogDiffBuilder sub(builder->subStart());
@@ -145,7 +150,7 @@ void computeDiffHelper(const BSONObj& pre,
             } else if (preElt.type() == BSONType::Array && postElt.type() == BSONType::Array) {
                 builder->appendFieldName(preElt.fieldNameStringData());
 
-                builder->b().appendChar(Marker::kDiffMarker);
+                builder->b().appendChar(Marker::kSubDiffMarker);
                 {
                     OplogDiffBuilder sub(builder->subStart());
                     diffArrays(preElt.embeddedObject(), postElt.embeddedObject(), &sub);

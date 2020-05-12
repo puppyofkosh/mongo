@@ -44,24 +44,35 @@ namespace doc_diff {
     /*
      * Diff format:
      *
-     * diff := <uint32 (size)> <entry>+ <null byte>
-     * entry := <fieldId> <value>|<resize marker> <uint32>
-     * fieldId := <name marker> <name C string>|<index marker> <arr index uint32>
-     * value := <diff marker> <diff>|<'update' marker> <bsonelem>|<'insert' marker> <bsonelem>|
-     *          <exclude marker>
+     * diff := <objDiff>
+     * objDiff := <uint32 (size)> <obj diff marker> <objEntry>+ <null byte>
+     * arrayDiff := <uint32 (size)> <array diff marker> <arrayEntry>+ <null byte>
+     * innerDiff := <objDiff>|<arrayDiff>
+     *
+     * // represents a value that can appear in an array diff or object diff.
+     * commonValue := <diff marker> <innerDiff>|<update marker> <bsonelem>|<insert marker> <bsonelem>
+     *
+     * objEntry := <name C string> <objValue>
+     * objValue := <commonValue>|<exclude marker>
+     *
+     * arrayEntry := <index marker> <arr index uint32> <arrValue>|<resize marker> <uint32 (new size)>
+     * arrValue := <commonValue>
+     *
      * bsonelem := <BSONElement with empty field name>
      * uint32 := <little endian unsigned int>
      */
 
     enum Marker : unsigned char {
-        kNameMarker = 1,
-        kIndexMarker = 2,
+        kObjDiffMarker = 1,
+        kArrayDiffMarker = 2,
 
-        kDiffMarker = 149,
+        kIndexMarker = 50,
+        kResizeMarker = 51,
+        
+        kSubDiffMarker = 149,
         kUpdateMarker = 150,
         kInsertMarker = 151,
         kExcludeMarker = 152,
-        kResizeMarker = 153
     };
     
     class OplogDiff {
@@ -85,7 +96,8 @@ namespace doc_diff {
 class OplogDiffBuilder {
 public:
     OplogDiffBuilder(BufBuilder& builder) :_builder(builder), _off(builder.len()) {
-        _builder.skip(4);
+        // Skip 4 bytes. Write all 1s for easier debugging.
+        _builder.appendNum(static_cast<uint32_t>(std::numeric_limits<uint32_t>::max()));
     }
 
     ~OplogDiffBuilder() {
@@ -98,7 +110,6 @@ public:
 
     // 's' MUST be null terminated
     void appendFieldName(StringData s) {
-        _builder.appendChar(Marker::kNameMarker);
         _builder.appendStr(s, true);
     }
 
@@ -136,7 +147,7 @@ public:
         char* sizeBytes = _builder.buf() + _off;
         std::cout << "location of size byte is " << (uintptr_t)sizeBytes << std::endl;
         // TODO: endianness
-        *(reinterpret_cast<size_t*>(sizeBytes)) = (_builder.len() - _off);
+        *(reinterpret_cast<uint32_t*>(sizeBytes)) = (_builder.len() - _off);
                                                                             _done = true;
     }
 
@@ -150,12 +161,16 @@ private:
 
 class OplogDiffReader {
 public:
-    OplogDiffReader(const char* start, size_t len)
-        :_rest(start), _end(start + len)
+    OplogDiffReader(const char* start)
+        :_rest(start)
     {
+        // TODO: endian
+        size_t len = *reinterpret_cast<const uint32_t*>(start);
+        
         // Should be null terminated. TODO: uassert.
         invariant(len > 0);
         invariant(*(start + (len - 1)) == 0);
+        _end = start + len;
     }
 
     unsigned char nextByte() {
@@ -188,6 +203,10 @@ public:
         invariant(_rest <= _end);
     }
 
+    const char* rest() const {
+        return _rest;
+    }
+
 private:
     const char* _rest;
     const char* _end;
@@ -196,14 +215,22 @@ private:
 // Stuff for converting it to a debug BSON output. Uses a made up format that doesn't disambiguate
 // between array indexes and field names or anything.
 
-void diffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder);
-
+void objDiffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder);
+void arrayDiffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder);
+    
 inline void valueHelper(OplogDiffReader* reader, BSONObjBuilder* builder, StringData fieldName) {
     const auto marker = reader->nextByte();
 
-    if (marker == Marker::kDiffMarker) {
+    if (marker == Marker::kSubDiffMarker) {
         BSONObjBuilder sub(builder->subobjStart(fieldName));
-        diffToDebugBSON(reader, &sub);
+        auto typ = *reinterpret_cast<const unsigned char*>(reader->rest() + 4);
+        
+        if (typ == Marker::kObjDiffMarker) {
+            objDiffToDebugBSON(reader, &sub);
+        } else {
+            invariant(typ == Marker::kArrayDiffMarker);
+            arrayDiffToDebugBSON(reader, &sub);
+        }
     } else if (marker == Marker::kUpdateMarker) {
         auto elt = reader->nextBsonElt();
         builder->append(fieldName, elt.wrap("<update>"));
@@ -211,35 +238,31 @@ inline void valueHelper(OplogDiffReader* reader, BSONObjBuilder* builder, String
         auto elt = reader->nextBsonElt();
         builder->append(fieldName, elt.wrap("<insert>"));
     } else if (marker == Marker::kExcludeMarker) {
+        // technically we should check if we're in an array diff and ban this.
         builder->append(fieldName, "<exclude>");
     } else {
         std::cout << "encountered value " << static_cast<int>(marker) << " for field " << fieldName << std::endl;
         MONGO_UNREACHABLE;
     }
 }
-            
-inline void diffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder) {
-    // Skip the size bytes as we don't care about them.
-    reader->skip(4);
 
+inline void arrayDiffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder) {
+    // skip size bytes plus type byte.
+    reader->skip(4);
+    invariant(reader->nextByte() == Marker::kArrayDiffMarker);
     auto marker = reader->nextByte();
 
     while (marker) {
-        if (marker == Marker::kNameMarker) {
-            auto str = reader->nextString();
-            std::cout << "ian: name entry " << str << std::endl;
-            
-            valueHelper(reader, builder, str);
-        } else if (marker == Marker::kIndexMarker) {
+        if (marker == Marker::kIndexMarker) {
             const auto ind = reader->nextUnsigned();
             std::cout << "ian: ind entry " << ind << std::endl;
-            
+
             std::string fieldName = std::to_string(ind);
             valueHelper(reader, builder, fieldName);
         } else if (marker == Marker::kResizeMarker) {
             const auto newSz = reader->nextUnsigned();
             std::cout << "ian: resize entry " << newSz << std::endl;
-            
+
             builder->appendNumber("<resize>"_sd, static_cast<size_t>(newSz));
         } else {
             MONGO_UNREACHABLE;
@@ -247,11 +270,25 @@ inline void diffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder) {
         marker = reader->nextByte();
     }
 }
+            
+inline void objDiffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder) {
+    // Skip the size bytes as we don't care about them.
+    reader->skip(4);
+    invariant(reader->nextByte() == Marker::kObjDiffMarker);
+
+    auto str = reader->nextString();
+    while (*str != 0) {
+        std::cout << "ian: name entry " << str << std::endl;
+            
+        valueHelper(reader, builder, str);
+        str = reader->nextString();
+    }
+}
 
 inline BSONObj diffToDebugBSON(const OplogDiff& d) {
-    OplogDiffReader reader(d.raw(), d.len());
+    OplogDiffReader reader(d.raw());
     BSONObjBuilder builder;
-    diffToDebugBSON(&reader, &builder);
+    objDiffToDebugBSON(&reader, &builder);
     return builder.obj();
 }
 }
