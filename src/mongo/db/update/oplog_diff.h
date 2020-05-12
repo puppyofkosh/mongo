@@ -44,7 +44,7 @@ namespace doc_diff {
     /*
      * Diff format:
      *
-     * diff := <entry>+ <null byte>
+     * diff := <uint32 (size)> <entry>+ <null byte>
      * entry := <fieldId> <value>|<resize marker> <uint32>
      * fieldId := <name marker> <name C string>|<index marker> <arr index uint32>
      * value := <diff marker> <diff>|<'update' marker> <bsonelem>|<'insert' marker> <bsonelem>|
@@ -84,7 +84,12 @@ namespace doc_diff {
     
 class OplogDiffBuilder {
 public:
-    OplogDiffBuilder(BufBuilder& builder) :_builder(builder) {
+    OplogDiffBuilder(BufBuilder& builder) :_builder(builder), _off(builder.len()) {
+        _builder.skip(4);
+    }
+
+    ~OplogDiffBuilder() {
+        done();
     }
 
     BufBuilder& b() {
@@ -110,6 +115,9 @@ public:
     }
 
     OplogDiff finish() {
+        // Can't call this from a sub object.
+        invariant(_off == 0);
+        done();
         return OplogDiff(_builder.release(), _builder.len());
     }
 
@@ -117,10 +125,27 @@ public:
         return _builder;
     }
 
+    void done() {
+        if (_done) {
+            return;
+        }
+        
+        std::cout << "off is " << _off << std::endl;
+        std::cout << "buf is " << (uintptr_t)(_builder.buf()) << std::endl;
+        std::cout << "buf len is " << _builder.len() << std::endl;
+        char* sizeBytes = _builder.buf() + _off;
+        std::cout << "location of size byte is " << (uintptr_t)sizeBytes << std::endl;
+        // TODO: endianness
+        *(reinterpret_cast<size_t*>(sizeBytes)) = (_builder.len() - _off);
+                                                                            _done = true;
+    }
+
     // TODO: abandon()/kill().
 
 private:
     BufBuilder& _builder;
+    size_t _off;
+    bool _done = false;
 };
 
 class OplogDiffReader {
@@ -158,6 +183,11 @@ public:
         return elt;
     }
 
+    void skip(size_t n) {
+        _rest += n;
+        invariant(_rest <= _end);
+    }
+
 private:
     const char* _rest;
     const char* _end;
@@ -189,6 +219,9 @@ inline void valueHelper(OplogDiffReader* reader, BSONObjBuilder* builder, String
 }
             
 inline void diffToDebugBSON(OplogDiffReader* reader, BSONObjBuilder* builder) {
+    // Skip the size bytes as we don't care about them.
+    reader->skip(4);
+
     auto marker = reader->nextByte();
 
     while (marker) {
