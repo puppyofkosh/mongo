@@ -197,7 +197,8 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
         std::cout << "ian: dbg " << dbg << std::endl;
 
         // TODO: Re-enable this branch.
-        if (false) {
+        if (diff.len() < static_cast<size_t>(transformedDoc.objsize())) {
+            invariant(applyParams.logBuilder->setDeltaBin(diff.raw(), diff.len()));
             //if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize()) && false) {
             // TODO: Set logBuilder's diff field.
             // for (auto&& [fieldRef, elt] : diff.toUpsert()) {

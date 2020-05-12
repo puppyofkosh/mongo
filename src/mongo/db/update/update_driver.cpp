@@ -49,6 +49,7 @@
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/modifier_table.h"
 #include "mongo/db/update/object_replace_executor.h"
+#include "mongo/db/update/delta_apply_executor.h"
 #include "mongo/db/update/path_support.h"
 #include "mongo/db/update/storage_validation.h"
 #include "mongo/util/embedded_builder.h"
@@ -59,84 +60,6 @@ namespace mongo {
 using pathsupport::EqualityMatches;
 
 namespace {
-
-std::list<boost::intrusive_ptr<DocumentSource>> buildResizeSets(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx,
-    const std::vector<std::pair<ArrayIndexPath, size_t>>& resizes) {
-    const bool serializeOnDispose = false;
-
-    // Fields in resize have their own set executor because $$ROOT always evaluates to the
-    // pre-image. Each resize turns into a $set of the form {path.to.$[i].resized.array:
-    // {$internalResizeArr:
-    //                                 {$internalArrayIndexPath: path.to.$[i].resized.array}}}.
-
-    std::list<boost::intrusive_ptr<DocumentSource>> out;
-    for (auto&& pair : resizes) {
-        auto root = ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState);
-        auto fieldPath = make_intrusive<ExpressionInternalArrayIndexPath>(expCtx, root, pair.first);
-        auto resizeArray =
-            make_intrusive<ExpressionInternalResizeArray>(expCtx, pair.second, fieldPath);
-
-        auto exec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
-        exec->getRoot()->addExpressionForArrayIndexPath(pair.first, resizeArray);
-
-        auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-            expCtx, std::move(exec), "$set", false, serializeOnDispose);
-
-        out.push_back(std::move(setDs));
-    }
-
-    return out;
-}
-
-std::unique_ptr<Pipeline, PipelineDeleter> convertDeltaToPipeline(
-    const boost::intrusive_ptr<ExpressionContext>& expCtx, const write_ops::DeltaUpdate& du) {
-    auto setExec = std::make_unique<projection_executor::AddFieldsProjectionExecutor>(expCtx);
-    for (auto&& pair : du.set) {
-        auto expression = ExpressionConstant::create(expCtx, pair.second);
-        setExec->getRoot()->addExpressionForArrayIndexPath(pair.first, std::move(expression));
-    }
-
-    // fields in $create region get added to both the set and unset executors.
-    for (auto&& pair : du.create) {
-        auto expression = ExpressionConstant::create(expCtx, pair.second);
-        setExec->getRoot()->addExpressionForArrayIndexPath(pair.first, std::move(expression));
-    }
-
-    const bool serializeOnDispose = false;
-    auto setDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-        expCtx, std::move(setExec), "$set", false, serializeOnDispose);
-
-    auto unsetExec = std::make_unique<projection_executor::ExclusionProjectionExecutor>(
-        expCtx, ProjectionPolicies{});
-    for (auto&& s : du.unset) {
-        unsetExec->getRoot()->addProjectionForArrayIndexPath(s);
-    }
-    for (auto&& pair : du.create) {
-        unsetExec->getRoot()->addProjectionForArrayIndexPath(pair.first);
-    }
-
-    auto unsetDs = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-        expCtx, std::move(unsetExec), "$unset", false, serializeOnDispose);
-
-    boost::intrusive_ptr<Expression> removeTombstoneExpr =
-        make_intrusive<ExpressionInternalRemoveFieldTombstones>(
-            expCtx, ExpressionFieldPath::parse(expCtx, "$$ROOT", expCtx->variablesParseState));
-    auto replaceRoot = make_intrusive<DocumentSourceSingleDocumentTransformation>(
-        expCtx,
-        std::make_unique<ReplaceRootTransformation>(
-            expCtx,
-            removeTombstoneExpr,
-            ReplaceRootTransformation::UserSpecifiedName::kReplaceRoot),
-        "$replaceRoot",
-        false);
-
-    auto resizeSources = buildResizeSets(expCtx, du.resizes);
-    std::list<boost::intrusive_ptr<DocumentSource>> out{unsetDs, replaceRoot, setDs};
-    out.insert(out.end(), resizeSources.begin(), resizeSources.end());
-    return Pipeline::create(out, expCtx);
-}
-
 StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {
     if (element.type() != BSONType::NumberInt && element.type() != BSONType::NumberLong) {
         return {ErrorCodes::BadValue, "'$v' (UpdateSemantics) field must be an integer."};
@@ -249,10 +172,9 @@ void UpdateDriver::parse(
                 "arrayFilters may not be specified for delta updates",
                 arrayFilters.empty());
 
-        auto pipeline = convertDeltaToPipeline(_expCtx, updateMod.getDeltaUpdate());
-
-        _updateType = UpdateType::kPipeline;
-        _updateExecutor = std::make_unique<PipelineExecutor>(_expCtx, std::move(pipeline));
+        _updateType = UpdateType::kDelta;
+        _updateExecutor = std::make_unique<DeltaApplyExecutor>(updateMod.getDeltaUpdate().delta.data(),
+                                                               updateMod.getDeltaUpdate().delta.size());
         return;
     }
 

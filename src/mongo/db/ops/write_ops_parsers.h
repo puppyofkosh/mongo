@@ -41,11 +41,7 @@ class Pipeline;
 namespace write_ops {
 
 struct DeltaUpdate {
-    using KVPair = std::pair<ArrayIndexPath, Value>;
-    std::vector<KVPair> set;
-    std::vector<ArrayIndexPath> unset;
-    std::vector<KVPair> create;
-    std::vector<std::pair<ArrayIndexPath, size_t>> resizes;
+    std::vector<char> delta;
 };
 
 // Conservative per array element overhead. This value was calculated as 1 byte (element type) + 5

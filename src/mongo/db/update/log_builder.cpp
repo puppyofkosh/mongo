@@ -35,10 +35,8 @@ namespace mongo {
 using mutablebson::Element;
 
 namespace {
-const char kDelete[] = "d";
-const char kUpsert[] = "u";
-const char kInsert[] = "i";
-const char kResize[] = "r";
+const char kSet[] = "$set";
+const char kUnset[] = "$unset";
 }  // namespace
 
 constexpr StringData LogBuilder::kUpdateSemanticsFieldName;
@@ -84,7 +82,7 @@ inline Status LogBuilder::addToSection(Element newElt, Element* section, const c
 }
 
 Status LogBuilder::addToSets(Element elt) {
-    return addToSection(elt, &_setAccumulator, kUpsert);
+    return addToSection(elt, &_setAccumulator, kSet);
 }
 
 Status LogBuilder::addToSetsWithNewFieldName(StringData name, const mutablebson::Element val) {
@@ -125,27 +123,16 @@ Status LogBuilder::addToUnsets(StringData path) {
         return Status(ErrorCodes::InternalError,
                       str::stream() << "Cannot create $unset oplog entry for path" << path);
 
-    return addToSection(logElement, &_unsetAccumulator, kDelete);
+    return addToSection(logElement, &_unsetAccumulator, kUnset);
 }
 
-Status LogBuilder::addToCreates(StringData name, const BSONElement& val) {
-    mutablebson::Element elemToCreate =
-        _logRoot.getDocument().makeElementWithNewFieldName(name, val);
-    if (!elemToCreate.ok())
-        return Status(ErrorCodes::InternalError,
-                      str::stream()
-                          << "Could not create new '" << name << "' element from existing element '"
-                          << val.fieldName() << "' of type " << typeName(val.type()));
-    return addToSection(elemToCreate, &_createAccumulator, kInsert);
-}
+Status LogBuilder::setDeltaBin(const void* data, size_t len) {
+    auto elem =_logRoot.getDocument().makeElementBinary("delta", len, BinDataType::BinDataGeneral, data);
+    invariant(elem.ok());
 
-Status LogBuilder::addToResizes(StringData name, size_t newSize) {
-    mutablebson::Element elemToCreate =
-        _logRoot.getDocument().makeElementLong(name, static_cast<int64_t>(newSize));
-
-    // TODO: Is this ever expected to be not ok??
-    invariant(elemToCreate.ok());
-    return addToSection(elemToCreate, &_resizeAccumulator, kResize);
+    // Invalidate attempts to set an object replacement.
+    _objectReplacementAccumulator = _logRoot.getDocument().end();
+    return _logRoot.pushBack(elem);
 }
 
 Status LogBuilder::setUpdateSemantics(UpdateSemantics updateSemantics) {

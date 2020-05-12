@@ -1268,58 +1268,14 @@ Status applyOperation_inlock(OperationContext* opCtx,
             if (o["$v"].numberInt() == static_cast<int>(UpdateSemantics::kPipeline)) {
                 std::cout << "ian: update entry is " << o << std::endl;
 
-                std::vector<write_ops::DeltaUpdate::KVPair> sets;
-                std::vector<ArrayIndexPath> unsets;
-                std::vector<write_ops::DeltaUpdate::KVPair> creates;
+                write_ops::DeltaUpdate update;
+                int len;
+                const char* bytes = o["delta"].binData(len);
 
-                std::vector<BSONObj> pipeline;
-                if (o["u"].ok()) {
-                    uassert(ErrorCodes::BadValue,
-                            str::stream() << "Expected 'u' to be of type object",
-                            o["u"].type() == BSONType::Object);
-
-                    BSONObj set = o["u"].embeddedObject();
-
-                    for (auto&& f : set) {
-                        sets.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), Value(f)});
-                    }
-                }
-
-                if (o["d"].ok()) {
-                    uassert(ErrorCodes::BadValue,
-                            str::stream() << "Expected 'd' to be of type object",
-                            o["d"].type() == BSONType::Object);
-
-                    for (auto&& f : o["d"].embeddedObject()) {
-                        unsets.push_back(ArrayIndexPath::parseUnsafe(f.fieldName()));
-                    }
-                }
-
-                if (o["i"].ok()) {
-                    uassert(ErrorCodes::BadValue,
-                            str::stream() << "Expected 'i' to be of type object",
-                            o["i"].type() == BSONType::Object);
-
-                    for (auto&& f : o["i"].embeddedObject()) {
-                        creates.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), Value(f)});
-                    }
-                }
-
-                std::vector<std::pair<ArrayIndexPath, size_t>> resizes;
-                if (o["r"].ok()) {
-                    uassert(ErrorCodes::BadValue,
-                            str::stream() << "Expected resize region to be of type object",
-                            o["r"].type() == BSONType::Object);
-                    for (auto&& f : o["r"].embeddedObject()) {
-                        uassert(ErrorCodes::BadValue,
-                                str::stream() << "Expected new size to be long",
-                                f.type() == BSONType::NumberLong);
-                        resizes.push_back({ArrayIndexPath::parseUnsafe(f.fieldName()), f.Long()});
-                    }
-                }
-
-                request.setUpdateModification(write_ops::DeltaUpdate{
-                    std::move(sets), std::move(unsets), std::move(creates), std::move(resizes)});
+                update.delta.resize(len);
+                memcpy(update.delta.data(), bytes, len);
+                
+                request.setUpdateModification(std::move(update));
             } else {
                 request.setUpdateModification(o);
             }
