@@ -197,27 +197,8 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
         std::cout << "ian: dbg " << dbg << std::endl;
 
         // TODO: Re-enable this branch.
-        if (false && diff.len() < static_cast<size_t>(transformedDoc.objsize())) {
+        if (diff.len() < static_cast<size_t>(transformedDoc.objsize())) {
             invariant(applyParams.logBuilder->setDeltaBin(diff.raw(), diff.len()));
-            //if (diff.computeApproxSize() * 2 < static_cast<size_t>(transformedDoc.objsize()) && false) {
-            // TODO: Set logBuilder's diff field.
-            // for (auto&& [fieldRef, elt] : diff.toUpsert()) {
-            //     invariant(
-            //         applyParams.logBuilder->addToSetsWithNewFieldName(fieldRef.toString(), elt));
-            // }
-
-            // for (auto&& fieldRef : diff.toDelete()) {
-            //     invariant(applyParams.logBuilder->addToUnsets(fieldRef.toString()));
-            // }
-
-            // for (auto&& [fieldRef, elt] : diff.toInsert()) {
-            //     invariant(applyParams.logBuilder->addToCreates(fieldRef.toString(), elt));
-            // }
-
-            // for (auto&& [fieldRef, newSize] : diff.toResize()) {
-            //     invariant(applyParams.logBuilder->addToResizes(fieldRef.toString(), newSize));
-            // }
-
             invariant(applyParams.logBuilder->setUpdateSemantics(UpdateSemantics::kPipeline));
         } else {
             auto replacementObject = applyParams.logBuilder->getDocument().end();

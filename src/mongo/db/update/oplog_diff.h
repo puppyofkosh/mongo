@@ -42,6 +42,9 @@ namespace mongo {
 namespace doc_diff {
 
     /*
+     * TODO: I believe users are allowed to have empty field names. This format may not accomodate
+     * that but could be changed to do so.
+     *
      * Diff format:
      *
      * diff := <objDiff>
@@ -173,8 +176,12 @@ public:
         _end = start + len;
     }
 
-    unsigned char nextByte() {
-        return *(reinterpret_cast<const unsigned char*>(_rest++));
+    unsigned char nextByte(bool advance = true) {
+        auto ret = *(reinterpret_cast<const unsigned char*>(_rest));
+        if (advance) {
+            _rest++;
+        }
+        return ret;
     }
 
     const char* nextString() {
@@ -185,9 +192,11 @@ public:
     }
 
     // TODO: endianness.......
-    uint32_t nextUnsigned() {
+    uint32_t nextUnsigned(bool advance=true) {
         auto ret = *(reinterpret_cast<const uint32_t*>(_rest));
-        _rest += 4;
+        if (advance) {
+            _rest += 4;
+        }
         return ret;
     }
 

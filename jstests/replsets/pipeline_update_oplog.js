@@ -32,12 +32,9 @@ function checkOplogEntry(node, expectUpdateOplogEntry) {
     assert.eq(res.length, 1);
 
     // TODO: Change this to look for bin data
-    if (expectUpdateOplogEntry && false) {
+    if (expectUpdateOplogEntry) {
         assert.eq(res[0].o.$v, 2, res[0]);
-        assert.eq(typeof (res[0].o.d) == "object" || typeof (res[0].o.u) == "object" ||
-                      typeof (res[0].o.i) == "object" || typeof (res[0].o.r) == "object",
-                  true,
-                  res[0]);
+        assert.eq(typeof (res[0].o.delta), "object", res[0]);
 
         // Verify that none of the fields in the 'insert' section of the oplog entry are present
         // in the 'delete' section of the oplog entry.
@@ -77,7 +74,7 @@ let id;
 
 // Removing fields.
 id = generateId();
-testUpdateReplicates({_id: id, x: 3, y: 3}, [{$unset: ["x", "y"]}], {_id: id}, true);
+    testUpdateReplicates({_id: id, x: 3, y: 3}, [{$unset: ["x", "y"]}], {_id: id}, true);
 
 // Adding a field and updating an existing one.
 id = generateId();
@@ -152,13 +149,13 @@ testUpdateReplicates({_id: id, x: kGiantStr, arrField: [{x: 1}, {x: 2}]},
 // Reorder fields with replaceRoot. (This requires internalRemoveTombstones to be used)
 id = generateId();
 testUpdateReplicates({_id: id, padding: kGiantStr, x: "foo", y: "bar"},
-                     [{$replaceRoot: {newRoot: {padding: kGiantStr, y: "bar", x: "foo"}}}],
+                     [{$replaceRoot: {newRoot: {_id: id, padding: kGiantStr, y: "bar", x: "foo"}}}],
                      {_id: id, padding: kGiantStr, y: "bar", x: "foo"},
                      true);
 
 id = generateId();
 testUpdateReplicates({_id: id, p: kGiantStr, a: 1, b: 1, c: 1, d: 1},
-                     [{$replaceRoot: {newRoot: {p: kGiantStr, a: 1, c: 1, b: 1, d: 1}}}],
+                     [{$replaceRoot: {newRoot: {_id: id, p: kGiantStr, a: 1, c: 1, b: 1, d: 1}}}],
                      {_id: id, p: kGiantStr, a: 1, c: 1, b: 1, d: 1},
                      true);
 
@@ -226,7 +223,7 @@ testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 999, 3, 4]},
                      [{$set: {a: [1, 2, 3, 4]}}],
                      {_id: id, padding: kGiantStr, a: [1, 2, 3, 4]},
                      true);
-
+    
 // TODO: nested nested nested
 
 // TODO remove

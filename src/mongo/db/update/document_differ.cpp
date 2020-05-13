@@ -29,6 +29,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <iomanip>
+
 #include "mongo/db/update/document_differ.h"
 #include "mongo/util/string_map.h"
 
@@ -113,6 +115,19 @@ void diffArrays(const BSONObj& pre,
 void computeDiffHelper(const BSONObj& pre,
                        const BSONObj& post,
                        OplogDiffBuilder* builder) {
+    std::cout << "computing diff. pre image " << pre << std::endl;
+    std::cout << "post " << post << std::endl;
+
+    std::cout << "ian: primary post image n fields is " << post.nFields() << std::endl;
+    std::cout << "ian: primary post image size is " << post.objsize() << std::endl;
+
+    std::cout << "primary raw data" << std::endl;
+    for (int i = 0; i < post.objsize(); ++i) {
+        const char next = static_cast<char>(post.objdata()[i]);
+        std::cout << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(next) << std::dec << " ";
+    }
+    std::cout << "end raw\n";
+    
     BSONObjIterator preIt(pre);
     BSONObjIterator postIt(post);
 
