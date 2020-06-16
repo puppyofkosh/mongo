@@ -33,6 +33,7 @@
 #include "mongo/db/exec/document_value/value.h"
 #include "mongo/db/field_ref_set.h"
 #include "mongo/db/update/log_builder.h"
+#include "mongo/db/update/bson_log_builder.h"
 #include "mongo/db/update/update_node_visitor.h"
 #include "mongo/db/update_index_data.h"
 
@@ -78,7 +79,11 @@ public:
         const UpdateIndexData* indexData = nullptr;
 
         // If provided, UpdateNode::apply will log the update here.
+        // TODO ian: Rename to "old log builder". Should this be a std::variant?
         LogBuilder* logBuilder = nullptr;
+
+        // May be used instead of log builder. TODO: comment
+        SimpleLogBuilder* simpleLogBuilder = nullptr;
 
         // If provided, UpdateNode::apply will populate this with a path to each modified field.
         FieldRefSetWithStorage* modifiedPaths = nullptr;

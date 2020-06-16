@@ -34,6 +34,7 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/pipeline/document_source_queue.h"
 #include "mongo/db/pipeline/lite_parsed_pipeline.h"
+#include "mongo/db/update/oplog_delta_calculator.h"
 #include "mongo/db/update/object_replace_executor.h"
 #include "mongo/db/update/storage_validation.h"
 
@@ -86,10 +87,28 @@ PipelineExecutor::PipelineExecutor(const boost::intrusive_ptr<ExpressionContext>
 }
 
 UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParams) const {
+    const auto originalDoc = applyParams.element.getDocument().getObject();
+
     DocumentSourceQueue* queueStage = static_cast<DocumentSourceQueue*>(_pipeline->peekFront());
-    queueStage->emplace_back(Document{applyParams.element.getDocument().getObject()});
-    auto transformedDoc = _pipeline->getNext()->toBson();
-    auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
+    queueStage->emplace_back(Document{originalDoc});
+
+    const auto transformedDoc = _pipeline->getNext()->toBson();
+    const auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
+
+    std::cout << "ian: In applyUpdate() " << std::endl;
+    // TODO: feature flag.
+    invariant(!applyParams.logBuilder);
+    if (applyParams.simpleLogBuilder) {
+        const auto diff = doc_diff::computeDiff(originalDoc, transformedDoc);
+        if (diff) {
+            std::cout << "Generating diff entry\n";
+            applyParams.simpleLogBuilder->setDelta(*diff);
+        } else {
+            applyParams.simpleLogBuilder->setReplacement(transformedDoc);
+        }
+
+        return ApplyResult();
+    }
 
     return ObjectReplaceExecutor::applyReplacementUpdate(
         applyParams, transformedDoc, transformedDocHasIdField);

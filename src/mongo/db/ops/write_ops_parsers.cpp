@@ -34,6 +34,7 @@
 #include "mongo/db/dbmessage.h"
 #include "mongo/db/ops/write_ops.h"
 #include "mongo/db/pipeline/aggregation_request.h"
+#include "mongo/db/update/log_builder.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/str.h"
 
@@ -208,6 +209,34 @@ write_ops::Delete DeleteOp::parseLegacy(const Message& msgRaw) {
     return op;
 }
 
+write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry(const BSONObj& oField) {
+    BSONElement vField = oField[LogBuilder::kUpdateSemanticsFieldName];
+
+    // If this field appears it should be an integer.
+    uassert(4772600,
+            str::stream() << "Expected $v field to be missing or an integer, but got type: " << vField.type(),
+            !vField.ok() || vField.type() == BSONType::NumberInt);
+
+    if (vField.ok() && vField.Int() == static_cast<int>(UpdateSemantics::kDelta)) {
+        // Make sure there's a diff field.
+        BSONElement diff = oField["diff"];
+        uassert(4772601,
+                str::stream() << "Expected 'diff' field to be an object, instead got type: " << diff.type(),
+                diff.type() == BSONType::Object);
+
+        return UpdateModification(write_ops::DocumentDelta{diff.embeddedObject()});
+    } else {
+        // Treat it as a "classic" update which can either be a full replacement or a
+        // modifier-style update. Which variant it is will be determined later.
+        return UpdateModification(oField);
+    }
+}
+    
+write_ops::UpdateModification::UpdateModification(DocumentDelta delta) {
+    _type = Type::kDelta;
+    _delta = std::move(delta);
+}
+    
 write_ops::UpdateModification::UpdateModification(BSONElement update) {
     const auto type = update.type();
     if (type == BSONType::Object) {

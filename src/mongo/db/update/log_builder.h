@@ -36,12 +36,16 @@ namespace mongo {
 
 /**
  * Previously, there were multiple supported versions of the update language.
+ * TODO: Rename to something like UpdateVersion. Consider adding an enum for replacements.
  */
 enum class UpdateSemantics {
-    // The update system introduced in v3.6, and is the only supported system. When a single update
-    // adds multiple fields, those fields are added in lexicographic order by field name. This
-    // system introduces support for arrayFilters and $[] syntax.
+    // The update system introduced in v3.6. When a single update adds multiple fields, those
+    // fields are added in lexicographic order by field name. This system introduces support for
+    // arrayFilters and $[] syntax.
     kUpdateNode = 1,
+
+    // Delta style update, introduced in 4.6.
+    kDelta = 2,
 
     // Must be last.
     kNumUpdateSemantics
