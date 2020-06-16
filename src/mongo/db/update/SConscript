@@ -26,6 +26,7 @@ env.Library(
         'addtoset_node.cpp',
         'arithmetic_node.cpp',
         'array_culling_node.cpp',
+        'bson_log_builder.cpp',
         'document_diff_serialization.cpp',
         'document_diff_applier.cpp',
         'oplog_delta_calculator.cpp',

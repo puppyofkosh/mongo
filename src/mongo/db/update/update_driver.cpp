@@ -39,6 +39,7 @@
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
 #include "mongo/db/server_options.h"
+#include "mongo/db/update/delta_executor.h"
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/modifier_table.h"
 #include "mongo/db/update/object_replace_executor.h"
@@ -158,6 +159,16 @@ void UpdateDriver::parse(
         return;
     }
 
+    if (updateMod.type() == write_ops::UpdateModification::Type::kDelta) {
+        uassert(ErrorCodes::FailedToParse,
+                "arrayFilters may not be specified for pipeline-syle updates",
+                arrayFilters.empty());
+
+        _updateType = UpdateType::kDelta;
+        _updateExecutor = std::make_unique<DeltaExecutor>(updateMod.getDelta().bson);
+        return;
+    }
+
     uassert(51198, "Constant values may only be specified for pipeline updates", !constants);
 
     // Check if the update expression is a full object replacement.
@@ -270,8 +281,14 @@ Status UpdateDriver::update(StringData matchedField,
     // The supplied 'modifiedPaths' must be an empty set.
     invariant(!modifiedPaths || modifiedPaths->empty());
 
+    // TODO: Probably use a std::variant instead of having two variables.
+    SimpleLogBuilder simpleLogBuilder;
     if (_logOp && logOpRec) {
-        applyParams.logBuilder = &logBuilder;
+        if (_updateType == UpdateType::kPipeline) {
+            applyParams.simpleLogBuilder = &simpleLogBuilder;
+        } else {
+            applyParams.logBuilder = &logBuilder;
+        }
     }
 
     invariant(_updateExecutor);
@@ -297,8 +314,14 @@ Status UpdateDriver::update(StringData matchedField,
         invariant(logBuilder.setUpdateSemantics(UpdateSemantics::kUpdateNode));
     }
 
-    if (_logOp && logOpRec)
-        *logOpRec = _logDoc.getObject();
+    if (_logOp && logOpRec) {
+        if (_updateType == UpdateType::kPipeline) {
+            *logOpRec = simpleLogBuilder.toBson();
+            std::cout << "log object is " << *logOpRec << std::endl;
+        } else {
+            *logOpRec = _logDoc.getObject();
+        }
+    }
 
     return Status::OK();
 }

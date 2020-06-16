@@ -37,6 +37,12 @@
 namespace mongo {
 namespace write_ops {
 
+// Represents a delta which can be applied to a document in order to recover the post image of an
+// update operation.
+struct DocumentDelta {
+    BSONObj bson;
+};
+
 // Conservative per array element overhead. This value was calculated as 1 byte (element type) + 5
 // bytes (max string encoding of the array index encoded as string and the maximum key is 99999) + 1
 // byte (zero terminator) = 7 bytes
@@ -55,18 +61,22 @@ void writeMultiDeleteProperty(bool isMulti, StringData fieldName, BSONObjBuilder
 
 class UpdateModification {
 public:
-    enum class Type { kClassic, kPipeline };
+    enum class Type { kClassic, kPipeline, kDelta };
 
     static StringData typeToString(Type type) {
         return (type == Type::kClassic ? "Classic"_sd : "Pipeline"_sd);
     }
 
+    // Given the 'o' field of an update oplog entry, will return an UpdateModification that can be
+    // applied.
+    static UpdateModification parseFromOplogEntry(const BSONObj& oField);
+    
     UpdateModification() = default;
     UpdateModification(BSONElement update);
     UpdateModification(std::vector<BSONObj> pipeline);
+    UpdateModification(DocumentDelta);
     // This constructor exists only to provide a fast-path for constructing classic-style updates.
     UpdateModification(const BSONObj& update);
-
 
     /**
      * These methods support IDL parsing of the "u" field from the update command and OP_UPDATE.
@@ -110,6 +120,11 @@ public:
         return *_pipeline;
     }
 
+    DocumentDelta getDelta() const {
+        invariant(_type == Type::kDelta);
+        return *_delta;
+    }
+
     std::string toString() const {
         StringBuilder sb;
         sb << "{type: " << typeToString(_type) << ", update: ";
@@ -127,6 +142,7 @@ private:
     Type _type = Type::kClassic;
     boost::optional<BSONObj> _classicUpdate;
     boost::optional<std::vector<BSONObj>> _pipeline;
+    boost::optional<DocumentDelta> _delta;
 };
 
 }  // namespace write_ops
