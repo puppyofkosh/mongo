@@ -33,7 +33,6 @@
 
 #include "mongo/util/str.h"
 #include "mongo/util/string_map.h"
-#include "mongo/util/visit_helper.h"
 
 namespace mongo::doc_diff {
 namespace {
@@ -98,8 +97,9 @@ void ArrayDiffBuilder::releaseTo(BSONObjBuilder* output) {
         stdx::visit(
             visit_helper::Overloaded{
                 [idx = idx, output](const Diff& subDiff) {
-                    // TODO: SERVER-48602 Try to avoid using BSON macro here. Ideally we will just
-                    // need one BSONObjBuilder for serializing the diff, at the end.
+                    // TODO: SERVER-48602 Try to avoid using BSON macro here. Ideally we
+                    // will just need one BSONObjBuilder for serializing the diff, at the
+                    // end.
                     output->append(std::to_string(idx), BSON(kSubDiffSectionFieldName << subDiff));
                 },
                 [idx = idx, output](BSONElement elt) {
