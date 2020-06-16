@@ -104,10 +104,21 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
             std::cout << "Generating diff entry\n";
             applyParams.simpleLogBuilder->setDelta(*diff);
         } else {
+            std::cout << "Generating replacement diff " << std::endl;
             applyParams.simpleLogBuilder->setReplacement(transformedDoc);
         }
 
-        return ApplyResult();
+        // Run the object replace executor, but run it without the logBuilder, indicating
+        // that it should not also generate an oplog entry.
+        invariant(applyParams.logBuilder == nullptr);
+
+        SimpleLogBuilder* tempLogBuilder = nullptr;
+        std::swap(applyParams.simpleLogBuilder, tempLogBuilder);
+        applyParams.simpleLogBuilder = nullptr;
+        const auto ret = ObjectReplaceExecutor::applyReplacementUpdate(
+            applyParams, transformedDoc, transformedDocHasIdField);
+        std::swap(applyParams.simpleLogBuilder, tempLogBuilder);
+        return ret;
     }
 
     return ObjectReplaceExecutor::applyReplacementUpdate(

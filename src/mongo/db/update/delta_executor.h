@@ -52,20 +52,29 @@ public:
      * Initializes the node with the document to replace with. Any zero-valued timestamps (except
      * for the _id) are updated to the current time.
      */
-    explicit DeltaExecutor(doc_diff::DocumentDiffReader reader)
-        :_reader(std::move(reader))
+    explicit DeltaExecutor(doc_diff::Diff diff)
+        :_diff(std::move(diff))
     {}
 
     ApplyResult applyUpdate(ApplyParams applyParams) const final {
-        MONGO_UNREACHABLE;
+        const auto originalDoc = applyParams.element.getDocument().getObject();
+        auto postImage = doc_diff::applyDiff(originalDoc, _diff);
+        // This could be done as part of diff application, but it doesn't seem like a problem.
+        auto postImageHasId = postImage.hasField("_id");
+        
+        return ObjectReplaceExecutor::applyReplacementUpdate(applyParams,
+                                                             postImage,
+                                                             postImageHasId);
     }
 
     Value serialize() const final {
+        // Delta updates are only applied internally on secondaries. They are never passed between
+        // nodes or re-written.
         MONGO_UNREACHABLE;
     }
 
 private:
-    doc_diff::DocumentDiffReader _reader;
+    doc_diff::Diff _diff;
 };
 
 }  // namespace mongo

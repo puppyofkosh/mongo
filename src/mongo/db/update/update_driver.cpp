@@ -165,8 +165,7 @@ void UpdateDriver::parse(
                 arrayFilters.empty());
 
         _updateType = UpdateType::kDelta;
-        doc_diff::DocumentDiffReader reader(updateMod.getDelta().bson);
-        _updateExecutor = std::make_unique<DeltaExecutor>(std::move(reader));
+        _updateExecutor = std::make_unique<DeltaExecutor>(updateMod.getDelta().bson);
         return;
     }
 

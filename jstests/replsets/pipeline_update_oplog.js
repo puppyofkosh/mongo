@@ -31,21 +31,22 @@ function checkOplogEntry(node, expectUpdateOplogEntry) {
     const res = oplog.find().sort({"ts": -1}).limit(1).toArray();
     assert.eq(res.length, 1);
 
-    // TODO: unrelax this check.
-    return;
-
     if (expectUpdateOplogEntry) {
         assert.eq(res[0].o.$v, 2, res[0]);
-        assert.eq(typeof (res[0].o.delta), "object", res[0]);
+        assert.eq(typeof (res[0].o.diff), "object", res[0]);
 
         // Verify that none of the fields in the 'insert' section of the oplog entry are present
         // in the 'delete' section of the oplog entry.
         const insertSection = res[0].o.i;
         const deleteSection = res[0].o.d;
         if (insertSection && deleteSection) {
+            // TODO: Should do the same for deleteSection and insert section. Should intersect the
+            // two.
             for (const fieldPath of Object.keys(insertSection)) {
                 assert(!(fieldPath in deleteSection));
             }
+
+            
         }
     } else {
         assert.eq(res[0].o.hasOwnProperty("$v"), false, res[0]);
@@ -76,8 +77,19 @@ let id;
 
 // Removing fields.
 id = generateId();
-testUpdateReplicates({_id: id, x: 3, y: 3}, [{$unset: ["x", "y"]}], {_id: id}, true);
+    testUpdateReplicates({_id: id, x: 3, y: 3, giantStr: kGiantStr},
+                         [{$unset: ["x", "y"]}],
+                         {_id: id, giantStr: kGiantStr},
+                         true);
+    
+    // TODO
+    print("ian: oplog");
+    printjson(oplog.find().sort({"ts": -1}).toArray());
 
+    rst.stopSet();
+    return;
+    //
+    
 // Adding a field and updating an existing one.
 id = generateId();
 testUpdateReplicates(
