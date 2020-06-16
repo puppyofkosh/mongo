@@ -40,13 +40,9 @@ function checkOplogEntry(node, expectUpdateOplogEntry) {
         const insertSection = res[0].o.i;
         const deleteSection = res[0].o.d;
         if (insertSection && deleteSection) {
-            // TODO: Should do the same for deleteSection and insert section. Should intersect the
-            // two.
             for (const fieldPath of Object.keys(insertSection)) {
                 assert(!(fieldPath in deleteSection));
             }
-
-            
         }
     } else {
         assert.eq(res[0].o.hasOwnProperty("$v"), false, res[0]);
@@ -82,14 +78,6 @@ id = generateId();
                          {_id: id, giantStr: kGiantStr},
                          true);
     
-    // TODO
-    print("ian: oplog");
-    printjson(oplog.find().sort({"ts": -1}).toArray());
-
-    rst.stopSet();
-    return;
-    //
-    
 // Adding a field and updating an existing one.
 id = generateId();
 testUpdateReplicates(
@@ -117,9 +105,9 @@ testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}},
 
 // Add subfield and remove top level field.
 id = generateId();
-testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}, toRemove: "foo"},
-                     [{$project: {subObj: 1}}, {$set: {"subObj.c": "foo"}}],
-                     {_id: id, subObj: {a: 1, b: 2, c: "foo"}},
+testUpdateReplicates({_id: id, subObj: {a: 1, b: 2}, toRemove: "foo", giantStr: kGiantStr},
+                     [{$project: {subObj: 1, giantStr: 1}}, {$set: {"subObj.c": "foo"}}],
+                     {_id: id, subObj: {a: 1, b: 2, c: "foo"}, giantStr: kGiantStr},
                      true);
 
 // Inclusion projection dropping a field (cannot be handled by static analysis).
@@ -131,20 +119,20 @@ testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}},
 
 // Inclusion projection dropping a subfield (subObj.b).
 id = generateId();
-testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}},
-                     [{$project: {subObj: {a: 1}}}],
-                     {_id: id, subObj: {a: 1}},
+testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
+                     [{$project: {subObj: {a: 1}, giantStr: 1}}],
+                     {_id: id, subObj: {a: 1}, giantStr: kGiantStr},
                      true);
 
-// Replace root with a similar document (not supported by static analysis).
+// Replace root with a similar document.
 id = generateId();
-testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}},
-                     [{$replaceRoot: {newRoot: {x: "bar", subObj: {a: 1, b: 2}}}}],
-                     {_id: id, x: "bar", subObj: {a: 1, b: 2}},
+testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
+                     [{$replaceRoot: {newRoot:
+                                      {x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr}}}],
+                     {_id: id, x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
                      true);
 
-// Replace root with a very different document should fall back to
-// replacement style update.
+// Replace root with a very different document should fall back to replacement style update.
 id = generateId();
 testUpdateReplicates(
     {_id: id, x: "foo", subObj: {a: 1, b: 2}},
@@ -229,20 +217,21 @@ testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, {b: 10}, 3]},
                      {_id: id, padding: kGiantStr, a: [1, {b: 9}]},
                      true);
 
-// Remove element from the middle of an array.
-// Should still use a delta, and only rewrite the last parts of the array.
-// TODO: This may fail with the early return optimization. Use bigger elements if that happens.
+// Remove element from the middle of an array. Should still use a delta, and only rewrite the last
+// parts of the array.
 id = generateId();
 testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 999, 3, 4]},
                      [{$set: {a: [1, 2, 3, 4]}}],
                      {_id: id, padding: kGiantStr, a: [1, 2, 3, 4]},
                      true);
 
-// TODO: nested nested nested
+// TODO: More tests!
 
-// TODO remove
-print("ian: oplog");
-printjson(oplog.find().sort({"ts": -1}).toArray());
+
+// TODO: Remove this. (Useful for debugging though).
+if (false) {
+    printjson(oplog.find().sort({"ts": -1}).toArray());
+}
 
 rst.stopSet();
 })();
