@@ -31,48 +31,51 @@
 
 #include "mongo/base/status.h"
 
-#include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/document_diff_serialization.h"
+#include "mongo/db/update/log_builder.h"
 #include "mongo/stdx/variant.h"
 #include "mongo/util/visit_helper.h"
 
 namespace mongo {
-    // An alternative to LogBuilder that does not rely on mutable BSON.
-    class SimpleLogBuilder {
-    public:
-        // A call to this indicates that we will log a delta style entry. With
-        // the diff provided.
-        void setDelta(const BSONObj& diff) {
-            invariant(stdx::holds_alternative<NoValue>(_update));
-            invariant(!_version);
-            _update = Delta{diff};
-            _version = UpdateSemantics::kDelta;
-        }
+// A simpler version of LogBuilder which can only be used for full replacements and
+// delta style oplog entries.
+    // TODO: Rename.
+class SimpleLogBuilder {
+public:
+    // A call to this indicates that we will log a delta style entry. With
+    // the diff provided.
+    void setDelta(const BSONObj& diff) {
+        invariant(stdx::holds_alternative<NoValue>(_update));
+        invariant(!_version);
+        _update = Delta{diff};
+        _version = UpdateSemantics::kDelta;
+    }
 
-        // A call to this indicates that we will log a replacement style update.
-        void setReplacement(const BSONObj& replacementBson) {
-            invariant(stdx::holds_alternative<NoValue>(_update));
-            invariant(!_version);
-            _update = Replacement{replacementBson};
-            // We do not set '_version' here, to indicate this is a replacement.
-        }
+    // A call to this indicates that we will log a replacement style update.
+    void setReplacement(const BSONObj& replacementBson) {
+        invariant(stdx::holds_alternative<NoValue>(_update));
+        invariant(!_version);
+        _update = Replacement{replacementBson};
+        // We do not set '_version' here, to indicate this is a replacement.
+    }
 
-        // Serializes to bson.
-        BSONObj toBson() const;
-    private:
-        // These structs are so we can store a variant<Delta,Replacement> without trying to store
-        // two identical types in a variant (which is possible, but leads to madness).
-        struct Delta {
-            BSONObj bson;
-        };
+    // Serializes to bson.
+    BSONObj toBson() const;
 
-        struct Replacement {
-            BSONObj bson;
-        };
-        using NoValue = stdx::monostate;
-
-        // Indicates which type of oplog entry is recorded. No value indicates replacement.
-        boost::optional<UpdateSemantics> _version;
-        stdx::variant<NoValue, Delta, Replacement> _update;
+private:
+    // These structs are so we can store a variant<Delta,Replacement> without trying to store
+    // two identical types in a variant (which is possible, but leads to madness).
+    struct Delta {
+        BSONObj bson;
     };
-}
+
+    struct Replacement {
+        BSONObj bson;
+    };
+    using NoValue = stdx::monostate;
+
+    // Indicates which type of oplog entry is recorded. No value indicates replacement.
+    boost::optional<UpdateSemantics> _version;
+    stdx::variant<NoValue, Delta, Replacement> _update;
+};
+}  // namespace mongo

@@ -70,7 +70,7 @@ public:
     // Given the 'o' field of an update oplog entry, will return an UpdateModification that can be
     // applied.
     static UpdateModification parseFromOplogEntry(const BSONObj& oField);
-    
+
     UpdateModification() = default;
     UpdateModification(BSONElement update);
     UpdateModification(std::vector<BSONObj> pipeline);

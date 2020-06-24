@@ -33,7 +33,7 @@
 #include "mongo/db/exec/document_value/value.h"
 #include "mongo/db/field_ref_set.h"
 #include "mongo/db/update/log_builder.h"
-#include "mongo/db/update/bson_log_builder.h"
+#include "mongo/db/update/simple_log_builder.h"
 #include "mongo/db/update/update_node_visitor.h"
 #include "mongo/db/update_index_data.h"
 

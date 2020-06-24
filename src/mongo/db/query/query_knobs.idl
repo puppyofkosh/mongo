@@ -364,3 +364,10 @@ server_parameters:
     validator:
       gt: 0
 
+  internalQueryEnableDeltaOplogEntries:
+    description: "If true, this node may log delta-style oplog entries."
+    set_at: [ startup, runtime ]
+    cpp_varname: "internalQueryEnableDeltaOplogEntries"
+    cpp_vartype: AtomicWord<bool>
+    # TODO: Should be false. Leaving as true for now so I can easily run tests with the flag on.
+    default: true

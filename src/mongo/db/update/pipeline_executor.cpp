@@ -34,8 +34,9 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/pipeline/document_source_queue.h"
 #include "mongo/db/pipeline/lite_parsed_pipeline.h"
-#include "mongo/db/update/oplog_delta_calculator.h"
+#include "mongo/db/query/query_knobs_gen.h"
 #include "mongo/db/update/object_replace_executor.h"
+#include "mongo/db/update/oplog_delta_calculator.h"
 #include "mongo/db/update/storage_validation.h"
 
 namespace mongo {

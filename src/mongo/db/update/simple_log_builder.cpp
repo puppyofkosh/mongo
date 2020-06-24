@@ -27,27 +27,26 @@
  *    it in the license file.
  */
 
-#include "mongo/db/update/bson_log_builder.h"
+#include "mongo/db/update/simple_log_builder.h"
 
 namespace mongo {
 BSONObj SimpleLogBuilder::toBson() const {
-    return stdx::visit(visit_helper::Overloaded{
-            [](NoValue) -> BSONObj {
-                // Attempted to call toBson() without setting an update!
-                MONGO_UNREACHABLE;
-            },
-                [this](const Delta& delta) {
-                    invariant(_version);
-                    BSONObjBuilder builder;
-                    builder.append("$v", static_cast<int>(*_version));
-                    builder.append("diff", delta.bson);
-                    return builder.obj();
-                },
-                    [this](const Replacement& replacement) {
-                        invariant(!_version);
-                        return replacement.bson;
-                    }
-        },
-        _update);
+    auto visitor = visit_helper::Overloaded{[](NoValue) -> BSONObj {
+                                                // Attempted to call toBson() without setting
+                                                // an update!
+                                                MONGO_UNREACHABLE;
+                                            },
+                                            [this](const Delta& delta) {
+                                                invariant(_version);
+                                                BSONObjBuilder builder;
+                                                builder.append("$v", static_cast<int>(*_version));
+                                                builder.append("diff", delta.bson);
+                                                return builder.obj();
+                                            },
+                                            [this](const Replacement& replacement) {
+                                                invariant(!_version);
+                                                return replacement.bson;
+                                            }};
+    return stdx::visit(visitor, _update);
 }
-}
+}  // namespace mongo

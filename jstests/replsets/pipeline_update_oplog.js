@@ -73,11 +73,11 @@ let id;
 
 // Removing fields.
 id = generateId();
-    testUpdateReplicates({_id: id, x: 3, y: 3, giantStr: kGiantStr},
-                         [{$unset: ["x", "y"]}],
-                         {_id: id, giantStr: kGiantStr},
-                         true);
-    
+testUpdateReplicates({_id: id, x: 3, y: 3, giantStr: kGiantStr},
+                     [{$unset: ["x", "y"]}],
+                     {_id: id, giantStr: kGiantStr},
+                     true);
+
 // Adding a field and updating an existing one.
 id = generateId();
 testUpdateReplicates(
@@ -126,11 +126,11 @@ testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}, giantStr: kGiantS
 
 // Replace root with a similar document.
 id = generateId();
-testUpdateReplicates({_id: id, x: "foo", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
-                     [{$replaceRoot: {newRoot:
-                                      {x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr}}}],
-                     {_id: id, x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
-                     true);
+testUpdateReplicates(
+    {_id: id, x: "foo", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
+    [{$replaceRoot: {newRoot: {x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr}}}],
+    {_id: id, x: "bar", subObj: {a: 1, b: 2}, giantStr: kGiantStr},
+    true);
 
 // Replace root with a very different document should fall back to replacement style update.
 id = generateId();
@@ -226,7 +226,6 @@ testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 999, 3, 4]},
                      true);
 
 // TODO: More tests!
-
 
 // TODO: Remove this. (Useful for debugging though).
 if (false) {

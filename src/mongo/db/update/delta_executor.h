@@ -37,24 +37,22 @@
 
 #include "mongo/db/update/update_executor.h"
 
-#include "mongo/db/update/document_diff_serialization.h"
 #include "mongo/db/update/document_diff_applier.h"
+#include "mongo/db/update/document_diff_serialization.h"
 
 namespace mongo {
 
 /**
- * An UpdateExecutor representing a replacement-style update.
+ * An UpdateExecutor representing a delta-style update. Delta-style updates apply a diff
+ * to the pre image document in order to recover the post image.
  */
 class DeltaExecutor : public UpdateExecutor {
 
 public:
     /**
-     * Initializes the node with the document to replace with. Any zero-valued timestamps (except
-     * for the _id) are updated to the current time.
+     * Initializes the executor with the diff to apply.
      */
-    explicit DeltaExecutor(doc_diff::Diff diff)
-        :_diff(std::move(diff))
-    {}
+    explicit DeltaExecutor(doc_diff::Diff diff) : _diff(std::move(diff)) {}
 
     ApplyResult applyUpdate(ApplyParams applyParams) const final {
         const auto originalDoc = applyParams.element.getDocument().getObject();

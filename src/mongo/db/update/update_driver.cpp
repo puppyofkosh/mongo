@@ -53,24 +53,6 @@ namespace mongo {
 using pathsupport::EqualityMatches;
 
 namespace {
-
-StatusWith<UpdateSemantics> updateSemanticsFromElement(BSONElement element) {
-    if (element.type() != BSONType::NumberInt && element.type() != BSONType::NumberLong) {
-        return {ErrorCodes::BadValue, "'$v' (UpdateSemantics) field must be an integer."};
-    }
-
-    auto updateSemantics = element.numberLong();
-
-    // As of 3.7, we only support one version of the update language.
-    if (updateSemantics != static_cast<int>(UpdateSemantics::kUpdateNode)) {
-        return {ErrorCodes::Error(40682),
-                str::stream() << "Unrecognized value for '$v' (UpdateSemantics) field: "
-                              << updateSemantics};
-    }
-
-    return static_cast<UpdateSemantics>(updateSemantics);
-}
-
 modifiertable::ModifierType validateMod(BSONElement mod) {
     auto modType = modifiertable::getType(mod.fieldName());
 
@@ -186,10 +168,11 @@ void UpdateDriver::parse(
 
     invariant(_updateType == UpdateType::kOperator);
 
-    // Some versions of mongod support more than one version of the update language and look for a
-    // $v "UpdateSemantics" field when applying an oplog entry, in order to know which version of
-    // the update language to apply with. We currently only support the 'kUpdateNode' version, but
-    // we parse $v and check its value for compatibility.
+    // By this point we are expecting a "classic" update. This version of mongod only supports $v:
+    // 1 (modifier language) and $v: 2 (delta) (older versions support $v: 0). We've already
+    // checked whether this is a delta update so we check that the $v field isn't present, or has a
+    // value of 1.
+
     auto updateExpr = updateMod.getUpdateClassic();
     BSONElement updateSemanticsElement = updateExpr[LogBuilder::kUpdateSemanticsFieldName];
     if (updateSemanticsElement) {
@@ -197,7 +180,11 @@ void UpdateDriver::parse(
                 "The $v update field is only recognized internally",
                 _fromOplogApplication);
 
-        uassertStatusOK(updateSemanticsFromElement(updateSemanticsElement));
+        auto updateSemantics = updateSemanticsElement.numberLong();
+        uassert(40682,
+                str::stream() << "Unrecognized value for '$v' (UpdateSemantics) field: "
+                              << updateSemantics,
+                updateSemantics == static_cast<int>(UpdateSemantics::kUpdateNode));
     }
 
     auto root = std::make_unique<UpdateObjectNode>();

@@ -209,19 +209,23 @@ write_ops::Delete DeleteOp::parseLegacy(const Message& msgRaw) {
     return op;
 }
 
-write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry(const BSONObj& oField) {
+write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry(
+    const BSONObj& oField) {
     BSONElement vField = oField[LogBuilder::kUpdateSemanticsFieldName];
 
     // If this field appears it should be an integer.
     uassert(4772600,
-            str::stream() << "Expected $v field to be missing or an integer, but got type: " << vField.type(),
-            !vField.ok() || vField.type() == BSONType::NumberInt);
+            str::stream() << "Expected $v field to be missing or an integer, but got type: "
+                          << vField.type(),
+            !vField.ok() ||
+                (vField.type() == BSONType::NumberInt || vField.type() == BSONType::NumberLong));
 
-    if (vField.ok() && vField.Int() == static_cast<int>(UpdateSemantics::kDelta)) {
+    if (vField.ok() && vField.numberInt() == static_cast<int>(UpdateSemantics::kDelta)) {
         // Make sure there's a diff field.
         BSONElement diff = oField["diff"];
         uassert(4772601,
-                str::stream() << "Expected 'diff' field to be an object, instead got type: " << diff.type(),
+                str::stream() << "Expected 'diff' field to be an object, instead got type: "
+                              << diff.type(),
                 diff.type() == BSONType::Object);
 
         return UpdateModification(write_ops::DocumentDelta{diff.embeddedObject()});
@@ -231,12 +235,12 @@ write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry
         return UpdateModification(oField);
     }
 }
-    
+
 write_ops::UpdateModification::UpdateModification(DocumentDelta delta) {
     _type = Type::kDelta;
     _delta = std::move(delta);
 }
-    
+
 write_ops::UpdateModification::UpdateModification(BSONElement update) {
     const auto type = update.type();
     if (type == BSONType::Object) {
