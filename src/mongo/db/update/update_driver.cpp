@@ -87,16 +87,17 @@ bool parseUpdateExpression(
     const std::map<StringData, std::unique_ptr<ExpressionWithPlaceholder>>& arrayFilters) {
     bool positional = false;
     std::set<std::string> foundIdentifiers;
-    bool foundUpdateSemanticsField = false;
+    bool foundVersionField = false;
     for (auto&& mod : updateExpr) {
         // If there is a "$v" field among the modifiers, it should have already been used by the
         // caller to determine that this is the correct parsing function.
-        if (mod.fieldNameStringData() == LogBuilder::kUpdateSemanticsFieldName) {
+        if (mod.fieldNameStringData() == kUpdateOplogEntryVersionFieldName) {
             uassert(ErrorCodes::BadValue,
                     "Duplicate $v in oplog update document",
-                    !foundUpdateSemanticsField);
-            foundUpdateSemanticsField = true;
-            invariant(mod.numberLong() == static_cast<long long>(UpdateSemantics::kUpdateNode));
+                    !foundVersionField);
+            foundVersionField = true;
+            invariant(mod.numberLong() ==
+                      static_cast<long long>(UpdateOplogEntryVersion::kUpdateNodeV1));
             continue;
         }
 
@@ -174,17 +175,17 @@ void UpdateDriver::parse(
     // value of 1.
 
     auto updateExpr = updateMod.getUpdateClassic();
-    BSONElement updateSemanticsElement = updateExpr[LogBuilder::kUpdateSemanticsFieldName];
+    BSONElement updateSemanticsElement = updateExpr[kUpdateOplogEntryVersionFieldName];
     if (updateSemanticsElement) {
         uassert(ErrorCodes::FailedToParse,
                 "The $v update field is only recognized internally",
                 _fromOplogApplication);
 
-        auto updateSemantics = updateSemanticsElement.numberLong();
+        auto updateSemantics = updateSemanticsElement.numberInt();
         uassert(40682,
-                str::stream() << "Unrecognized value for '$v' (UpdateSemantics) field: "
+                str::stream() << "Unrecognized value for '$v' (Version) field: "
                               << updateSemantics,
-                updateSemantics == static_cast<int>(UpdateSemantics::kUpdateNode));
+                updateSemantics == static_cast<int>(UpdateOplogEntryVersion::kUpdateNodeV1));
     }
 
     auto root = std::make_unique<UpdateObjectNode>();
@@ -293,12 +294,12 @@ Status UpdateDriver::update(StringData matchedField,
         // update semantics that could be used by a featureCompatibilityVersion=3.4 node.
         //
         // TODO (SERVER-32240): Once binVersion <= 3.6 nodes are not supported in a replica set, we
-        // can safely elide this "$v" UpdateSemantics field from oplog entries, because there will
+        // can safely elide this "$v" version field from oplog entries, because there will
         // only one supported version, which all nodes will assume is in use.
         //
         // We also don't need to specify the semantics for a full document replacement (and there
         // would be no place to put a "$v" field in the update document).
-        invariant(logBuilder.setUpdateSemantics(UpdateSemantics::kUpdateNode));
+        invariant(logBuilder.setVersion(UpdateOplogEntryVersion::kUpdateNodeV1));
     }
 
     if (_logOp && logOpRec) {

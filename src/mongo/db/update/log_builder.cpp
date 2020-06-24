@@ -39,8 +39,6 @@ const char kSet[] = "$set";
 const char kUnset[] = "$unset";
 }  // namespace
 
-constexpr StringData LogBuilder::kUpdateSemanticsFieldName;
-
 inline Status LogBuilder::addToSection(Element newElt, Element* section, const char* sectionName) {
     // If we don't already have this section, try to create it now.
     if (!section->ok()) {
@@ -126,24 +124,24 @@ Status LogBuilder::addToUnsets(StringData path) {
     return addToSection(logElement, &_unsetAccumulator, kUnset);
 }
 
-Status LogBuilder::setUpdateSemantics(UpdateSemantics updateSemantics) {
+Status LogBuilder::setVersion(UpdateOplogEntryVersion updateSemantics) {
     if (hasObjectReplacement()) {
         return Status(ErrorCodes::IllegalOperation,
                       "LogBuilder: Invalid attempt to add a $v entry to a log with an existing "
                       "object replacement");
     }
 
-    if (_updateSemantics.ok()) {
+    if (_version.ok()) {
         return Status(ErrorCodes::IllegalOperation, "LogBuilder: Invalid attempt to set $v twice.");
     }
 
     mutablebson::Document& doc = _logRoot.getDocument();
-    _updateSemantics =
-        doc.makeElementInt(kUpdateSemanticsFieldName, static_cast<int>(updateSemantics));
+    _version =
+        doc.makeElementInt(kUpdateOplogEntryVersionFieldName, static_cast<int>(updateSemantics));
 
-    dassert(_logRoot[kUpdateSemanticsFieldName] == doc.end());
+    dassert(_logRoot[kUpdateOplogEntryVersionFieldName] == doc.end());
 
-    return _logRoot.pushFront(_updateSemantics);
+    return _logRoot.pushFront(_version);
 }
 
 Status LogBuilder::getReplacementObject(Element* outElt) {
@@ -161,7 +159,7 @@ Status LogBuilder::getReplacementObject(Element* outElt) {
                       "LogBuilder: Invalid attempt to acquire the replacement object "
                       "in a log with existing object replacement data");
 
-    if (_updateSemantics.ok()) {
+    if (_version.ok()) {
         return Status(ErrorCodes::IllegalOperation,
                       "LogBuilder: Invalid attempt to acquire the replacement object in a log with "
                       "an update semantics value");

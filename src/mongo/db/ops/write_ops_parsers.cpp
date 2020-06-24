@@ -34,7 +34,7 @@
 #include "mongo/db/dbmessage.h"
 #include "mongo/db/ops/write_ops.h"
 #include "mongo/db/pipeline/aggregation_request.h"
-#include "mongo/db/update/log_builder.h"
+#include "mongo/db/update/update_oplog_entry_version.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/str.h"
 
@@ -211,7 +211,7 @@ write_ops::Delete DeleteOp::parseLegacy(const Message& msgRaw) {
 
 write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry(
     const BSONObj& oField) {
-    BSONElement vField = oField[LogBuilder::kUpdateSemanticsFieldName];
+    BSONElement vField = oField[kUpdateOplogEntryVersionFieldName];
 
     // If this field appears it should be an integer.
     uassert(4772600,
@@ -220,7 +220,7 @@ write_ops::UpdateModification write_ops::UpdateModification::parseFromOplogEntry
             !vField.ok() ||
                 (vField.type() == BSONType::NumberInt || vField.type() == BSONType::NumberLong));
 
-    if (vField.ok() && vField.numberInt() == static_cast<int>(UpdateSemantics::kDelta)) {
+    if (vField.ok() && vField.numberInt() == static_cast<int>(UpdateOplogEntryVersion::kDeltaV2)) {
         // Make sure there's a diff field.
         BSONElement diff = oField["diff"];
         uassert(4772601,

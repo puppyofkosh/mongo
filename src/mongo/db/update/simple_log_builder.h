@@ -32,7 +32,7 @@
 #include "mongo/base/status.h"
 
 #include "mongo/db/update/document_diff_serialization.h"
-#include "mongo/db/update/log_builder.h"
+#include "mongo/db/update/update_oplog_entry_version.h"
 #include "mongo/stdx/variant.h"
 #include "mongo/util/visit_helper.h"
 
@@ -48,7 +48,7 @@ public:
         invariant(stdx::holds_alternative<NoValue>(_update));
         invariant(!_version);
         _update = Delta{diff};
-        _version = UpdateSemantics::kDelta;
+        _version = UpdateOplogEntryVersion::kDeltaV2;
     }
 
     // A call to this indicates that we will log a replacement style update.
@@ -75,7 +75,8 @@ private:
     using NoValue = stdx::monostate;
 
     // Indicates which type of oplog entry is recorded. No value indicates replacement.
-    boost::optional<UpdateSemantics> _version;
+    // TODO: REMOVE
+    boost::optional<UpdateOplogEntryVersion> _version;
     stdx::variant<NoValue, Delta, Replacement> _update;
 };
 }  // namespace mongo
