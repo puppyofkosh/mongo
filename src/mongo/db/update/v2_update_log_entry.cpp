@@ -27,10 +27,10 @@
  *    it in the license file.
  */
 
-#include "mongo/db/update/simple_log_builder.h"
+#include "mongo/db/update/v2_update_log_entry.h"
 
 namespace mongo {
-BSONObj SimpleLogBuilder::toBson() const {
+BSONObj V2UpdateLogEntry::toBson() const {
     auto visitor = visit_helper::Overloaded{[](NoValue) -> BSONObj {
                                                 // Attempted to call toBson() without setting
                                                 // an update!

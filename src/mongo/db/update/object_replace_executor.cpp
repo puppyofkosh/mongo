@@ -72,7 +72,10 @@ ObjectReplaceExecutor::ObjectReplaceExecutor(BSONObj replacement)
 }
 
 UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyReplacementUpdate(
-    ApplyParams applyParams, const BSONObj& replacementDoc, bool replacementDocContainsIdField) {
+    ApplyParams applyParams,
+    const BSONObj& replacementDoc,
+    bool replacementDocContainsIdField,
+    bool shouldBuildLogEntry ) {
     auto originalDoc = applyParams.element.getDocument().getObject();
 
     // Check for noop.
@@ -142,7 +145,7 @@ UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyReplacementUpdate(
         }
     }
 
-    if (applyParams.logBuilder) {
+    if (shouldBuildLogEntry && applyParams.logBuilder) {
         auto replacementObject = applyParams.logBuilder->getDocument().end();
         invariant(applyParams.logBuilder->getReplacementObject(&replacementObject));
         for (auto current = applyParams.element.leftChild(); current.ok();
@@ -157,5 +160,4 @@ UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyReplacementUpdate(
 UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyUpdate(ApplyParams applyParams) const {
     return applyReplacementUpdate(applyParams, _replacementDoc, _containsId);
 }
-
 }  // namespace mongo

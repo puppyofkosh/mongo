@@ -225,8 +225,31 @@ testUpdateReplicates({_id: id, padding: kGiantStr, a: [1, 2, 999, 3, 4]},
                      {_id: id, padding: kGiantStr, a: [1, 2, 3, 4]},
                      true);
 
-// TODO: More tests!
 
+    // Make sure we reject $v3 oplog entries. First run an update that will create a $v 2 delta
+    // oplog entry which we can use as a "template."
+    id = generateId();
+    testUpdateReplicates({_id: id, padding: kGiantStr, a: 1},
+                             [{$set: {a: 2}}],
+                             {_id: id, padding: kGiantStr, a: 2},
+                             true);
+
+    (function() {
+        let opEntry = oplog.find().sort({"ts": -1}).limit(1).toArray()[0];
+
+        // Make sure we can re-apply it.
+        assert.commandWorked(primary.adminCommand({applyOps: [opEntry]}));
+
+        // Change the 'version' entry to $v: 3.
+        assert.eq(opEntry.o.$v, 2);
+        opEntry.o.$v = 3;
+
+        // Make sure that trying to apply a $v 3 entry fails.
+        assert.commandFailedWithCode(primary.adminCommand({applyOps: [opEntry]}), 40682);
+    })();
+
+
+// TODO: More tests!
 // TODO: Remove this. (Useful for debugging though).
 if (false) {
     printjson(oplog.find().sort({"ts": -1}).toArray());

@@ -37,13 +37,16 @@
 #include "mongo/util/visit_helper.h"
 
 namespace mongo {
-// A simpler version of LogBuilder which can only be used for full replacements and
-// delta style oplog entries.
-    // TODO: Rename.
-class SimpleLogBuilder {
+/**
+ * A simpler version of LogBuilder which can only be used for full replacements and $v: 2 delta
+ * style oplog entries. Unlike with LogBuilder, there's no interface for gradually constructing an
+ * update using the 3.6 modifier style language.
+ */
+class V2UpdateLogEntry {
 public:
-    // A call to this indicates that we will log a delta style entry. With
-    // the diff provided.
+    /**
+     * A call to this indicates that we will log a delta style entry. With the diff provided.
+     */
     void setDelta(const BSONObj& diff) {
         invariant(stdx::holds_alternative<NoValue>(_update));
         invariant(!_version);
@@ -51,7 +54,9 @@ public:
         _version = UpdateOplogEntryVersion::kDeltaV2;
     }
 
-    // A call to this indicates that we will log a replacement style update.
+    /**
+     * A call to this indicates that we will log a replacement style update.
+     */
     void setReplacement(const BSONObj& replacementBson) {
         invariant(stdx::holds_alternative<NoValue>(_update));
         invariant(!_version);
@@ -59,9 +64,10 @@ public:
         // We do not set '_version' here, to indicate this is a replacement.
     }
 
-    // Serializes to bson.
+    /**
+     * Serializes to bson.
+     */
     BSONObj toBson() const;
-
 private:
     // These structs are so we can store a variant<Delta,Replacement> without trying to store
     // two identical types in a variant (which is possible, but leads to madness).

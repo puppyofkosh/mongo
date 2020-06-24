@@ -33,8 +33,8 @@
 #include "mongo/db/exec/document_value/value.h"
 #include "mongo/db/field_ref_set.h"
 #include "mongo/db/update/log_builder.h"
-#include "mongo/db/update/simple_log_builder.h"
 #include "mongo/db/update/update_node_visitor.h"
+#include "mongo/db/update/v2_update_log_entry.h"
 #include "mongo/db/update_index_data.h"
 
 namespace mongo {
@@ -83,7 +83,7 @@ public:
         LogBuilder* logBuilder = nullptr;
 
         // May be used instead of log builder. TODO: comment
-        SimpleLogBuilder* simpleLogBuilder = nullptr;
+        V2UpdateLogEntry* simpleLogBuilder = nullptr;
 
         // If provided, UpdateNode::apply will populate this with a path to each modified field.
         FieldRefSetWithStorage* modifiedPaths = nullptr;

@@ -45,12 +45,19 @@ namespace mongo {
 class ObjectReplaceExecutor : public UpdateExecutor {
 
 public:
-    // Applies a replacement style update to 'applyParams.element'. If
-    // 'replacementDocContainsIdField' is false then the _id field from the original document will
-    // be preserved.
+    /**
+     * Applies a replacement style update to 'applyParams.element'.
+     *
+     * If 'replacementDocContainsIdField' is false then the _id field from the original document
+     * will be preserved.
+     *
+     * The 'shouldBuildLogEntry' argument indicates whether this function should populate the log
+     * builder passed in by 'applyParams' (if any).
+     */
     static ApplyResult applyReplacementUpdate(ApplyParams applyParams,
                                               const BSONObj& replacementDoc,
-                                              bool replacementDocContainsIdField);
+                                              bool replacementDocContainsIdField,
+                                              bool shouldBuildLogEntry = true);
 
     /**
      * Initializes the node with the document to replace with. Any zero-valued timestamps (except

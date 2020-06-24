@@ -270,7 +270,7 @@ Status UpdateDriver::update(StringData matchedField,
     invariant(!modifiedPaths || modifiedPaths->empty());
 
     // TODO: Probably use a std::variant instead of having two variables.
-    SimpleLogBuilder simpleLogBuilder;
+    V2UpdateLogEntry simpleLogBuilder;
     if (_logOp && logOpRec) {
         if (_updateType == UpdateType::kPipeline) {
             applyParams.simpleLogBuilder = &simpleLogBuilder;

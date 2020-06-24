@@ -97,9 +97,8 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
     const auto transformedDocHasIdField = transformedDoc.hasField(kIdFieldName);
 
     std::cout << "ian: In applyUpdate() " << std::endl;
-    // TODO: feature flag.
     invariant(!applyParams.logBuilder);
-    if (applyParams.simpleLogBuilder) {
+    if (applyParams.simpleLogBuilder && internalQueryEnableV2OplogEntries.load()) {
         const auto diff = doc_diff::computeDiff(originalDoc, transformedDoc);
         if (diff) {
             std::cout << "Generating diff entry\n";
@@ -112,13 +111,9 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
         // Run the object replace executor, but run it without the logBuilder, indicating
         // that it should not also generate an oplog entry.
         invariant(applyParams.logBuilder == nullptr);
-
-        SimpleLogBuilder* tempLogBuilder = nullptr;
-        std::swap(applyParams.simpleLogBuilder, tempLogBuilder);
-        applyParams.simpleLogBuilder = nullptr;
+        const bool shouldBuildLogEntry = false;
         const auto ret = ObjectReplaceExecutor::applyReplacementUpdate(
-            applyParams, transformedDoc, transformedDocHasIdField);
-        std::swap(applyParams.simpleLogBuilder, tempLogBuilder);
+            applyParams, transformedDoc, transformedDocHasIdField, shouldBuildLogEntry);
         return ret;
     }
 

@@ -29,12 +29,6 @@
 
 #pragma once
 
-#include <map>
-#include <memory>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "mongo/db/update/update_executor.h"
 
 #include "mongo/db/update/document_diff_applier.h"
@@ -47,7 +41,6 @@ namespace mongo {
  * to the pre image document in order to recover the post image.
  */
 class DeltaExecutor : public UpdateExecutor {
-
 public:
     /**
      * Initializes the executor with the diff to apply.
