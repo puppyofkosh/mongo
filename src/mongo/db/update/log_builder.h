@@ -32,6 +32,7 @@
 #include "mongo/base/status.h"
 #include "mongo/bson/mutable/document.h"
 #include "mongo/db/update/update_oplog_entry_version.h"
+#include "mongo/db/update/log_builder_base.h"
 
 namespace mongo {
 
@@ -40,8 +41,13 @@ namespace mongo {
  * modifier-style update entry. It manages separate regions into which it accumulates $set and
  * $unset operations.
  */
-class LogBuilder {
+class LogBuilder : public LogBuilderBase{
 public:
+    struct PathInfo {
+        int createdFieldIdx;
+        // stuff about types and so on
+    };
+    
     /** Construct a new LogBuilder. Log entries will be recorded as new children under the
      *  'logRoot' Element, which must be of type mongo::Object and have no children.
      */
@@ -54,6 +60,10 @@ public:
         dassert(!logRoot.hasChildren());
     }
 
+    void logUpdatedField(StringData path, mutablebson::Element elt);
+    void logCreatedField(StringData path, int idxOfFirstNewComponent, mutablebson::Element elt);
+    void logDeletedField(StringData path);
+
     /** Return the Document to which the logging root belongs. */
     inline mutablebson::Document& getDocument() {
         return _logRoot.getDocument();
@@ -64,15 +74,17 @@ public:
      *  configured to contain an object replacement, the request to add to the $set section
      *  will return an Error.
      */
-    Status addToSets(mutablebson::Element elt);
+    Status addToSets(mutablebson::Element elt, boost::optional<int> createdFieldIdx);
 
     /**
      * Convenience method which calls addToSets after
      * creating a new Element to wrap the SafeNum value.
      *
      * If any problem occurs then the operation will stop and return that error Status.
+     *
+     * DO we really need this??
      */
-    Status addToSets(StringData name, const SafeNum& val);
+    Status addToSets(StringData name, const SafeNum& val, boost::optional<int> createdFieldIdx);
 
     /**
      * Convenience method which calls addToSets after
@@ -80,7 +92,9 @@ public:
      *
      * If any problem occurs then the operation will stop and return that error Status.
      */
-    Status addToSetsWithNewFieldName(StringData name, const mutablebson::Element val);
+    Status addToSetsWithNewFieldName(StringData name,
+                                     const mutablebson::Element val,
+                                     boost::optional<int> createdFieldIdx);
 
     /**
      * Convenience method which calls addToSets after
@@ -102,6 +116,9 @@ public:
      */
     Status setVersion(UpdateOplogEntryVersion);
 
+    const std::map<std::string, PathInfo>& createdPathInfo() const {
+        return _createdPaths;
+    }
 private:
     inline Status addToSection(mutablebson::Element newElt,
                                mutablebson::Element* section,
@@ -111,6 +128,8 @@ private:
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
     mutablebson::Element _version;
+
+    std::map<std::string, PathInfo> _createdPaths;
 };
 
 }  // namespace mongo

@@ -168,13 +168,17 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
     // If the child updates have not been logged, log the updated array elements.
     auto* const logBuilder = updateNodeApplyParams.logBuilder;
     if (!childrenShouldLogThemselves && logBuilder) {
+        // Earlier we should have checked that the path already exists.
+        invariant(updateNodeApplyParams.pathToCreate->empty());
+        const bool newPathCreated = false;
+        
         if (nModified > 1) {
 
             // Log the entire array.
             auto logElement = logBuilder->getDocument().makeElementWithNewFieldName(
                 updateNodeApplyParams.pathTaken->dottedField(), applyParams.element);
             invariant(logElement.ok());
-            uassertStatusOK(logBuilder->addToSets(logElement));
+            uassertStatusOK(logBuilder->addToSets(logElement, newPathCreated));
         } else if (nModified == 1) {
 
             // Log the modified array element.
@@ -184,7 +188,7 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
             auto logElement = logBuilder->getDocument().makeElementWithNewFieldName(
                 updateNodeApplyParams.pathTaken->dottedField(), *modifiedElement);
             invariant(logElement.ok());
-            uassertStatusOK(logBuilder->addToSets(logElement));
+            uassertStatusOK(logBuilder->addToSets(logElement, newPathCreated));
         }
     }
 

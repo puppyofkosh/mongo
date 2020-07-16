@@ -66,7 +66,8 @@ protected:
     void logUpdate(LogBuilder* logBuilder,
                    StringData pathTaken,
                    mutablebson::Element element,
-                   ModifyResult modifyResult) const final;
+                   ModifyResult modifyResult,
+                   boost::optional<int> createdFieldIdx) const final;
 
     bool allowCreation() const final {
         return true;

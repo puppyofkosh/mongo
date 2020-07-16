@@ -139,7 +139,8 @@ protected:
     virtual void logUpdate(LogBuilder* logBuilder,
                            StringData pathTaken,
                            mutablebson::Element element,
-                           ModifyResult modifyResult) const;
+                           ModifyResult modifyResult,
+                           boost::optional<int> createdFieldIdx) const;
 
     /**
      * ModifierNode::apply() calls this method to determine what to do when applying an update to a

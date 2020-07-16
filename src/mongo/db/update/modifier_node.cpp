@@ -204,7 +204,9 @@ UpdateExecutor::ApplyResult ModifierNode::applyToExistingElement(
         logUpdate(logBuilder,
                   updateNodeApplyParams.pathTaken->dottedField(),
                   applyParams.element,
-                  updateResult);
+                  updateResult,
+                  boost::none // No path was created.
+            );
     }
 
     return applyResult;
@@ -300,7 +302,8 @@ UpdateExecutor::ApplyResult ModifierNode::applyToNonexistentElement(
         }
 
         if (auto logBuilder = updateNodeApplyParams.logBuilder) {
-            logUpdate(logBuilder, fullPath.dottedField(), newElement, ModifyResult::kCreated);
+            logUpdate(logBuilder, fullPath.dottedField(), newElement, ModifyResult::kCreated,
+                      updateNodeApplyParams.pathTaken->numParts());
         }
 
         return applyResult;
@@ -350,11 +353,16 @@ void ModifierNode::validateUpdate(mutablebson::ConstElement updatedElement,
 void ModifierNode::logUpdate(LogBuilder* logBuilder,
                              StringData pathTaken,
                              mutablebson::Element element,
-                             ModifyResult modifyResult) const {
+                             ModifyResult modifyResult,
+                             boost::optional<int> createdFieldIdx) const {
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate ||
               modifyResult == ModifyResult::kCreated);
-    uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element));
+    std::cout << "Adding field name " << pathTaken << " to sets " << std::endl;
+    if (modifyResult == ModifyResult::kCreated) {
+        invariant(createdFieldIdx);
+    }
+    uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element, createdFieldIdx));
 }
 
 }  // namespace mongo

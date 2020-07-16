@@ -329,12 +329,17 @@ ModifierNode::ModifyResult PushNode::updateExistingElement(
 void PushNode::logUpdate(LogBuilder* logBuilder,
                          StringData pathTaken,
                          mutablebson::Element element,
-                         ModifyResult modifyResult) const {
+                         ModifyResult modifyResult,
+                         boost::optional<int> createdFieldIdx) const {
     invariant(logBuilder);
 
     if (modifyResult == ModifyResult::kNormalUpdate || modifyResult == ModifyResult::kCreated) {
+        if (modifyResult == ModifyResult::kCreated) {
+            invariant(createdFieldIdx);
+        }
+        
         // Simple case: log the entires contents of the updated array.
-        uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element));
+        uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element, createdFieldIdx));
     } else if (modifyResult == ModifyResult::kArrayAppendUpdate) {
         // This update only modified the array by appending entries to the end. Rather than writing
         // out the entire contents of the array, we create oplog entries for the newly appended

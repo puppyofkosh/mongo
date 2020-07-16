@@ -68,11 +68,16 @@ inline Status LogBuilder::addToSection(Element newElt, Element* section, const c
     return section->pushBack(newElt);
 }
 
-Status LogBuilder::addToSets(Element elt) {
-    return addToSection(elt, &_setAccumulator, kSet);
+Status LogBuilder::addToSets(Element elt, boost::optional<int> createdFieldIdx) {
+    auto res = addToSection(elt, &_setAccumulator, kSet);
+    if (res.isOK() && createdFieldIdx) {
+        _createdPaths.emplace(elt.getFieldName().toString(), PathInfo{*createdFieldIdx});
+    }
+    return res;
 }
 
-Status LogBuilder::addToSetsWithNewFieldName(StringData name, const mutablebson::Element val) {
+Status LogBuilder::addToSetsWithNewFieldName(StringData name, const mutablebson::Element val,
+                                             boost::optional<int> createdFieldIdx) {
     mutablebson::Element elemToSet = _logRoot.getDocument().makeElementWithNewFieldName(name, val);
     if (!elemToSet.ok())
         return Status(ErrorCodes::InternalError,
@@ -80,7 +85,7 @@ Status LogBuilder::addToSetsWithNewFieldName(StringData name, const mutablebson:
                           << "Could not create new '" << name << "' element from existing element '"
                           << val.getFieldName() << "' of type " << typeName(val.getType()));
 
-    return addToSets(elemToSet);
+    return addToSets(elemToSet, createdFieldIdx);
 }
 
 Status LogBuilder::addToSetsWithNewFieldName(StringData name, const BSONElement& val) {
@@ -91,17 +96,17 @@ Status LogBuilder::addToSetsWithNewFieldName(StringData name, const BSONElement&
                           << "Could not create new '" << name << "' element from existing element '"
                           << val.fieldName() << "' of type " << typeName(val.type()));
 
-    return addToSets(elemToSet);
+    // TODO: plumb
+    return addToSets(elemToSet, boost::none);
 }
 
-Status LogBuilder::addToSets(StringData name, const SafeNum& val) {
+Status LogBuilder::addToSets(StringData name, const SafeNum& val, boost::optional<int> createdFieldIdx) {
     mutablebson::Element elemToSet = _logRoot.getDocument().makeElementSafeNum(name, val);
     if (!elemToSet.ok())
         return Status(ErrorCodes::InternalError,
                       str::stream() << "Could not create new '" << name << "' SafeNum from "
                                     << val.debugString());
-
-    return addToSets(elemToSet);
+    return addToSets(elemToSet, createdFieldIdx);
 }
 
 Status LogBuilder::addToUnsets(StringData path) {
@@ -126,4 +131,16 @@ Status LogBuilder::setVersion(UpdateOplogEntryVersion oplogVersion) {
 
     return _logRoot.pushFront(_version);
 }
+
+    void LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
+        addToSetsWithNewFieldName(path, elt);
+    }
+    void LogBuilder::logCreatedField(StringData path,
+                                     int idxOfFirstNewComponent,
+                                     mutablebson::Element elt) {
+        addToSetsWithNewFieldName(path, elt);
+    }
+    void LogBuilder::logDeletedField(StringData path) {
+        addToUnsets(path);
+    }
 }  // namespace mongo

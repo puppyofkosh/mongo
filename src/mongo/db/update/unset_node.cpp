@@ -81,9 +81,11 @@ void UnsetNode::validateUpdate(mutablebson::ConstElement updatedElement,
 void UnsetNode::logUpdate(LogBuilder* logBuilder,
                           StringData pathTaken,
                           mutablebson::Element element,
-                          ModifyResult modifyResult) const {
+                          ModifyResult modifyResult,
+                          boost::optional<int> createdFieldIdx) const {
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate);
+    invariant(!createdFieldIdx);
     uassertStatusOK(logBuilder->addToUnsets(pathTaken));
 }
 
