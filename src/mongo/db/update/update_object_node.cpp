@@ -136,6 +136,11 @@ void applyChild(const UpdateNode& child,
         updateNodeApplyParams->pathToCreate->appendPart(field);
     }
 
+    if (childElement.getType() == BSONType::Array) {
+        updateNodeApplyParams->modifiedArrayPaths->insert(
+            updateNodeApplyParams->pathTaken->dottedField().toString());
+    }
+
     auto childApplyParams = *applyParams;
     childApplyParams.element = childElement;
     UpdateNode::UpdateNodeApplyParams childUpdateNodeApplyParams = *updateNodeApplyParams;

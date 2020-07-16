@@ -58,10 +58,11 @@ public:
                         std::uint32_t recursionLevel,
                         ModifyResult modifyResult) const final;
 
-    void logUpdate(LogBuilder* logBuilder,
-                   StringData pathTaken,
+    void logUpdate(LogBuilderBase* logBuilder,
+                   const FieldRef& pathTaken,
                    mutablebson::Element element,
-                   ModifyResult modifyResult) const final;
+                   ModifyResult modifyResult,
+                   boost::optional<int> createdFieldIdx) const final;
 
     bool allowNonViablePath() const final {
         return true;

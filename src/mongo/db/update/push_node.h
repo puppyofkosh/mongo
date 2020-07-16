@@ -63,10 +63,11 @@ protected:
     ModifyResult updateExistingElement(mutablebson::Element* element,
                                        std::shared_ptr<FieldRef> elementPath) const final;
     void setValueForNewElement(mutablebson::Element* element) const final;
-    void logUpdate(LogBuilder* logBuilder,
-                   StringData pathTaken,
+    void logUpdate(LogBuilderBase* logBuilder,
+                   const FieldRef& pathTaken,
                    mutablebson::Element element,
-                   ModifyResult modifyResult) const final;
+                   ModifyResult modifyResult,
+                   boost::optional<int> createdFieldIdx) const final;
 
     bool allowCreation() const final {
         return true;

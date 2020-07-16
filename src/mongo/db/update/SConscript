@@ -59,6 +59,7 @@ env.Library(
         'document_diff_serialization.cpp',
         'object_replace_executor.cpp',
         'pipeline_executor.cpp',
+        'v2_log_builder.cpp',
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/pipeline/pipeline',

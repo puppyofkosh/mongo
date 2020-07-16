@@ -28,6 +28,7 @@
  */
 
 #include "mongo/db/update/log_builder.h"
+#include "mongo/db/field_ref.h"
 #include "mongo/util/str.h"
 
 namespace mongo {
@@ -94,16 +95,6 @@ Status LogBuilder::addToSetsWithNewFieldName(StringData name, const BSONElement&
     return addToSets(elemToSet);
 }
 
-Status LogBuilder::addToSets(StringData name, const SafeNum& val) {
-    mutablebson::Element elemToSet = _logRoot.getDocument().makeElementSafeNum(name, val);
-    if (!elemToSet.ok())
-        return Status(ErrorCodes::InternalError,
-                      str::stream() << "Could not create new '" << name << "' SafeNum from "
-                                    << val.debugString());
-
-    return addToSets(elemToSet);
-}
-
 Status LogBuilder::addToUnsets(StringData path) {
     mutablebson::Element logElement = _logRoot.getDocument().makeElementBool(path, true);
     if (!logElement.ok())
@@ -125,5 +116,22 @@ Status LogBuilder::setVersion(UpdateOplogEntryVersion oplogVersion) {
     dassert(_logRoot[kUpdateOplogEntryVersionFieldName] == doc.end());
 
     return _logRoot.pushFront(_version);
+}
+
+Status LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element elt) {
+    return addToSetsWithNewFieldName(path.dottedField(), elt);
+}
+
+Status LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
+    return addToSetsWithNewFieldName(path.dottedField(), elt);
+}
+
+Status LogBuilder::logCreatedField(const FieldRef& path,
+                                   int idxOfFirstNewComponent,
+                                   mutablebson::Element elt) {
+    return addToSetsWithNewFieldName(path.dottedField(), elt);
+}
+Status LogBuilder::logDeletedField(const FieldRef& path) {
+    return addToUnsets(path.dottedField());
 }
 }  // namespace mongo

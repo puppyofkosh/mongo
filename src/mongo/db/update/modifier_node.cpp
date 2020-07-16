@@ -202,9 +202,11 @@ UpdateExecutor::ApplyResult ModifierNode::applyToExistingElement(
 
     if (auto logBuilder = updateNodeApplyParams.logBuilder) {
         logUpdate(logBuilder,
-                  updateNodeApplyParams.pathTaken->dottedField(),
+                  *updateNodeApplyParams.pathTaken,
                   applyParams.element,
-                  updateResult);
+                  updateResult,
+                  boost::none  // No path was created.
+        );
     }
 
     return applyResult;
@@ -300,7 +302,11 @@ UpdateExecutor::ApplyResult ModifierNode::applyToNonexistentElement(
         }
 
         if (auto logBuilder = updateNodeApplyParams.logBuilder) {
-            logUpdate(logBuilder, fullPath.dottedField(), newElement, ModifyResult::kCreated);
+            logUpdate(logBuilder,
+                      fullPath,
+                      newElement,
+                      ModifyResult::kCreated,
+                      updateNodeApplyParams.pathTaken->numParts());
         }
 
         return applyResult;
@@ -347,14 +353,20 @@ void ModifierNode::validateUpdate(mutablebson::ConstElement updatedElement,
     storage_validation::storageValid(updatedElement, doRecursiveCheck, recursionLevel);
 }
 
-void ModifierNode::logUpdate(LogBuilder* logBuilder,
-                             StringData pathTaken,
+void ModifierNode::logUpdate(LogBuilderBase* logBuilder,
+                             const FieldRef& pathTaken,
                              mutablebson::Element element,
-                             ModifyResult modifyResult) const {
+                             ModifyResult modifyResult,
+                             boost::optional<int> createdFieldIdx) const {
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate ||
               modifyResult == ModifyResult::kCreated);
-    uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element));
+    if (modifyResult == ModifyResult::kCreated) {
+        invariant(createdFieldIdx);
+        uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
+    } else {
+        uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
+    }
 }
 
 }  // namespace mongo

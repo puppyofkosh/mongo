@@ -31,6 +31,7 @@
 
 #include "mongo/base/status.h"
 #include "mongo/bson/mutable/document.h"
+#include "mongo/db/update/log_builder_base.h"
 #include "mongo/db/update/update_oplog_entry_version.h"
 
 namespace mongo {
@@ -40,7 +41,7 @@ namespace mongo {
  * modifier-style update entry. It manages separate regions into which it accumulates $set and
  * $unset operations.
  */
-class LogBuilder {
+class LogBuilder : public LogBuilderBase {
 public:
     /** Construct a new LogBuilder. Log entries will be recorded as new children under the
      *  'logRoot' Element, which must be of type mongo::Object and have no children.
@@ -54,25 +55,42 @@ public:
         dassert(!logRoot.hasChildren());
     }
 
+    /**
+     * Overloads from LogBuilderBase. Each of these methods logs a modification to the document
+     * in _logRoot.
+     */
+    Status logUpdatedField(const FieldRef& path, mutablebson::Element elt) override;
+    Status logUpdatedField(const FieldRef& path, BSONElement) override;
+    Status logCreatedField(const FieldRef& path,
+                           int idxOfFirstNewComponent,
+                           mutablebson::Element elt) override;
+    Status logDeletedField(const FieldRef& path) override;
+
     /** Return the Document to which the logging root belongs. */
     inline mutablebson::Document& getDocument() {
         return _logRoot.getDocument();
     }
 
+    /**
+     * Produces a BSON object representing this update using the modifier syntax which can be
+     * stored in the oplog.
+     */
+    BSONObj serialize() const override {
+        return _logRoot.getDocument().getObject();
+    }
+
+    /**
+     * Add a "$v" field to the log. Fails if there is already a "$v" field.
+     */
+    Status setVersion(UpdateOplogEntryVersion);
+
+private:
     /** Add the given Element as a new entry in the '$set' section of the log. If a $set
      *  section does not yet exist, it will be created. If this LogBuilder is currently
      *  configured to contain an object replacement, the request to add to the $set section
      *  will return an Error.
      */
     Status addToSets(mutablebson::Element elt);
-
-    /**
-     * Convenience method which calls addToSets after
-     * creating a new Element to wrap the SafeNum value.
-     *
-     * If any problem occurs then the operation will stop and return that error Status.
-     */
-    Status addToSets(StringData name, const SafeNum& val);
 
     /**
      * Convenience method which calls addToSets after
@@ -97,12 +115,6 @@ public:
      */
     Status addToUnsets(StringData path);
 
-    /**
-     * Add a "$v" field to the log. Fails if there is already a "$v" field.
-     */
-    Status setVersion(UpdateOplogEntryVersion);
-
-private:
     inline Status addToSection(mutablebson::Element newElt,
                                mutablebson::Element* section,
                                const char* sectionName);

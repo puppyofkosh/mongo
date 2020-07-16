@@ -33,6 +33,7 @@
 
 #include "mongo/db/update/document_diff_applier.h"
 #include "mongo/db/update/document_diff_serialization.h"
+#include "mongo/db/update/update_oplog_entry_serialization.h"
 
 namespace mongo {
 
@@ -49,11 +50,17 @@ public:
 
     ApplyResult applyUpdate(ApplyParams applyParams) const final {
         const auto originalDoc = applyParams.element.getDocument().getObject();
+
         auto postImage = doc_diff::applyDiff(originalDoc, _diff);
         auto postImageHasId = postImage.hasField("_id");
 
-        return ObjectReplaceExecutor::applyReplacementUpdate(
-            applyParams, postImage, postImageHasId);
+        auto ret =
+            ObjectReplaceExecutor::applyReplacementUpdate(applyParams, postImage, postImageHasId);
+
+        if (!ret.noop) {
+            ret.oplogEntry = update_oplog_entry::makeDeltaOplogEntry(_diff);
+        }
+        return ret;
     }
 
     Value serialize() const final {

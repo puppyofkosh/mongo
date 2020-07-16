@@ -241,7 +241,11 @@ UpdateExecutor::ApplyResult RenameNode::apply(ApplyParams applyParams,
     unsetParams.element = fromElement;
 
     UpdateNodeApplyParams unsetUpdateNodeApplyParams{
-        std::make_shared<FieldRef>(), fromFieldRef, updateNodeApplyParams.logBuilder};
+        std::make_shared<FieldRef>(),
+        fromFieldRef,
+        updateNodeApplyParams.modifiedArrayPaths,
+        updateNodeApplyParams.logBuilder,
+    };
 
     UnsetNode unsetElement;
     auto unsetElementApplyResult = unsetElement.apply(unsetParams, unsetUpdateNodeApplyParams);
