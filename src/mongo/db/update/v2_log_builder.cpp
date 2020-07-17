@@ -30,6 +30,7 @@
 #include "mongo/db/update/v2_log_builder.h"
 
 #include "mongo/db/field_ref.h"
+#include "mongo/util/str.h"
 
 namespace mongo::v2_log_builder {
     Status V2LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
@@ -70,13 +71,56 @@ namespace mongo::v2_log_builder {
         return Status::OK();
     }
 
-    Node* V2LogBuilder::findOrCreateNode(const FieldRef& path, size_t pathIdx, Node* root) {
+    Node* V2LogBuilder::createInternalNode(DocumentNode* parent,
+                                           StringData pathToParent,
+                                           StringData newNode) {
+        return nullptr;
+    }
+    Node* V2LogBuilder::createInternalNode(ArrayNode* parent, StringData pathToParent, size_t idx) {
+        return nullptr;
+    }
+    
+    bool V2LogBuilder::addNodeAtPath(const FieldRef& path,
+                                     size_t pathIdx,
+                                     Node* root,
+                                     std::unique_ptr<Node> nodeToAdd) {
         if (root->type() == NodeType::kDocument) {
+            DocumentNode* docNode = static_cast<DocumentNode*>(root);
+            const auto part = path.getPart(pathIdx);
+            if (pathIdx == static_cast<size_t>(path.numParts() - 1)) {
+                docNode->children.emplace(part, std::move(nodeToAdd));
+                return true;
+            }
+
+            if (auto it = docNode->children.find(part.toString()); it != docNode->children.end()) {
+                return addNodeAtPath(path, pathIdx + 1, it->second.get(), std::move(nodeToAdd));
+            } else {
+                auto newNode = createInternalNode(docNode, path.dottedSubstring(0, pathIdx), part);
+                return addNodeAtPath(path, pathIdx + 1, newNode, std::move(nodeToAdd));
+            }
+            MONGO_UNREACHABLE;
         } else if (root->type() == NodeType::kArray) {
-        } else {
-            return nullptr;
+            ArrayNode* arrNode = static_cast<ArrayNode*>(root);
+            const auto part = path.getPart(pathIdx);
+            invariant(FieldRef::isNumericPathComponentStrict(part));
+            auto optInd = str::parseUnsignedBase10Integer(part);
+            invariant(optInd);
+
+            if (pathIdx == static_cast<size_t>(path.numParts() - 1)) {
+                arrNode->children.emplace(*optInd, std::move(nodeToAdd));
+                return true;
+            }
+
+            if (auto it = arrNode->children.find(*optInd); it != arrNode->children.end()) {
+                return addNodeAtPath(path, pathIdx + 1, it->second.get(),
+                                     std::move(nodeToAdd));
+            } else {
+                auto newNode = createInternalNode(arrNode, path.dottedSubstring(0, pathIdx), *optInd);
+                return addNodeAtPath(path, pathIdx + 1, newNode,
+                                     std::move(nodeToAdd));
+            }
         }
 
-        MONGO_UNREACHABLE;
+        return false;
     }
 }

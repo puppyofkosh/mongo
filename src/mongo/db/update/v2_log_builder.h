@@ -97,8 +97,13 @@ public:
     }
 
 private:
-    Node* findOrCreateNode(const FieldRef& path, size_t pathIdx,
-                           Node* root);
+    Node* createInternalNode(DocumentNode* parent, StringData pathToParent, StringData childName);
+    Node* createInternalNode(ArrayNode* parent, StringData pathToParent, size_t idx);
+    
+    bool addNodeAtPath(const FieldRef& path,
+                       size_t pathIdx,
+                       Node* root,
+                       std::unique_ptr<Node> nodeToAdd);
 
     StringSet* _arrayPaths;
     DocumentNode _root;
