@@ -44,6 +44,7 @@
 #include "mongo/db/update/update_node_visitor.h"
 #include "mongo/db/update_index_data.h"
 #include "mongo/util/assert_util.h"
+#include "mongo/util/string_map.h"
 
 namespace mongo {
 
@@ -83,6 +84,9 @@ public:
         // For example, if the update is {$set: {'a.b.c': 5}}, and the document is {a: {}}, then at
         // the leaf node, 'pathTaken'="a".
         std::shared_ptr<FieldRef> pathTaken = std::make_shared<FieldRef>();
+
+        // Keeps track of which paths are arrays that were modified.
+        std::shared_ptr<StringSet> modifiedArrayPaths = std::make_shared<StringSet>();
 
         // Builder object used for constructing an oplog entry. A value of nullptr indicates that
         // no oplog entry needs to be constructed.

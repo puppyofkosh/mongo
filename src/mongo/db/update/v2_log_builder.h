@@ -33,15 +33,58 @@
 #include "mongo/bson/mutable/document.h"
 #include "mongo/base/status.h"
 #include "mongo/db/update/log_builder_base.h"
-
+#include "mongo/util/string_map.h"
 
 namespace mongo {
-// 2: change StringData to omni path
+class FieldRef;
+namespace v2_log_builder {
+    enum class NodeType {
+        kDocument,
+        kArray,
+        kDelete,
+        kUpdate,
+        kInsert
+    };
+    
+    struct Node {
+        virtual NodeType type() const = 0;
+    };
+
+    struct DeleteNode : public Node {
+        NodeType type() const override {
+            return NodeType::kDelete;
+        }
+    };
+
+    struct InsertNode : public Node {
+        NodeType type() const override {
+            return NodeType::kInsert;
+        }
+    };
+        
+    struct DocumentNode : public Node {
+        NodeType type() const override {
+            return NodeType::kDocument;
+        }
+        
+        std::map<std::string, std::unique_ptr<Node>> children;
+    };
+    struct ArrayNode : public Node {
+        NodeType type() const override {
+            return NodeType::kArray;
+        }
+        std::map<size_t, std::unique_ptr<Node>> children;
+    };
+
 /**
  * TODO
  */
 class V2LogBuilder : public LogBuilderBase {
 public:
+    V2LogBuilder(StringSet* modifiedArrayPaths)
+        :_arrayPaths(modifiedArrayPaths)
+    {}
+    
     Status logUpdatedField(StringData path, mutablebson::Element elt) override;
     Status logUpdatedField(StringData path, BSONElement) override;
     Status logCreatedField(StringData path,
@@ -52,5 +95,13 @@ public:
     BSONObj serialize() const override {
         return BSONObj();
     }
+
+private:
+    Node* findOrCreateNode(const FieldRef& path, size_t pathIdx,
+                           Node* root);
+
+    StringSet* _arrayPaths;
+    DocumentNode _root;
 };
+}
 }

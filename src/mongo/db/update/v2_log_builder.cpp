@@ -29,14 +29,23 @@
 
 #include "mongo/db/update/v2_log_builder.h"
 
-namespace mongo {
+#include "mongo/db/field_ref.h"
+
+namespace mongo::v2_log_builder {
     Status V2LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
         std::cout << "log updated field " << elt.toString() << " at " << path << std::endl;
+        for (auto && s : *_arrayPaths) {
+            std::cout << "array path " << s << std::endl;
+        }
+        
         return Status::OK();
     }
 
     Status V2LogBuilder::logUpdatedField(StringData path, BSONElement elt) {
         std::cout << "log updated field " << elt << " at " << path << std::endl;
+        for (auto && s : *_arrayPaths) {
+            std::cout << "array path " << s << std::endl;
+        }        
         return Status::OK();
     }
 
@@ -45,11 +54,29 @@ namespace mongo {
                                          mutablebson::Element elt) {
         std::cout << "log created field " << elt.toString() << " at " << path <<
             " idx " << idxOfFirstNewComponent << std::endl;
+        for (auto && s : *_arrayPaths) {
+            std::cout << "array path " << s << std::endl;
+        }
+
         return Status::OK();
     }
 
     Status V2LogBuilder::logDeletedField(StringData path) {
         std::cout << "log deleted field " << path << std::endl;
+        for (auto && s : *_arrayPaths) {
+            std::cout << "array path " << s << std::endl;
+        }
+
         return Status::OK();
+    }
+
+    Node* V2LogBuilder::findOrCreateNode(const FieldRef& path, size_t pathIdx, Node* root) {
+        if (root->type() == NodeType::kDocument) {
+        } else if (root->type() == NodeType::kArray) {
+        } else {
+            return nullptr;
+        }
+
+        MONGO_UNREACHABLE;
     }
 }

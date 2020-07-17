@@ -63,6 +63,8 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
             str::stream() << "Cannot apply array updates to non-array element "
                           << applyParams.element.toString(),
             applyParams.element.getType() == BSONType::Array);
+    updateNodeApplyParams.modifiedArrayPaths->insert(
+        (*updateNodeApplyParams.pathTaken + *updateNodeApplyParams.pathToCreate).dottedField().toString());
 
     // Construct a map from the array index to the set of updates that should be applied to the
     // array element at that index. We do not apply the updates yet because we need to know how many

@@ -29,6 +29,7 @@
 
 #pragma once
 #include "mongo/db/pipeline/field_path.h"
+#include "mongo/db/field_ref.h"
 #include "mongo/stdx/variant.h"
 #include "mongo/util/visit_helper.h"
 
@@ -108,6 +109,10 @@ public:
     }
 
     std::string serialize() const;
+
+    FieldRef toAmbiguousFieldRef() {
+        return FieldRef(serialize());
+    }
 
 private:
     FieldAndArrayPathView(const Component* components, size_t size)
@@ -193,6 +198,13 @@ inline std::string FieldAndArrayPathView::serialize() const {
 class FieldAndArrayPath {
 public:
     using Component = FieldAndArrayPathView::Component;
+    static std::string serializeComponent(const Component& comp) {
+        return stdx::visit(
+            visit_helper::Overloaded{
+                [](size_t index) { return std::to_string(index); },
+                    [](const std::string& fieldName) { return fieldName; }},
+            comp);        
+    }
 
     /**
      * Create a FieldAndArrayPath from a FieldPath. All numeric field names in the FieldPath are
@@ -204,6 +216,15 @@ public:
         components.reserve(fp.getPathLength());
         for (size_t i = 0; i < fp.getPathLength(); ++i) {
             components.push_back(Component{fp.getFieldName(i).toString()});
+        }
+        return FieldAndArrayPath(components);
+    }
+
+    static FieldAndArrayPath fromAmbiguousFieldRef(const FieldRef& fr) {
+        std::vector<Component> components;
+        components.reserve(fr.numParts());
+        for (size_t i = 0; i < fr.numParts(); ++i) {
+            components.push_back(Component{fr.getPart(i).toString()});
         }
         return FieldAndArrayPath(components);
     }
@@ -280,6 +301,10 @@ public:
     void removeLast() {
         invariant(!_components.empty());
         _components.pop_back();
+    }
+
+    void clear() {
+        _components.clear();
     }
 
 private:

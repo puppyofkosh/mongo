@@ -121,6 +121,11 @@ void applyChild(const UpdateNode& child,
         childElement = getChild(applyParams->element, field);
     }
 
+    if (applyParams->element.getType() == BSONType::Array) {
+        updateNodeApplyParams->modifiedArrayPaths->insert(
+            updateNodeApplyParams->pathTaken->dottedField().toString());
+    }
+    
     if (childElement.ok()) {
         // The path we've traversed so far already exists in our document, and 'childElement'
         // represents the Element indicated by the 'field' name or index, which we indicate by

@@ -45,7 +45,7 @@ public:
     ApplyResult applyUpdate(ApplyParams applyParams) const final {
         mutablebson::Document logDocument;
         boost::optional<LogBuilder> optLogBuilder;
-        boost::optional<V2LogBuilder> optV2LogBuilder;
+        boost::optional<v2_log_builder::V2LogBuilder> optV2LogBuilder;
 
         UpdateNode::UpdateNodeApplyParams updateNodeApplyParams;
 
@@ -53,7 +53,7 @@ public:
             optLogBuilder.emplace(logDocument.root());
             updateNodeApplyParams.logBuilder = optLogBuilder.get_ptr();
         } else if (applyParams.logMode == ApplyParams::LogMode::kGenerateOplogEntry) {
-            optV2LogBuilder.emplace();
+            optV2LogBuilder.emplace(updateNodeApplyParams.modifiedArrayPaths.get());
             updateNodeApplyParams.logBuilder = optV2LogBuilder.get_ptr();
         }
 
