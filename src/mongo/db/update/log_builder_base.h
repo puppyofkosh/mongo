@@ -1,5 +1,3 @@
-#pragma once
-
 /**
  *    Copyright (C) 2018-present MongoDB, Inc.
  *
@@ -30,15 +28,19 @@
  */
 
 #include "mongo/bson/mutable/document.h"
-#include "mongo/util/string_data.h"
+#include "mongo/base/string_data.h"
+#include "mongo/base/status.h"
 
 namespace mongo {
 // 1: Plumb LogBuilderBase through update system
 // 2: change StringData to omni path
 class LogBuilderBase {
 public:
-    virtual void logUpdatedField(StringData path, mutablebson::Element elt) = 0;
-    virtual void logCreatedField(StringData path, int idxOfFirstNewComponent) = 0;
-    virtual void logDeletedField(StringData path) = 0;
+    virtual Status logUpdatedField(StringData path, mutablebson::Element elt) = 0;
+    virtual Status logUpdatedField(StringData path, BSONElement) = 0;
+    virtual Status logCreatedField(StringData path,
+                                   int idxOfFirstNewComponent,
+                                   mutablebson::Element elt) = 0;
+    virtual Status logDeletedField(StringData path) = 0;
 };
 }

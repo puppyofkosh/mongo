@@ -326,7 +326,7 @@ ModifierNode::ModifyResult PushNode::updateExistingElement(
     return performPush(element, elementPath.get());
 }
 
-void PushNode::logUpdate(LogBuilder* logBuilder,
+void PushNode::logUpdate(LogBuilderBase* logBuilder,
                          StringData pathTaken,
                          mutablebson::Element element,
                          ModifyResult modifyResult,
@@ -336,10 +336,12 @@ void PushNode::logUpdate(LogBuilder* logBuilder,
     if (modifyResult == ModifyResult::kNormalUpdate || modifyResult == ModifyResult::kCreated) {
         if (modifyResult == ModifyResult::kCreated) {
             invariant(createdFieldIdx);
+            uassertStatusOK(logBuilder->logCreatedField(pathTaken,
+                                                        *createdFieldIdx,
+                                                        element));
+        } else {
+            uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
         }
-        
-        // Simple case: log the entires contents of the updated array.
-        uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element, createdFieldIdx));
     } else if (modifyResult == ModifyResult::kArrayAppendUpdate) {
         // This update only modified the array by appending entries to the end. Rather than writing
         // out the entire contents of the array, we create oplog entries for the newly appended
@@ -351,7 +353,7 @@ void PushNode::logUpdate(LogBuilder* logBuilder,
         auto position = arraySize - numAppended;
         for (const auto& valueToLog : _valuesToPush) {
             std::string pathToArrayElement(str::stream() << pathTaken << "." << position);
-            uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathToArrayElement, valueToLog));
+            uassertStatusOK(logBuilder->logUpdatedField(pathToArrayElement, valueToLog));
 
             ++position;
         }

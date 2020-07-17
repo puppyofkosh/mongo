@@ -85,7 +85,7 @@ public:
 
         // Builder object used for constructing an oplog entry. A value of nullptr indicates that
         // no oplog entry needs to be constructed.
-        LogBuilder* logBuilder = nullptr;
+        LogBuilderBase* logBuilder = nullptr;
     };
 
     explicit UpdateNode(Type type, Context context = Context::kAll)

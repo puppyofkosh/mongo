@@ -35,6 +35,8 @@
 #include "mongo/unittest/unittest.h"
 #include "mongo/util/safe_num.h"
 
+// TODO: Rewrite these tests
+#if 0 
 namespace {
 
 namespace mmb = mongo::mutablebson;
@@ -147,3 +149,4 @@ TEST(LogBuilder, VerifyUnsetsAreGrouped) {
                   doc);
 }
 }  // namespace
+#endif

@@ -63,7 +63,7 @@ protected:
     ModifyResult updateExistingElement(mutablebson::Element* element,
                                        std::shared_ptr<FieldRef> elementPath) const final;
     void setValueForNewElement(mutablebson::Element* element) const final;
-    void logUpdate(LogBuilder* logBuilder,
+    void logUpdate(LogBuilderBase* logBuilder,
                    StringData pathTaken,
                    mutablebson::Element element,
                    ModifyResult modifyResult,

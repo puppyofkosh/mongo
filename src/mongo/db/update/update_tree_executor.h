@@ -70,13 +70,6 @@ public:
 
             invariant(ret.oplogEntry.isEmpty());
             ret.oplogEntry = logDocument.getObject();
-
-            if (!ret.noop) {
-                std::cout << "oplog entry is " << ret.oplogEntry << std::endl;
-                for (auto && [path, info]: optLogBuilder->createdPathInfo()) {
-                    std::cout << "path " << path << ": ix: " << info.createdFieldIdx << std::endl;
-                }
-            }
         }
 
         return ret;

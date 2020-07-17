@@ -78,7 +78,7 @@ void UnsetNode::validateUpdate(mutablebson::ConstElement updatedElement,
     }
 }
 
-void UnsetNode::logUpdate(LogBuilder* logBuilder,
+void UnsetNode::logUpdate(LogBuilderBase* logBuilder,
                           StringData pathTaken,
                           mutablebson::Element element,
                           ModifyResult modifyResult,
@@ -86,7 +86,7 @@ void UnsetNode::logUpdate(LogBuilder* logBuilder,
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate);
     invariant(!createdFieldIdx);
-    uassertStatusOK(logBuilder->addToUnsets(pathTaken));
+    uassertStatusOK(logBuilder->logDeletedField(pathTaken));
 }
 
 }  // namespace mongo

@@ -170,25 +170,24 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
     if (!childrenShouldLogThemselves && logBuilder) {
         // Earlier we should have checked that the path already exists.
         invariant(updateNodeApplyParams.pathToCreate->empty());
-        const bool newPathCreated = false;
         
         if (nModified > 1) {
-
             // Log the entire array.
-            auto logElement = logBuilder->getDocument().makeElementWithNewFieldName(
-                updateNodeApplyParams.pathTaken->dottedField(), applyParams.element);
-            invariant(logElement.ok());
-            uassertStatusOK(logBuilder->addToSets(logElement, newPathCreated));
+            uassertStatusOK(logBuilder->logUpdatedField(
+                                updateNodeApplyParams.pathTaken->dottedField(),
+                                applyParams.element));
         } else if (nModified == 1) {
-
             // Log the modified array element.
+            //
+            // TODO: This may be wrong. We might have to check the type of modifiedElement
+            //
+            invariant(modifiedElement->getFieldName().find('.') == std::string::npos);
+            
             invariant(modifiedElement);
             FieldRef::FieldRefTempAppend tempAppend(*(updateNodeApplyParams.pathTaken),
                                                     modifiedElement->getFieldName());
-            auto logElement = logBuilder->getDocument().makeElementWithNewFieldName(
-                updateNodeApplyParams.pathTaken->dottedField(), *modifiedElement);
-            invariant(logElement.ok());
-            uassertStatusOK(logBuilder->addToSets(logElement, newPathCreated));
+            uassertStatusOK(logBuilder->logUpdatedField(updateNodeApplyParams.pathTaken->dottedField(),
+                                                        *modifiedElement));
         }
     }
 

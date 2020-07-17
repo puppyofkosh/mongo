@@ -58,7 +58,7 @@ public:
                         std::uint32_t recursionLevel,
                         ModifyResult modifyResult) const final;
 
-    void logUpdate(LogBuilder* logBuilder,
+    void logUpdate(LogBuilderBase* logBuilder,
                    StringData pathTaken,
                    mutablebson::Element element,
                    ModifyResult modifyResult,

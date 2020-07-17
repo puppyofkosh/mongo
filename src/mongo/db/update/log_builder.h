@@ -60,21 +60,28 @@ public:
         dassert(!logRoot.hasChildren());
     }
 
-    void logUpdatedField(StringData path, mutablebson::Element elt);
-    void logCreatedField(StringData path, int idxOfFirstNewComponent, mutablebson::Element elt);
-    void logDeletedField(StringData path);
+    Status logUpdatedField(StringData path, mutablebson::Element elt) override;
+    Status logUpdatedField(StringData path, BSONElement) override;
+    Status logCreatedField(StringData path, int idxOfFirstNewComponent, mutablebson::Element elt) override;
+    Status logDeletedField(StringData path) override;
 
     /** Return the Document to which the logging root belongs. */
     inline mutablebson::Document& getDocument() {
         return _logRoot.getDocument();
     }
 
+    /**
+     * Add a "$v" field to the log. Fails if there is already a "$v" field.
+     * TODO: Remove?
+     */
+    Status setVersion(UpdateOplogEntryVersion);
+private:
     /** Add the given Element as a new entry in the '$set' section of the log. If a $set
      *  section does not yet exist, it will be created. If this LogBuilder is currently
      *  configured to contain an object replacement, the request to add to the $set section
      *  will return an Error.
      */
-    Status addToSets(mutablebson::Element elt, boost::optional<int> createdFieldIdx);
+    Status addToSets(mutablebson::Element elt);
 
     /**
      * Convenience method which calls addToSets after
@@ -84,7 +91,7 @@ public:
      *
      * DO we really need this??
      */
-    Status addToSets(StringData name, const SafeNum& val, boost::optional<int> createdFieldIdx);
+    Status addToSets(StringData name, const SafeNum& val);
 
     /**
      * Convenience method which calls addToSets after
@@ -93,8 +100,7 @@ public:
      * If any problem occurs then the operation will stop and return that error Status.
      */
     Status addToSetsWithNewFieldName(StringData name,
-                                     const mutablebson::Element val,
-                                     boost::optional<int> createdFieldIdx);
+                                     const mutablebson::Element val);
 
     /**
      * Convenience method which calls addToSets after
@@ -111,15 +117,6 @@ public:
      */
     Status addToUnsets(StringData path);
 
-    /**
-     * Add a "$v" field to the log. Fails if there is already a "$v" field.
-     */
-    Status setVersion(UpdateOplogEntryVersion);
-
-    const std::map<std::string, PathInfo>& createdPathInfo() const {
-        return _createdPaths;
-    }
-private:
     inline Status addToSection(mutablebson::Element newElt,
                                mutablebson::Element* section,
                                const char* sectionName);
@@ -128,8 +125,6 @@ private:
     mutablebson::Element _setAccumulator;
     mutablebson::Element _unsetAccumulator;
     mutablebson::Element _version;
-
-    std::map<std::string, PathInfo> _createdPaths;
 };
 
 }  // namespace mongo

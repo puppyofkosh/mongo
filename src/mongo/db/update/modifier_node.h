@@ -136,7 +136,7 @@ protected:
      * - 'modifyResult' is either the value returned by updateExistingElement() or the value
      *    ModifyResult::kCreated.
      */
-    virtual void logUpdate(LogBuilder* logBuilder,
+    virtual void logUpdate(LogBuilderBase* logBuilder,
                            StringData pathTaken,
                            mutablebson::Element element,
                            ModifyResult modifyResult,

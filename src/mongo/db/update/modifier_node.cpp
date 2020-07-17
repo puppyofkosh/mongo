@@ -350,7 +350,7 @@ void ModifierNode::validateUpdate(mutablebson::ConstElement updatedElement,
     storage_validation::storageValid(updatedElement, doRecursiveCheck, recursionLevel);
 }
 
-void ModifierNode::logUpdate(LogBuilder* logBuilder,
+void ModifierNode::logUpdate(LogBuilderBase* logBuilder,
                              StringData pathTaken,
                              mutablebson::Element element,
                              ModifyResult modifyResult,
@@ -361,8 +361,11 @@ void ModifierNode::logUpdate(LogBuilder* logBuilder,
     std::cout << "Adding field name " << pathTaken << " to sets " << std::endl;
     if (modifyResult == ModifyResult::kCreated) {
         invariant(createdFieldIdx);
+        uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
+    } else {
+        uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
     }
-    uassertStatusOK(logBuilder->addToSetsWithNewFieldName(pathTaken, element, createdFieldIdx));
+    
 }
 
 }  // namespace mongo
