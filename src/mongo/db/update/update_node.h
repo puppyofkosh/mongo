@@ -38,6 +38,7 @@
 #include "mongo/bson/bsonelement.h"
 #include "mongo/bson/mutable/element.h"
 #include "mongo/db/field_ref_set.h"
+#include "mongo/db/query/field_and_array_path.h"
 #include "mongo/db/update/log_builder.h"
 #include "mongo/db/update/update_executor.h"
 #include "mongo/db/update/update_node_visitor.h"

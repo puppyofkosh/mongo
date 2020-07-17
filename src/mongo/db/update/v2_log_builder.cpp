@@ -27,25 +27,29 @@
  *    it in the license file.
  */
 
-#pragma once
-
-#include "mongo/bson/mutable/document.h"
-#include "mongo/base/string_data.h"
-#include "mongo/base/status.h"
+#include "mongo/db/update/v2_log_builder.h"
 
 namespace mongo {
-/**
- * TODO
- */
-class LogBuilderBase {
-public:
-    virtual Status logUpdatedField(StringData path, mutablebson::Element elt) = 0;
-    virtual Status logUpdatedField(StringData path, BSONElement) = 0;
-    virtual Status logCreatedField(StringData path,
-                                   int idxOfFirstNewComponent,
-                                   mutablebson::Element elt) = 0;
-    virtual Status logDeletedField(StringData path) = 0;
+    Status V2LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
+        std::cout << "log updated field " << elt.toString() << " at " << path << std::endl;
+        return Status::OK();
+    }
 
-    virtual BSONObj serialize() const = 0;
-};
+    Status V2LogBuilder::logUpdatedField(StringData path, BSONElement elt) {
+        std::cout << "log updated field " << elt << " at " << path << std::endl;
+        return Status::OK();
+    }
+
+    Status V2LogBuilder::logCreatedField(StringData path,
+                                         int idxOfFirstNewComponent,
+                                         mutablebson::Element elt) {
+        std::cout << "log created field " << elt.toString() << " at " << path <<
+            " idx " << idxOfFirstNewComponent << std::endl;
+        return Status::OK();
+    }
+
+    Status V2LogBuilder::logDeletedField(StringData path) {
+        std::cout << "log deleted field " << path << std::endl;
+        return Status::OK();
+    }
 }

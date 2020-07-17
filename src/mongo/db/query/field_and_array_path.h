@@ -107,6 +107,8 @@ public:
         return _components + _size;
     }
 
+    std::string serialize() const;
+
 private:
     FieldAndArrayPathView(const Component* components, size_t size)
         : _components(components), _size(size) {}
@@ -169,6 +171,22 @@ inline std::ostream& operator<<(std::ostream& stream, const FieldAndArrayPathVie
     return stream;
 }
 
+inline std::string FieldAndArrayPathView::serialize() const {
+    StringBuilder sb;
+    for (size_t i = 0; i < size(); ++i) {
+        stdx::visit(
+            visit_helper::Overloaded{
+                [&sb](size_t index) { sb << std::to_string(index); },
+                [&sb](const std::string& fieldName) { sb << fieldName; }},
+            (*this)[i]);
+
+        if (i + 1 != size()) {
+            sb << ".";
+        }
+    }
+    return sb.str();
+}
+    
 /**
  * Class responsible for storing FieldAndArrayPath components.
  */

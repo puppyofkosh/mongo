@@ -70,6 +70,10 @@ public:
         return _logRoot.getDocument();
     }
 
+    BSONObj serialize() const override {
+        return _logRoot.getDocument().getObject();
+    }
+
     /**
      * Add a "$v" field to the log. Fails if there is already a "$v" field.
      * TODO: Remove?

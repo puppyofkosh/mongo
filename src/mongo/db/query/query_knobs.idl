@@ -369,4 +369,5 @@ server_parameters:
     set_at: [ startup, runtime ]
     cpp_varname: "internalQueryEnableLoggingV2OplogEntries"
     cpp_vartype: AtomicWord<bool>
-    default: false
+# TODO: change back to false
+    default: true

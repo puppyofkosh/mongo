@@ -1,3 +1,5 @@
+#pragma once
+
 /**
  *    Copyright (C) 2018-present MongoDB, Inc.
  *
@@ -27,25 +29,28 @@
  *    it in the license file.
  */
 
-#pragma once
-
+#include "mongo/bson/bsonobj.h"
 #include "mongo/bson/mutable/document.h"
-#include "mongo/base/string_data.h"
 #include "mongo/base/status.h"
+#include "mongo/db/update/log_builder_base.h"
+
 
 namespace mongo {
+// 2: change StringData to omni path
 /**
  * TODO
  */
-class LogBuilderBase {
+class V2LogBuilder : public LogBuilderBase {
 public:
-    virtual Status logUpdatedField(StringData path, mutablebson::Element elt) = 0;
-    virtual Status logUpdatedField(StringData path, BSONElement) = 0;
-    virtual Status logCreatedField(StringData path,
-                                   int idxOfFirstNewComponent,
-                                   mutablebson::Element elt) = 0;
-    virtual Status logDeletedField(StringData path) = 0;
+    Status logUpdatedField(StringData path, mutablebson::Element elt) override;
+    Status logUpdatedField(StringData path, BSONElement) override;
+    Status logCreatedField(StringData path,
+                           int idxOfFirstNewComponent,
+                           mutablebson::Element elt) override;
+    Status logDeletedField(StringData path) override;
 
-    virtual BSONObj serialize() const = 0;
+    BSONObj serialize() const override {
+        return BSONObj();
+    }
 };
 }
