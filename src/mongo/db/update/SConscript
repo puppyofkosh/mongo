@@ -11,7 +11,6 @@ env.Library(
         'log_builder.cpp',
         'path_support.cpp',
         'storage_validation.cpp',
-        'v2_log_builder.cpp',
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/base',
@@ -49,6 +48,7 @@ env.Library(
         'update_leaf_node.cpp',
         'update_node.cpp',
         'update_object_node.cpp',
+        'v2_log_builder.cpp',
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/pipeline/pipeline',

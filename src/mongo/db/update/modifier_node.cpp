@@ -358,7 +358,6 @@ void ModifierNode::logUpdate(LogBuilderBase* logBuilder,
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate ||
               modifyResult == ModifyResult::kCreated);
-    std::cout << "Adding field name " << pathTaken << " to sets " << std::endl;
     if (modifyResult == ModifyResult::kCreated) {
         invariant(createdFieldIdx);
         uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));

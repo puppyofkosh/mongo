@@ -31,9 +31,20 @@
 
 #include "mongo/db/field_ref.h"
 #include "mongo/util/str.h"
+#include "mongo/db/update/document_diff_serialization.h"
+#include "mongo/db/update/update_oplog_entry_serialization.h"
 
 namespace mongo::v2_log_builder {
     Status V2LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
+        invariant(elt.hasValue());
+        std::cout << "update to " << path << " " << elt.getValue() << std::endl;
+        auto newNode = std::make_unique<UpdateNode>(elt.getValue());
+        // TODO: Can they just pass a field ref in?
+        addNodeAtPath(FieldRef(path),
+                      0,
+                      &_root,
+                      std::move(newNode));
+        
         std::cout << "log updated field " << elt.toString() << " at " << path << std::endl;
         for (auto && s : *_arrayPaths) {
             std::cout << "array path " << s << std::endl;
@@ -43,6 +54,14 @@ namespace mongo::v2_log_builder {
     }
 
     Status V2LogBuilder::logUpdatedField(StringData path, BSONElement elt) {
+        std::cout << "update to " << path << " " << elt << std::endl;
+        auto newNode = std::make_unique<UpdateNode>(elt);
+        // TODO: Can they just pass a field ref in?
+        addNodeAtPath(FieldRef(path),
+                      0,
+                      &_root,
+                      std::move(newNode));
+
         std::cout << "log updated field " << elt << " at " << path << std::endl;
         for (auto && s : *_arrayPaths) {
             std::cout << "array path " << s << std::endl;
@@ -53,6 +72,19 @@ namespace mongo::v2_log_builder {
     Status V2LogBuilder::logCreatedField(StringData path,
                                          int idxOfFirstNewComponent,
                                          mutablebson::Element elt) {
+        //
+        // TODO: Need to use idxOfFirstNewComponent to determine where the creation is.
+        //
+        
+        invariant(elt.hasValue());
+        std::cout << "create " << elt.getValue() << " " << std::endl;
+        auto newNode = std::make_unique<InsertNode>(elt.getValue());
+        // TODO: Can they just pass a field ref in?
+        addNodeAtPath(FieldRef(path),
+                      0,
+                      &_root,
+                      std::move(newNode));
+        
         std::cout << "log created field " << elt.toString() << " at " << path <<
             " idx " << idxOfFirstNewComponent << std::endl;
         for (auto && s : *_arrayPaths) {
@@ -63,6 +95,11 @@ namespace mongo::v2_log_builder {
     }
 
     Status V2LogBuilder::logDeletedField(StringData path) {
+        addNodeAtPath(FieldRef(path),
+                      0,
+                      &_root,
+                      std::make_unique<DeleteNode>());
+        
         std::cout << "log deleted field " << path << std::endl;
         for (auto && s : *_arrayPaths) {
             std::cout << "array path " << s << std::endl;
@@ -71,13 +108,41 @@ namespace mongo::v2_log_builder {
         return Status::OK();
     }
 
-    Node* V2LogBuilder::createInternalNode(DocumentNode* parent,
-                                           StringData pathToParent,
-                                           StringData newNode) {
-        return nullptr;
+    std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(StringData fullPath) {
+        std::cout << "Creating internal node at " << fullPath << std::endl;
+        std::unique_ptr<Node> newNode;
+        if (_arrayPaths->count(fullPath)) {
+            return std::make_unique<ArrayNode>();
+        } else {
+            return std::make_unique<DocumentNode>();
+        }        
     }
-    Node* V2LogBuilder::createInternalNode(ArrayNode* parent, StringData pathToParent, size_t idx) {
-        return nullptr;
+
+    Node* V2LogBuilder::createInternalNode(DocumentNode* parent,
+                                           const FieldRef& fullPath,
+                                           size_t indexOfChildPathComponent) {
+        const auto pathStr = fullPath.dottedSubstring(0, indexOfChildPathComponent + 1);
+        std::unique_ptr<Node> newNode = createNewInternalNode(pathStr);
+        auto ret = newNode.get();
+        auto [it, inserted] = parent->children.emplace(fullPath.getPart(indexOfChildPathComponent),
+                                                       std::move(newNode));
+        invariant(inserted);
+        
+        return ret;
+    }
+
+    // TODO: comments
+    Node* V2LogBuilder::createInternalNode(ArrayNode* parent,
+                                           const FieldRef& fullPath,
+                                           size_t indexOfChildPathComponent,
+                                           size_t childPathComponentValue) {
+        const auto pathStr = fullPath.dottedSubstring(0, indexOfChildPathComponent + 1);
+        std::unique_ptr<Node> newNode = createNewInternalNode(pathStr);
+        auto ret = newNode.get();
+        auto [it, inserted] = parent->children.emplace(childPathComponentValue, std::move(newNode));
+        invariant(inserted);
+        
+        return ret;    
     }
     
     bool V2LogBuilder::addNodeAtPath(const FieldRef& path,
@@ -95,7 +160,7 @@ namespace mongo::v2_log_builder {
             if (auto it = docNode->children.find(part.toString()); it != docNode->children.end()) {
                 return addNodeAtPath(path, pathIdx + 1, it->second.get(), std::move(nodeToAdd));
             } else {
-                auto newNode = createInternalNode(docNode, path.dottedSubstring(0, pathIdx), part);
+                auto newNode = createInternalNode(docNode, path, pathIdx);
                 return addNodeAtPath(path, pathIdx + 1, newNode, std::move(nodeToAdd));
             }
             MONGO_UNREACHABLE;
@@ -115,12 +180,65 @@ namespace mongo::v2_log_builder {
                 return addNodeAtPath(path, pathIdx + 1, it->second.get(),
                                      std::move(nodeToAdd));
             } else {
-                auto newNode = createInternalNode(arrNode, path.dottedSubstring(0, pathIdx), *optInd);
+                auto newNode = createInternalNode(arrNode, path, pathIdx, *optInd);
                 return addNodeAtPath(path, pathIdx + 1, newNode,
                                      std::move(nodeToAdd));
             }
         }
 
         return false;
+    }
+
+    namespace {
+        void writeArrayDiff(const ArrayNode& node,
+                            doc_diff::ArrayDiffBuilder* builder) {
+        }
+        
+        void writeDocumentDiff(const DocumentNode& node,
+                               doc_diff::DocumentDiffBuilder* builder) {
+            for (auto&& [name, child] : node.children) {
+                switch(child->type()) {
+                case NodeType::kDocument: {
+                    auto childBuilder = builder->startSubObjDiff(name);
+                    writeDocumentDiff(static_cast<const DocumentNode&>(*child),
+                                      childBuilder.builder());
+                    break;
+                }
+                case NodeType::kArray: {
+                    auto childBuilder = builder->startSubArrDiff(name);
+                    writeArrayDiff(static_cast<const ArrayNode&>(*child),
+                                   childBuilder.builder());
+                    break;
+                }
+                case NodeType::kDelete: {
+                    builder->addDelete(name);
+                    break;
+                }
+                case NodeType::kUpdate: {
+                    builder->addUpdate(name, static_cast<const UpdateNode*>(child.get())->elt);
+                    break;
+                }
+                case NodeType::kInsert: {
+                    builder->addInsert(name, static_cast<const InsertNode*>(child.get())->elt);
+                    break;
+                }
+                default:
+                    MONGO_UNREACHABLE;
+                }
+            }
+        }
+    }
+
+    BSONObj V2LogBuilder::serialize() const {
+        doc_diff::DocumentDiffBuilder topBuilder;
+        writeDocumentDiff(_root, &topBuilder);
+
+        auto res = topBuilder.serialize();
+        if (!res.isEmpty()) {
+            std::cout << "Final oplog entry is " << res << std::endl;
+            return update_oplog_entry::makeDeltaOplogEntry(res);
+        }
+
+        return BSONObj();
     }
 }

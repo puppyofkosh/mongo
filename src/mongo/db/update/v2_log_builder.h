@@ -34,6 +34,7 @@
 #include "mongo/base/status.h"
 #include "mongo/db/update/log_builder_base.h"
 #include "mongo/util/string_map.h"
+#include "mongo/stdx/variant.h"
 
 namespace mongo {
 class FieldRef;
@@ -57,11 +58,24 @@ namespace v2_log_builder {
     };
 
     struct InsertNode : public Node {
+        InsertNode(BSONElement el) :elt(el) {}
+        
         NodeType type() const override {
             return NodeType::kInsert;
         }
+
+        BSONElement elt;
     };
+
+    struct UpdateNode : public Node {
+        UpdateNode(BSONElement el) : elt(el) {}
         
+        NodeType type() const override {
+            return NodeType::kUpdate;
+        }
+        BSONElement elt;
+    };
+    
     struct DocumentNode : public Node {
         NodeType type() const override {
             return NodeType::kDocument;
@@ -92,13 +106,17 @@ public:
                            mutablebson::Element elt) override;
     Status logDeletedField(StringData path) override;
 
-    BSONObj serialize() const override {
-        return BSONObj();
-    }
+    BSONObj serialize() const override;
 
 private:
-    Node* createInternalNode(DocumentNode* parent, StringData pathToParent, StringData childName);
-    Node* createInternalNode(ArrayNode* parent, StringData pathToParent, size_t idx);
+    std::unique_ptr<Node> createNewInternalNode(StringData fullPath);
+    Node* createInternalNode(DocumentNode* parent,
+                             const FieldRef& fullPath,
+                             size_t indexOfChildPathComponent);
+    Node* createInternalNode(ArrayNode* parent,
+                             const FieldRef& fullPath,
+                             size_t indexOfChildPathComponent,
+                             size_t childPathComponentValue);
     
     bool addNodeAtPath(const FieldRef& path,
                        size_t pathIdx,
