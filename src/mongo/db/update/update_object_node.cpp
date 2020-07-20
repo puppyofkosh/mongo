@@ -125,7 +125,7 @@ void applyChild(const UpdateNode& child,
         updateNodeApplyParams->modifiedArrayPaths->insert(
             updateNodeApplyParams->pathTaken->dottedField().toString());
     }
-    
+
     if (childElement.ok()) {
         // The path we've traversed so far already exists in our document, and 'childElement'
         // represents the Element indicated by the 'field' name or index, which we indicate by

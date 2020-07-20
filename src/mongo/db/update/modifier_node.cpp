@@ -205,8 +205,8 @@ UpdateExecutor::ApplyResult ModifierNode::applyToExistingElement(
                   updateNodeApplyParams.pathTaken->dottedField(),
                   applyParams.element,
                   updateResult,
-                  boost::none // No path was created.
-            );
+                  boost::none  // No path was created.
+        );
     }
 
     return applyResult;
@@ -302,7 +302,10 @@ UpdateExecutor::ApplyResult ModifierNode::applyToNonexistentElement(
         }
 
         if (auto logBuilder = updateNodeApplyParams.logBuilder) {
-            logUpdate(logBuilder, fullPath.dottedField(), newElement, ModifyResult::kCreated,
+            logUpdate(logBuilder,
+                      fullPath.dottedField(),
+                      newElement,
+                      ModifyResult::kCreated,
                       updateNodeApplyParams.pathTaken->numParts());
         }
 
@@ -364,7 +367,6 @@ void ModifierNode::logUpdate(LogBuilderBase* logBuilder,
     } else {
         uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
     }
-    
 }
 
 }  // namespace mongo

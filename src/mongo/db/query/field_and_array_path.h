@@ -28,8 +28,8 @@
  */
 
 #pragma once
-#include "mongo/db/pipeline/field_path.h"
 #include "mongo/db/field_ref.h"
+#include "mongo/db/pipeline/field_path.h"
 #include "mongo/stdx/variant.h"
 #include "mongo/util/visit_helper.h"
 
@@ -180,9 +180,8 @@ inline std::string FieldAndArrayPathView::serialize() const {
     StringBuilder sb;
     for (size_t i = 0; i < size(); ++i) {
         stdx::visit(
-            visit_helper::Overloaded{
-                [&sb](size_t index) { sb << std::to_string(index); },
-                [&sb](const std::string& fieldName) { sb << fieldName; }},
+            visit_helper::Overloaded{[&sb](size_t index) { sb << std::to_string(index); },
+                                     [&sb](const std::string& fieldName) { sb << fieldName; }},
             (*this)[i]);
 
         if (i + 1 != size()) {
@@ -191,7 +190,7 @@ inline std::string FieldAndArrayPathView::serialize() const {
     }
     return sb.str();
 }
-    
+
 /**
  * Class responsible for storing FieldAndArrayPath components.
  */
@@ -200,10 +199,9 @@ public:
     using Component = FieldAndArrayPathView::Component;
     static std::string serializeComponent(const Component& comp) {
         return stdx::visit(
-            visit_helper::Overloaded{
-                [](size_t index) { return std::to_string(index); },
-                    [](const std::string& fieldName) { return fieldName; }},
-            comp);        
+            visit_helper::Overloaded{[](size_t index) { return std::to_string(index); },
+                                     [](const std::string& fieldName) { return fieldName; }},
+            comp);
     }
 
     /**

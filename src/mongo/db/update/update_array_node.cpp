@@ -64,7 +64,9 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
                           << applyParams.element.toString(),
             applyParams.element.getType() == BSONType::Array);
     updateNodeApplyParams.modifiedArrayPaths->insert(
-        (*updateNodeApplyParams.pathTaken + *updateNodeApplyParams.pathToCreate).dottedField().toString());
+        (*updateNodeApplyParams.pathTaken + *updateNodeApplyParams.pathToCreate)
+            .dottedField()
+            .toString());
 
     // Construct a map from the array index to the set of updates that should be applied to the
     // array element at that index. We do not apply the updates yet because we need to know how many
@@ -172,24 +174,23 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
     if (!childrenShouldLogThemselves && logBuilder) {
         // Earlier we should have checked that the path already exists.
         invariant(updateNodeApplyParams.pathToCreate->empty());
-        
+
         if (nModified > 1) {
             // Log the entire array.
             uassertStatusOK(logBuilder->logUpdatedField(
-                                updateNodeApplyParams.pathTaken->dottedField(),
-                                applyParams.element));
+                updateNodeApplyParams.pathTaken->dottedField(), applyParams.element));
         } else if (nModified == 1) {
             // Log the modified array element.
             //
             // TODO: This may be wrong. We might have to check the type of modifiedElement
             //
             invariant(modifiedElement->getFieldName().find('.') == std::string::npos);
-            
+
             invariant(modifiedElement);
             FieldRef::FieldRefTempAppend tempAppend(*(updateNodeApplyParams.pathTaken),
                                                     modifiedElement->getFieldName());
-            uassertStatusOK(logBuilder->logUpdatedField(updateNodeApplyParams.pathTaken->dottedField(),
-                                                        *modifiedElement));
+            uassertStatusOK(logBuilder->logUpdatedField(
+                updateNodeApplyParams.pathTaken->dottedField(), *modifiedElement));
         }
     }
 

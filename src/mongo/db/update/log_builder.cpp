@@ -126,20 +126,20 @@ Status LogBuilder::setVersion(UpdateOplogEntryVersion oplogVersion) {
     return _logRoot.pushFront(_version);
 }
 
-    Status LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
-        return addToSetsWithNewFieldName(path, elt);
-    }
+Status LogBuilder::logUpdatedField(StringData path, mutablebson::Element elt) {
+    return addToSetsWithNewFieldName(path, elt);
+}
 
-    Status LogBuilder::logUpdatedField(StringData path, BSONElement elt) {
-        return addToSetsWithNewFieldName(path, elt);
-    }
+Status LogBuilder::logUpdatedField(StringData path, BSONElement elt) {
+    return addToSetsWithNewFieldName(path, elt);
+}
 
-    Status LogBuilder::logCreatedField(StringData path,
-                                     int idxOfFirstNewComponent,
-                                     mutablebson::Element elt) {
-        return addToSetsWithNewFieldName(path, elt);
-    }
-    Status LogBuilder::logDeletedField(StringData path) {
-        return addToUnsets(path);
-    }
+Status LogBuilder::logCreatedField(StringData path,
+                                   int idxOfFirstNewComponent,
+                                   mutablebson::Element elt) {
+    return addToSetsWithNewFieldName(path, elt);
+}
+Status LogBuilder::logDeletedField(StringData path) {
+    return addToUnsets(path);
+}
 }  // namespace mongo

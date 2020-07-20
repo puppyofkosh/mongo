@@ -31,8 +31,8 @@
 
 #include "mongo/base/status.h"
 #include "mongo/bson/mutable/document.h"
-#include "mongo/db/update/update_oplog_entry_version.h"
 #include "mongo/db/update/log_builder_base.h"
+#include "mongo/db/update/update_oplog_entry_version.h"
 
 namespace mongo {
 
@@ -41,13 +41,13 @@ namespace mongo {
  * modifier-style update entry. It manages separate regions into which it accumulates $set and
  * $unset operations.
  */
-class LogBuilder : public LogBuilderBase{
+class LogBuilder : public LogBuilderBase {
 public:
     struct PathInfo {
         int createdFieldIdx;
         // stuff about types and so on
     };
-    
+
     /** Construct a new LogBuilder. Log entries will be recorded as new children under the
      *  'logRoot' Element, which must be of type mongo::Object and have no children.
      */
@@ -62,7 +62,9 @@ public:
 
     Status logUpdatedField(StringData path, mutablebson::Element elt) override;
     Status logUpdatedField(StringData path, BSONElement) override;
-    Status logCreatedField(StringData path, int idxOfFirstNewComponent, mutablebson::Element elt) override;
+    Status logCreatedField(StringData path,
+                           int idxOfFirstNewComponent,
+                           mutablebson::Element elt) override;
     Status logDeletedField(StringData path) override;
 
     /** Return the Document to which the logging root belongs. */
@@ -79,6 +81,7 @@ public:
      * TODO: Remove?
      */
     Status setVersion(UpdateOplogEntryVersion);
+
 private:
     /** Add the given Element as a new entry in the '$set' section of the log. If a $set
      *  section does not yet exist, it will be created. If this LogBuilder is currently
@@ -103,8 +106,7 @@ private:
      *
      * If any problem occurs then the operation will stop and return that error Status.
      */
-    Status addToSetsWithNewFieldName(StringData name,
-                                     const mutablebson::Element val);
+    Status addToSetsWithNewFieldName(StringData name, const mutablebson::Element val);
 
     /**
      * Convenience method which calls addToSets after

@@ -29,9 +29,9 @@
 
 #pragma once
 
-#include "mongo/bson/mutable/document.h"
-#include "mongo/base/string_data.h"
 #include "mongo/base/status.h"
+#include "mongo/base/string_data.h"
+#include "mongo/bson/mutable/document.h"
 
 namespace mongo {
 /**
@@ -48,4 +48,4 @@ public:
 
     virtual BSONObj serialize() const = 0;
 };
-}
+}  // namespace mongo

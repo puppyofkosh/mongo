@@ -336,9 +336,7 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
     if (modifyResult == ModifyResult::kNormalUpdate || modifyResult == ModifyResult::kCreated) {
         if (modifyResult == ModifyResult::kCreated) {
             invariant(createdFieldIdx);
-            uassertStatusOK(logBuilder->logCreatedField(pathTaken,
-                                                        *createdFieldIdx,
-                                                        element));
+            uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
         } else {
             uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
         }

@@ -29,76 +29,77 @@
  *    it in the license file.
  */
 
+#include "mongo/base/status.h"
 #include "mongo/bson/bsonobj.h"
 #include "mongo/bson/mutable/document.h"
-#include "mongo/base/status.h"
+#include "mongo/db/update/document_diff_serialization.h"
 #include "mongo/db/update/log_builder_base.h"
-#include "mongo/util/string_map.h"
 #include "mongo/stdx/variant.h"
+#include "mongo/util/string_map.h"
 
 namespace mongo {
 class FieldRef;
 namespace v2_log_builder {
-    enum class NodeType {
-        kDocument,
-        kArray,
-        kDelete,
-        kUpdate,
-        kInsert
-    };
-    
-    struct Node {
-        virtual NodeType type() const = 0;
-    };
+enum class NodeType { kDocument, kArray, kDelete, kUpdate, kInsert };
 
-    struct DeleteNode : public Node {
-        NodeType type() const override {
-            return NodeType::kDelete;
-        }
-    };
+struct Node {
+    virtual NodeType type() const = 0;
+};
 
-    struct InsertNode : public Node {
-        InsertNode(BSONElement el) :elt(el) {}
-        
-        NodeType type() const override {
-            return NodeType::kInsert;
-        }
+struct DeleteNode : public Node {
+    NodeType type() const override {
+        return NodeType::kDelete;
+    }
+};
 
-        BSONElement elt;
-    };
+struct InsertNode : public Node {
+    InsertNode(BSONElement el) : elt(el) {}
 
-    struct UpdateNode : public Node {
-        UpdateNode(BSONElement el) : elt(el) {}
-        
-        NodeType type() const override {
-            return NodeType::kUpdate;
-        }
-        BSONElement elt;
-    };
-    
-    struct DocumentNode : public Node {
-        NodeType type() const override {
-            return NodeType::kDocument;
-        }
-        
-        std::map<std::string, std::unique_ptr<Node>> children;
-    };
-    struct ArrayNode : public Node {
-        NodeType type() const override {
-            return NodeType::kArray;
-        }
-        std::map<size_t, std::unique_ptr<Node>> children;
-    };
+    NodeType type() const override {
+        return NodeType::kInsert;
+    }
+
+    BSONElement elt;
+};
+
+struct UpdateNode : public Node {
+    UpdateNode(BSONElement el) : elt(el) {}
+
+    NodeType type() const override {
+        return NodeType::kUpdate;
+    }
+    BSONElement elt;
+};
+
+struct DocumentNode : public Node {
+    DocumentNode() = default;
+    DocumentNode(bool isCreated) : created(isCreated) {}
+
+    NodeType type() const override {
+        return NodeType::kDocument;
+    }
+
+    // Indicates whether the document this node represents was created as part of the update.
+    // E.g. applying the update {$set: {"a.b.c": "foo"}} on document {} will create documents
+    // at paths "a" and "a.b".
+    bool created = false;
+
+    std::map<std::string, std::unique_ptr<Node>> children;
+};
+struct ArrayNode : public Node {
+    NodeType type() const override {
+        return NodeType::kArray;
+    }
+    std::map<size_t, std::unique_ptr<Node>> children;
+};
 
 /**
  * TODO
  */
 class V2LogBuilder : public LogBuilderBase {
 public:
-    V2LogBuilder(StringSet* modifiedArrayPaths)
-        :_arrayPaths(modifiedArrayPaths)
-    {}
-    
+    V2LogBuilder(StringSet* modifiedArrayPaths) : _arrayPaths(modifiedArrayPaths) {}
+
     Status logUpdatedField(StringData path, mutablebson::Element elt) override;
     Status logUpdatedField(StringData path, BSONElement) override;
     Status logCreatedField(StringData path,
@@ -109,22 +110,39 @@ public:
     BSONObj serialize() const override;
 
 private:
-    std::unique_ptr<Node> createNewInternalNode(StringData fullPath);
+    std::unique_ptr<Node> createNewInternalNode(StringData fullPath, bool newPath);
     Node* createInternalNode(DocumentNode* parent,
                              const FieldRef& fullPath,
-                             size_t indexOfChildPathComponent);
+                             size_t indexOfChildPathComponent,
+                             bool newPath);
     Node* createInternalNode(ArrayNode* parent,
                              const FieldRef& fullPath,
                              size_t indexOfChildPathComponent,
-                             size_t childPathComponentValue);
-    
+                             size_t childPathComponentValue,
+                             bool newPath);
+
+    bool addNodeAtPathHelper(const FieldRef& path,
+                             size_t pathIdx,
+                             Node* root,
+                             std::unique_ptr<Node> nodeToAdd,
+                             boost::optional<size_t> idxOfFirstNewComponent);
+
+    // TODO: Comments
     bool addNodeAtPath(const FieldRef& path,
-                       size_t pathIdx,
                        Node* root,
-                       std::unique_ptr<Node> nodeToAdd);
+                       std::unique_ptr<Node> nodeToAdd,
+                       boost::optional<size_t> idxOfFirstNewComponent);
+
+    // TODO: Move to anon namespace
+    void writeArrayDiff(const ArrayNode& node,
+                        doc_diff::ArrayDiffBuilder* builder,
+                        std::vector<BSONObj>*) const;
+    void writeDocumentDiff(const DocumentNode& node,
+                           doc_diff::DocumentDiffBuilder* builder,
+                           std::vector<BSONObj>*) const;
 
     StringSet* _arrayPaths;
     DocumentNode _root;
 };
-}
-}
+}  // namespace v2_log_builder
+}  // namespace mongo

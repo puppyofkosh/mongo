@@ -77,7 +77,7 @@ public:
         if (auto logBuilder = updateNodeApplyParams.logBuilder) {
             ret.oplogEntry = logBuilder->serialize();
         }
-        
+
         return ret;
     }
 
