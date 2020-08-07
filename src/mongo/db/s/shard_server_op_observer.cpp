@@ -34,6 +34,7 @@
 #include "mongo/db/s/shard_server_op_observer.h"
 
 #include "mongo/bson/util/bson_extract.h"
+#include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/catalog_raii.h"
 #include "mongo/db/op_observer_impl.h"
 #include "mongo/db/s/chunk_split_state_driver.h"
@@ -279,7 +280,27 @@ void ShardServerOpObserver::onInserts(OperationContext* opCtx,
     }
 }
 
+    BSONElement getNewValueForField(const BSONObj& diff, StringData fieldName) {
+        BSONElement updateElt = dotted_path_support::extractElementAtPath(diff,
+                                                                          "u");
+        BSONObj updateObj = updateElt.ok() ? updateElt.embeddedObject() : BSONObj();
+        BSONElement insertElt = dotted_path_support::extractElementAtPath(diff,
+                                                                          "i");
+        BSONObj insertObj = insertElt.ok() ? insertElt.embeddedObject() : BSONObj();
+
+        BSONElement ret = updateObj[fieldName];
+        if (ret.ok()) {
+            return ret;
+        }
+
+        return insertObj[fieldName];
+    }
+
 void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateEntryArgs& args) {
+    // TODO
+    std::cout << "ian: update is " << args.updateArgs.update << std::endl;
+
+
     if (args.nss == NamespaceString::kShardConfigCollectionsNamespace) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {
@@ -309,23 +330,24 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             return NamespaceString(coll);
         }());
 
-        // Parse the '$set' update
-        BSONElement setElement;
-        Status setStatus =
-            bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
-        if (setStatus.isOK()) {
-            BSONObj setField = setElement.Obj();
+        // BSONElement setElement;
+        // Status setStatus =
+        //     bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
+        BSONElement diffElt = args.updateArgs.update["diff"];
+        if (diffElt.ok()) {
+            BSONObj diffField = diffElt.Obj();
 
             // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit()
             AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
 
-            auto refreshingField = setField.getField(ShardCollectionType::kRefreshingFieldName);
+            auto refreshingField = getNewValueForField(diffField, ShardCollectionType::kRefreshingFieldName);
             if (refreshingField.isBoolean() && !refreshingField.boolean()) {
                 opCtx->recoveryUnit()->registerChange(
                     std::make_unique<CollectionVersionLogOpHandler>(opCtx, updatedNss));
             }
 
-            if (setField.hasField(ShardCollectionType::kEnterCriticalSectionCounterFieldName)) {
+            auto critSectionField = getNewValueForField(diffField, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
+            if (critSectionField.ok()) {
                 // Force subsequent uses of the namespace to refresh the filtering metadata so they
                 // can synchronize with any work happening on the primary (e.g., migration critical
                 // section).
@@ -354,13 +376,14 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             bsonExtractStringField(args.updateArgs.criteria, ShardDatabaseType::name.name(), &db));
 
         // Parse the '$set' update
-        BSONElement setElement;
-        Status setStatus =
-            bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
-        if (setStatus.isOK()) {
-            BSONObj setField = setElement.Obj();
+        // BSONElement setElement;
+        // Status setStatus =
+        //     bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
+        BSONElement diffElt = args.updateArgs.update["diff"];
+        if (diffElt.ok()) {
+            BSONObj diffField = diffElt.Obj();
 
-            if (setField.hasField(ShardDatabaseType::enterCriticalSectionCounter.name())) {
+            if (getNewValueForField(diffField, ShardDatabaseType::enterCriticalSectionCounter.name()).ok()) {
                 AutoGetDb autoDb(opCtx, db, MODE_X);
                 auto dss = DatabaseShardingState::get(opCtx, db);
                 auto dssLock = DatabaseShardingState::DSSLock::lockExclusive(opCtx, dss);
@@ -373,11 +396,18 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
         if (!isStandaloneOrPrimary(opCtx))
             return;
 
-        BSONElement unsetElement;
-        Status status = bsonExtractTypedField(
-            args.updateArgs.update, StringData("$unset"), Object, &unsetElement);
+        // BSONElement unsetElement;
+        // Status status = bsonExtractTypedField(
+        //     args.updateArgs.update, StringData("$unset"), Object, &unsetElement);
+        BSONElement diffElt = args.updateArgs.update["diff"];
+        BSONElement deleteElt = diffElt.Obj()["d"];
 
-        if (unsetElement.Obj().hasField("pending")) {
+        bool removesPending = false;
+        if (deleteElt.ok()) {
+            removesPending = deleteElt.Obj()["pending"].ok();
+        }
+
+        if (removesPending) {
             auto deletionTask = RangeDeletionTask::parse(
                 IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
 
