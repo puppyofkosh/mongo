@@ -297,10 +297,6 @@ void ShardServerOpObserver::onInserts(OperationContext* opCtx,
     }
 
 void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateEntryArgs& args) {
-    // TODO
-    std::cout << "ian: update is " << args.updateArgs.update << std::endl;
-
-
     if (args.nss == NamespaceString::kShardConfigCollectionsNamespace) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {

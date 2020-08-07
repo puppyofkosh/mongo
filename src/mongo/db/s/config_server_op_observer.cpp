@@ -34,6 +34,7 @@
 #include "mongo/db/s/config_server_op_observer.h"
 
 #include "mongo/db/s/config/sharding_catalog_manager.h"
+#include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/vector_clock_mutable.h"
 #include "mongo/logv2/log.h"
 #include "mongo/s/catalog/type_config_version.h"
@@ -132,6 +133,24 @@ void ConfigServerOpObserver::onInserts(OperationContext* opCtx,
     }
 }
 
+    namespace {
+    BSONElement getNewValueForField(const BSONObj& diff, StringData fieldName) {
+        BSONElement updateElt = dotted_path_support::extractElementAtPath(diff,
+                                                                          "u");
+        BSONObj updateObj = updateElt.ok() ? updateElt.embeddedObject() : BSONObj();
+        BSONElement insertElt = dotted_path_support::extractElementAtPath(diff,
+                                                                          "i");
+        BSONObj insertObj = insertElt.ok() ? insertElt.embeddedObject() : BSONObj();
+
+        BSONElement ret = updateObj[fieldName];
+        if (ret.ok()) {
+            return ret;
+        }
+
+        return insertObj[fieldName];
+    }
+    }
+    
 void ConfigServerOpObserver::onApplyOps(OperationContext* opCtx,
                                         const std::string& dbName,
                                         const BSONObj& applyOpCmd) {
@@ -178,13 +197,13 @@ void ConfigServerOpObserver::onApplyOps(OperationContext* opCtx,
     if (updateElem.type() != Object) {
         return;
     }
-    auto updateObj = updateElem.Obj();
-    auto setElem = updateObj["$set"];
-    if (setElem.type() != Object) {
+
+    auto diffElem = updateElem.Obj()["diff"];
+    if (!diffElem) {
         return;
     }
-    auto setObj = setElem.Obj();
-    auto newTopologyTime = setObj[ShardType::topologyTime()].timestamp();
+
+    auto newTopologyTime = getNewValueForField(diffElem.Obj(), ShardType::topologyTime()).timestamp();
     if (newTopologyTime == Timestamp()) {
         return;
     }
