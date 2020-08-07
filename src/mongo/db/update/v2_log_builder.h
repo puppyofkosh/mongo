@@ -49,6 +49,7 @@ namespace v2_log_builder {
 enum class NodeType { kDocument, kArray, kDelete, kUpdate, kInsert };
 
 struct Node {
+    virtual ~Node() = default;
     virtual NodeType type() const = 0;
 };
 
