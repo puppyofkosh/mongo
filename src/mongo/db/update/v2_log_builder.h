@@ -64,12 +64,12 @@ struct DeleteNode : public Node {
  * associated field.
  */
 struct LiteralValueNode : public Node {
-    LiteralValueNode(BSONElement el) : elt(el) {}
-    BSONElement elt;
+    LiteralValueNode(stdx::variant<BSONElement, mutablebson::Element> el) : elt(el) {}
+    stdx::variant<BSONElement, mutablebson::Element> elt;
 };
 
 struct InsertNode : public LiteralValueNode {
-    InsertNode(BSONElement el) : LiteralValueNode{el} {}
+    InsertNode(stdx::variant<BSONElement, mutablebson::Element> el) : LiteralValueNode{el} {}
 
     NodeType type() const override {
         return NodeType::kInsert;
@@ -77,7 +77,7 @@ struct InsertNode : public LiteralValueNode {
 };
 
 struct UpdateNode : public LiteralValueNode {
-    UpdateNode(BSONElement el) : LiteralValueNode{el} {}
+    UpdateNode(stdx::variant<BSONElement, mutablebson::Element> el) : LiteralValueNode{el} {}
 
     NodeType type() const override {
         return NodeType::kUpdate;
@@ -170,10 +170,6 @@ private:
                        std::unique_ptr<Node> nodeToAdd,
                        boost::optional<size_t> idxOfFirstNewComponent);
 
-    // As a convention, everything in the tree is stored as a BSONElement. This is a helper for
-    // converting mutablebson elements into BSONElements.
-    BSONElement convertToBSONElement(mutablebson::Element);
-
     // Pointer to set of array paths that is maintained by the update tree.
     const StringSet* _arrayPaths;
 
@@ -184,8 +180,6 @@ private:
     // without making copies, but sometimes that is not possible. In the event that a copy is
     // necessary, the memory for the copies is owned here.
     std::vector<BSONObj> _storage;
-    // TODO: may be slow
-    std::vector<std::vector<char>> _elemStorage;
 };
 }  // namespace v2_log_builder
 }  // namespace mongo

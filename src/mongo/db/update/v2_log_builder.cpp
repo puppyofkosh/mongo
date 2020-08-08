@@ -36,8 +36,7 @@
 namespace mongo::v2_log_builder {
 Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element elt) {
     invariant(elt.ok());
-    BSONElement bsonElt = convertToBSONElement(elt);
-    auto newNode = std::make_unique<UpdateNode>(bsonElt);
+    auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
                             &_root,
                             std::move(newNode),
@@ -49,7 +48,6 @@ Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element 
 }
 
 Status V2LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
-    invariant(!elt.eoo());
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
                             &_root,
@@ -65,9 +63,7 @@ Status V2LogBuilder::logCreatedField(const FieldRef& path,
                                      int idxOfFirstNewComponent,
                                      mutablebson::Element elt) {
     invariant(elt.ok());
-    auto bsonElt = convertToBSONElement(elt);
-    invariant(!bsonElt.eoo());
-    auto newNode = std::make_unique<InsertNode>(bsonElt);
+    auto newNode = std::make_unique<InsertNode>(elt);
     invariant(addNodeAtPath(path, &_root, std::move(newNode), idxOfFirstNewComponent));
 
     return Status::OK();
@@ -79,14 +75,17 @@ Status V2LogBuilder::logDeletedField(const FieldRef& path) {
     return Status::OK();
 }
 
-BSONElement V2LogBuilder::convertToBSONElement(mutablebson::Element elt) {
+    namespace {
+BSONElement convertToBSONElement(const stdx::variant<BSONElement, mutablebson::Element>& eltVar,
+                                 std::vector<BSONObj>* tempStorage) {
+    if (stdx::holds_alternative<BSONElement>(eltVar)) {
+        return stdx::get<BSONElement>(eltVar);
+    }
+    auto elt = stdx::get<mutablebson::Element>(eltVar);
+    
     if (elt.hasValue()) {
         BSONElement bsonElt = elt.getValue();
-
-        std::vector<char> buf;
-        buf.insert(buf.end(), bsonElt.rawdata(), bsonElt.rawdata() + bsonElt.size());
-        _elemStorage.push_back(std::move(buf));
-        return BSONElement(_elemStorage.back().data(), bsonElt.fieldNameSize(), bsonElt.size(), BSONElement::CachedSizeTag{});
+        return bsonElt;
     } else if (elt.getType() == BSONType::Object) {
         BSONObjBuilder topLevelBob;
 
@@ -94,19 +93,20 @@ BSONElement V2LogBuilder::convertToBSONElement(mutablebson::Element elt) {
             BSONObjBuilder bob(topLevelBob.subobjStart("dummy"));
             elt.writeTo(&bob);
         }
-        _storage.push_back(topLevelBob.obj());
-        return _storage.back().firstElement();
+        tempStorage->push_back(topLevelBob.obj());
+        return tempStorage->back().firstElement();
     } else if (elt.getType() == BSONType::Array) {
         BSONObjBuilder topLevelBob;
         {
             BSONArrayBuilder bob(topLevelBob.subarrayStart("dummy"));
             elt.writeArrayTo(&bob);
         }
-        _storage.push_back(topLevelBob.obj());
-        return _storage.back().firstElement();
+        tempStorage->push_back(topLevelBob.obj());
+        return tempStorage->back().firstElement();
     }
     MONGO_UNREACHABLE;
 }
+    }
 
 std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(StringData fullPath, bool newPath) {
     std::unique_ptr<Node> newNode;
@@ -204,17 +204,18 @@ bool V2LogBuilder::addNodeAtPathHelper(const FieldRef& path,
 }
 
 namespace {
-void serializeNewlyCreatedDocument(const DocumentNode& node, BSONObjBuilder* out) {
+void serializeNewlyCreatedDocument(const DocumentNode& node, BSONObjBuilder* out,
+                                       std::vector<BSONObj>* tempStorage) {
     for (auto&& [name, child] : node.children) {
         switch (child->type()) {
             case NodeType::kDocument: {
                 BSONObjBuilder childBuilder(out->subobjStart(name));
                 serializeNewlyCreatedDocument(static_cast<const DocumentNode&>(*child),
-                                              &childBuilder);
+                                              &childBuilder, tempStorage);
                 break;
             }
             case NodeType::kInsert: {
-                out->appendAs(static_cast<const InsertNode&>(*child).elt, name);
+                out->appendAs(convertToBSONElement(static_cast<const InsertNode&>(*child).elt, tempStorage), name);
                 break;
             }
 
@@ -249,7 +250,7 @@ void writeArrayDiff(const ArrayNode& node,
                     BSONObjBuilder topLevelBob;
                     {
                         BSONObjBuilder bob(topLevelBob.subobjStart("dummy"));
-                        serializeNewlyCreatedDocument(docNode, &bob);
+                        serializeNewlyCreatedDocument(docNode, &bob, tempStorage);
                     }
                     tempStorage->push_back(topLevelBob.obj());
                     builder->addUpdate(idx, tempStorage->back().firstElement());
@@ -270,7 +271,7 @@ void writeArrayDiff(const ArrayNode& node,
             case NodeType::kUpdate: {
                 // In $v:2 entries, array updates and inserts are treated the same.
                 const auto& valueNode = static_cast<const LiteralValueNode&>(*child);
-                builder->addUpdate(idx, valueNode.elt);
+                builder->addUpdate(idx, convertToBSONElement(valueNode.elt, tempStorage));
                 break;
             }
             case NodeType::kDelete:
@@ -312,7 +313,7 @@ void writeDocumentDiff(const DocumentNode& node,
                     BSONObjBuilder topLevelBob;
                     {
                         BSONObjBuilder bob(topLevelBob.subobjStart("dummy"));
-                        serializeNewlyCreatedDocument(docNode, &bob);
+                        serializeNewlyCreatedDocument(docNode, &bob, tempStorage);
                     }
                     tempStorage->push_back(topLevelBob.obj());
                     builder->addInsert(name, tempStorage->back().firstElement());
@@ -334,11 +335,16 @@ void writeDocumentDiff(const DocumentNode& node,
                 break;
             }
             case NodeType::kUpdate: {
-                builder->addUpdate(name, static_cast<const UpdateNode*>(child.get())->elt);
+                builder->addUpdate(name,
+                                   convertToBSONElement(
+                                       static_cast<const UpdateNode*>(child.get())->elt,
+                                       tempStorage));
                 break;
             }
             case NodeType::kInsert: {
-                builder->addInsert(name, static_cast<const InsertNode*>(child.get())->elt);
+                builder->addInsert(name, convertToBSONElement(
+                                       static_cast<const InsertNode*>(child.get())->elt,
+                                       tempStorage));
                 break;
             }
             default:
