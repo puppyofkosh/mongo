@@ -35,6 +35,7 @@
 
 namespace mongo::v2_log_builder {
 Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element elt) {
+    invariant(elt.ok());
     BSONElement bsonElt = convertToBSONElement(elt);
     auto newNode = std::make_unique<UpdateNode>(bsonElt);
     invariant(addNodeAtPath(path,
@@ -48,6 +49,7 @@ Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element 
 }
 
 Status V2LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
+    invariant(!elt.eoo());
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
                             &_root,
@@ -62,7 +64,9 @@ Status V2LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
 Status V2LogBuilder::logCreatedField(const FieldRef& path,
                                      int idxOfFirstNewComponent,
                                      mutablebson::Element elt) {
+    invariant(elt.ok());
     auto bsonElt = convertToBSONElement(elt);
+    invariant(!bsonElt.eoo());
     auto newNode = std::make_unique<InsertNode>(bsonElt);
     invariant(addNodeAtPath(path, &_root, std::move(newNode), idxOfFirstNewComponent));
 
@@ -77,7 +81,12 @@ Status V2LogBuilder::logDeletedField(const FieldRef& path) {
 
 BSONElement V2LogBuilder::convertToBSONElement(mutablebson::Element elt) {
     if (elt.hasValue()) {
-        return elt.getValue();
+        BSONElement bsonElt = elt.getValue();
+
+        std::vector<char> buf;
+        buf.insert(buf.end(), bsonElt.rawdata(), bsonElt.rawdata() + bsonElt.size());
+        _elemStorage.push_back(std::move(buf));
+        return BSONElement(_elemStorage.back().data(), bsonElt.fieldNameSize(), bsonElt.size(), BSONElement::CachedSizeTag{});
     } else if (elt.getType() == BSONType::Object) {
         BSONObjBuilder topLevelBob;
 

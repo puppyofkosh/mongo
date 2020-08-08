@@ -75,6 +75,7 @@ SubBuilderGuard<ArrayDiffBuilder> ArrayDiffBuilder::startSubArrDiff(size_t idx) 
 }
 
 void ArrayDiffBuilder::addUpdate(size_t idx, BSONElement elem) {
+    invariant(!elem.eoo());
     auto fieldName = std::to_string(idx);
     sizeTracker.addEntry(fieldName.size() + 1 /* kUpdateSectionFieldName */, elem.valuesize());
     _modifications.push_back({std::move(fieldName), elem});
@@ -114,6 +115,7 @@ void DocumentDiffBuilder::serializeTo(BSONObjBuilder* output) const {
     if (!_updates.empty()) {
         BSONObjBuilder subBob(output->subobjStart(StringData(&kUpdateSectionFieldName, 1)));
         for (auto&& update : _updates) {
+            invariant(!update.second.eoo());
             subBob.appendAs(update.second, update.first);
         }
     }
@@ -121,6 +123,7 @@ void DocumentDiffBuilder::serializeTo(BSONObjBuilder* output) const {
     if (!_inserts.empty()) {
         BSONObjBuilder subBob(output->subobjStart(StringData(&kInsertSectionFieldName, 1)));
         for (auto&& insert : _inserts) {
+            invariant(!insert.second.eoo());
             subBob.appendAs(insert.second, insert.first);
         }
     }

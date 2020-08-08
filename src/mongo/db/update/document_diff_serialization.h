@@ -256,12 +256,14 @@ public:
         _deletes.push_back(field);
     }
     void addUpdate(StringData field, BSONElement value) {
+        invariant(!value.eoo());
         // Add the size of 'field' + 'value'.
         sizeTracker.addEntry(field.size(), value.valuesize(), _updates.empty());
 
         _updates.push_back({field, value});
     }
     void addInsert(StringData field, BSONElement value) {
+        invariant(!value.eoo());
         // Add the size of 'field' + 'value'.
         sizeTracker.addEntry(field.size(), value.valuesize(), _inserts.empty());
 

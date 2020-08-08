@@ -184,6 +184,8 @@ private:
     // without making copies, but sometimes that is not possible. In the event that a copy is
     // necessary, the memory for the copies is owned here.
     std::vector<BSONObj> _storage;
+    // TODO: may be slow
+    std::vector<std::vector<char>> _elemStorage;
 };
 }  // namespace v2_log_builder
 }  // namespace mongo
