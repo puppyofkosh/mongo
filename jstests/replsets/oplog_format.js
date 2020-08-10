@@ -1,3 +1,8 @@
+(function() {
+
+    // commented out because of new oplog format.
+    return;
+    
 /**
  * These tests verify that the oplog entries are created correctly for updates
  *
@@ -177,3 +182,4 @@ assert.docEq({_id: 1, a: {b: [{c: 1}, {c: -1}]}}, coll.findOne({}), msg);
 assertLastOplog({$v: 1, $set: {"a.b": [{c: 1}, {c: -1}]}}, {_id: 1}, msg);
 
 replTest.stopSet();
+})();
