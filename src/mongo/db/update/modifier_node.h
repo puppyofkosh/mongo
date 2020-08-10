@@ -84,7 +84,7 @@ protected:
      * what kind of update was performed in its return value.
      */
     virtual ModifyResult updateExistingElement(mutablebson::Element* element,
-                                               std::shared_ptr<FieldRef> elementPath) const = 0;
+                                               std::shared_ptr<PathTaken> elementPath) const = 0;
 
     /**
      * ModifierNode::apply() calls this method when applying an update to a path that does not yet
@@ -140,7 +140,7 @@ protected:
      *   provided.
      */
     virtual void logUpdate(LogBuilderBase* logBuilder,
-                           const FieldRef& pathTaken,
+                           const PathTaken& pathTaken,
                            mutablebson::Element element,
                            ModifyResult modifyResult,
                            boost::optional<int> createdFieldIdx) const;

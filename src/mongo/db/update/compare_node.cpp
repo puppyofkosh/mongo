@@ -49,7 +49,7 @@ void CompareNode::setCollator(const CollatorInterface* collator) {
 }
 
 ModifierNode::ModifyResult CompareNode::updateExistingElement(
-    mutablebson::Element* element, std::shared_ptr<FieldRef> elementPath) const {
+    mutablebson::Element* element, std::shared_ptr<PathTaken> elementPath) const {
     const auto compareVal = element->compareWithBSONElement(_val, _collator, false);
     if ((compareVal == 0) || ((_mode == CompareMode::kMax) ? (compareVal > 0) : (compareVal < 0))) {
         return ModifyResult::kNoOp;

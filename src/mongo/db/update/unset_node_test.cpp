@@ -57,7 +57,7 @@ DEATH_TEST_REGEX(UnsetNodeTest,
 
 DEATH_TEST_REGEX_F(UnsetNodeTest,
                    ApplyToRootFails,
-                   R"#(Invariant failure.*!updateNodeApplyParams.pathTaken->empty\(\))#") {
+                   R"#(Invariant failure.*!updateNodeApplyParams.pathTaken.*empty\(\))#") {
     auto update = fromjson("{$unset: {}}");
     boost::intrusive_ptr<ExpressionContextForTest> expCtx(new ExpressionContextForTest());
     UnsetNode node;

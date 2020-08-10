@@ -46,7 +46,7 @@ namespace mongo {
 class ArrayCullingNode : public ModifierNode {
 public:
     ModifyResult updateExistingElement(mutablebson::Element* element,
-                                       std::shared_ptr<FieldRef> elementPath) const final;
+                                       std::shared_ptr<PathTaken> elementPath) const final;
 
     void validateUpdate(mutablebson::ConstElement updatedElement,
                         mutablebson::ConstElement leftSibling,

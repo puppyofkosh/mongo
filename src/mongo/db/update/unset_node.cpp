@@ -42,7 +42,7 @@ Status UnsetNode::init(BSONElement modExpr, const boost::intrusive_ptr<Expressio
 }
 
 ModifierNode::ModifyResult UnsetNode::updateExistingElement(
-    mutablebson::Element* element, std::shared_ptr<FieldRef> elementPath) const {
+    mutablebson::Element* element, std::shared_ptr<PathTaken> elementPath) const {
     auto parent = element->parent();
 
     invariant(parent.ok());
@@ -79,14 +79,14 @@ void UnsetNode::validateUpdate(mutablebson::ConstElement updatedElement,
 }
 
 void UnsetNode::logUpdate(LogBuilderBase* logBuilder,
-                          const FieldRef& pathTaken,
+                          const PathTaken& pathTaken,
                           mutablebson::Element element,
                           ModifyResult modifyResult,
                           boost::optional<int> createdFieldIdx) const {
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate);
     invariant(!createdFieldIdx);
-    uassertStatusOK(logBuilder->logDeletedField(pathTaken));
+    uassertStatusOK(logBuilder->logDeletedField(pathTaken.fr()));
 }
 
 }  // namespace mongo

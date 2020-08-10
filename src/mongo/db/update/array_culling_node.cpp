@@ -34,7 +34,7 @@
 namespace mongo {
 
 ModifierNode::ModifyResult ArrayCullingNode::updateExistingElement(
-    mutablebson::Element* element, std::shared_ptr<FieldRef> elementPath) const {
+    mutablebson::Element* element, std::shared_ptr<PathTaken> elementPath) const {
     invariant(element->ok());
     uassert(ErrorCodes::BadValue,
             "Cannot apply $pull to a non-array value",

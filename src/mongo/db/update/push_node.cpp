@@ -322,12 +322,12 @@ ModifierNode::ModifyResult PushNode::performPush(mutablebson::Element* element,
 }
 
 ModifierNode::ModifyResult PushNode::updateExistingElement(
-    mutablebson::Element* element, std::shared_ptr<FieldRef> elementPath) const {
-    return performPush(element, elementPath.get());
+    mutablebson::Element* element, std::shared_ptr<PathTaken> elementPath) const {
+    return performPush(element, &elementPath->fr());
 }
 
 void PushNode::logUpdate(LogBuilderBase* logBuilder,
-                         const FieldRef& pathTaken,
+                         const PathTaken& pathTaken,
                          mutablebson::Element element,
                          ModifyResult modifyResult,
                          boost::optional<int> createdFieldIdx) const {
@@ -336,9 +336,9 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
     if (modifyResult == ModifyResult::kNormalUpdate || modifyResult == ModifyResult::kCreated) {
         if (modifyResult == ModifyResult::kCreated) {
             invariant(createdFieldIdx);
-            uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
+            uassertStatusOK(logBuilder->logCreatedField(pathTaken.fr(), *createdFieldIdx, element));
         } else {
-            uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
+            uassertStatusOK(logBuilder->logUpdatedField(pathTaken.fr(), element));
         }
     } else if (modifyResult == ModifyResult::kArrayAppendUpdate) {
         // This update only modified the array by appending entries to the end. Rather than writing
@@ -348,7 +348,7 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
         const auto arraySize = countChildren(element);
 
         // We have to copy the field ref provided in order to use FieldRefTempAppend.
-        FieldRef pathTakenCopy(pathTaken.dottedField());
+        FieldRef pathTakenCopy(pathTaken.fr().dottedField());
 
         invariant(arraySize > numAppended);
         auto position = arraySize - numAppended;

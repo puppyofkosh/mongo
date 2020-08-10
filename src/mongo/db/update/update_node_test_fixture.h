@@ -55,7 +55,7 @@ protected:
         _immutablePathsVector.clear();
         _immutablePaths.clear();
         _pathToCreate = std::make_shared<FieldRef>();
-        _pathTaken = std::make_shared<FieldRef>();
+        _pathTaken = std::make_shared<PathTaken>();
         _matchedField = StringData();
         _insert = false;
         _fromOplogApplication = false;
@@ -98,8 +98,13 @@ protected:
     }
 
     void setPathTaken(StringData path) {
-        _pathTaken->clear();
-        _pathTaken->parse(path);
+        _pathTaken->fr().clear();
+        _pathTaken->fr().parse(path);
+    }
+
+    // TODO: Go through tests and call this.
+    void setPathTakenTypes(std::vector<FieldComponentType> types) {
+        _pathTaken->types() = std::move(types);
     }
 
     void setMatchedField(StringData matchedField) {
@@ -141,7 +146,7 @@ private:
     std::vector<std::unique_ptr<FieldRef>> _immutablePathsVector;
     FieldRefSet _immutablePaths;
     std::shared_ptr<FieldRef> _pathToCreate;
-    std::shared_ptr<FieldRef> _pathTaken;
+    std::shared_ptr<PathTaken> _pathTaken;
     StringData _matchedField;
     bool _insert;
     bool _fromOplogApplication;

@@ -49,10 +49,10 @@ Status PopNode::init(BSONElement modExpr, const boost::intrusive_ptr<ExpressionC
 }
 
 ModifierNode::ModifyResult PopNode::updateExistingElement(
-    mutablebson::Element* element, std::shared_ptr<FieldRef> elementPath) const {
+    mutablebson::Element* element, std::shared_ptr<PathTaken> elementPath) const {
     invariant(element->ok());
     uassert(ErrorCodes::TypeMismatch,
-            str::stream() << "Path '" << elementPath->dottedField()
+            str::stream() << "Path '" << elementPath->fr().dottedField()
                           << "' contains an element of non-array type '"
                           << typeName(element->getType()) << "'",
             element->getType() == BSONType::Array);

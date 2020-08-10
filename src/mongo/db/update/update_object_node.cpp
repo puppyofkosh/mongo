@@ -108,7 +108,7 @@ void applyChild(const UpdateNode& child,
                 UpdateNode::UpdateNodeApplyParams* updateNodeApplyParams,
                 UpdateExecutor::ApplyResult* applyResult) {
 
-    auto pathTakenSizeBefore = updateNodeApplyParams->pathTaken->numParts();
+    auto pathTakenSizeBefore = updateNodeApplyParams->pathTaken->fr().numParts();
 
     // A non-ok value for childElement will indicate that we need to append 'field' to the
     // 'pathToCreate' FieldRef.
@@ -125,7 +125,9 @@ void applyChild(const UpdateNode& child,
         // The path we've traversed so far already exists in our document, and 'childElement'
         // represents the Element indicated by the 'field' name or index, which we indicate by
         // updating the 'pathTaken' FieldRef.
-        updateNodeApplyParams->pathTaken->appendPart(field);
+        updateNodeApplyParams->pathTaken->push(field,
+                                               childElement.getType() == BSONType::Array ?
+                                               FieldComponentType::kArray : FieldComponentType::kObject);
     } else {
         // We are traversing path components that do not exist in our document. Any update modifier
         // that creates new path components (i.e., any modifiers that return true for
@@ -138,7 +140,7 @@ void applyChild(const UpdateNode& child,
 
     if (childElement.getType() == BSONType::Array) {
         updateNodeApplyParams->modifiedArrayPaths->insert(
-            updateNodeApplyParams->pathTaken->dottedField().toString());
+            updateNodeApplyParams->pathTaken->fr().dottedField().toString());
     }
 
     auto childApplyParams = *applyParams;
@@ -153,15 +155,15 @@ void applyChild(const UpdateNode& child,
     if (!updateNodeApplyParams->pathToCreate->empty()) {
         updateNodeApplyParams->pathToCreate->removeLastPart();
     } else {
-        updateNodeApplyParams->pathTaken->removeLastPart();
+        updateNodeApplyParams->pathTaken->pop();
     }
 
     // If the child is an internal node, it may have created 'pathToCreate' and moved 'pathToCreate'
     // to the end of 'pathTaken'. We should advance 'element' to the end of 'pathTaken'.
-    if (updateNodeApplyParams->pathTaken->numParts() > pathTakenSizeBefore) {
-        for (auto i = pathTakenSizeBefore; i < updateNodeApplyParams->pathTaken->numParts(); ++i) {
+    if (updateNodeApplyParams->pathTaken->fr().numParts() > pathTakenSizeBefore) {
+        for (auto i = pathTakenSizeBefore; i < updateNodeApplyParams->pathTaken->fr().numParts(); ++i) {
             applyParams->element =
-                getChild(applyParams->element, updateNodeApplyParams->pathTaken->getPart(i));
+                getChild(applyParams->element, updateNodeApplyParams->pathTaken->fr().getPart(i));
             invariant(applyParams->element.ok());
         }
     } else if (!updateNodeApplyParams->pathToCreate->empty()) {
@@ -173,16 +175,18 @@ void applyChild(const UpdateNode& child,
             getChild(applyParams->element, updateNodeApplyParams->pathToCreate->getPart(0));
         if (childElement.ok()) {
             applyParams->element = childElement;
-            updateNodeApplyParams->pathTaken->appendPart(
-                updateNodeApplyParams->pathToCreate->getPart(0));
+            updateNodeApplyParams->pathTaken->push(
+                updateNodeApplyParams->pathToCreate->getPart(0),
+                childElement.getType() == BSONType::Array);
 
             // Either the path was fully created or not created at all.
             for (size_t i = 1; i < updateNodeApplyParams->pathToCreate->numParts(); ++i) {
                 applyParams->element =
                     getChild(applyParams->element, updateNodeApplyParams->pathToCreate->getPart(i));
                 invariant(applyParams->element.ok());
-                updateNodeApplyParams->pathTaken->appendPart(
-                    updateNodeApplyParams->pathToCreate->getPart(i));
+                updateNodeApplyParams->pathTaken->push(
+                    updateNodeApplyParams->pathToCreate->getPart(i),
+                    applyParams->element.getType() == BSONType::Array);
             }
 
             updateNodeApplyParams->pathToCreate->clear();
@@ -419,19 +423,20 @@ UpdateExecutor::ApplyResult UpdateObjectNode::apply(
             auto mergedChild = _mergedChildrenCache.find(pair.first);
             if (mergedChild == _mergedChildrenCache.end()) {
 
-                // The full path to the merged field is required for error reporting.
+                // The full path to the merged field is required for error reporting. We temporarily
+                // append to 'pathTaken' to get the full path. TODO: Could use TempAppend here.
                 for (size_t i = 0; i < updateNodeApplyParams.pathToCreate->numParts(); ++i) {
-                    updateNodeApplyParams.pathTaken->appendPart(
+                    updateNodeApplyParams.pathTaken->fr().appendPart(
                         updateNodeApplyParams.pathToCreate->getPart(i));
                 }
-                updateNodeApplyParams.pathTaken->appendPart(applyParams.matchedField);
+                updateNodeApplyParams.pathTaken->fr().appendPart(applyParams.matchedField);
                 auto insertResult = _mergedChildrenCache.emplace(std::make_pair(
                     pair.first,
                     UpdateNode::createUpdateNodeByMerging(
-                        *_positionalChild, *pair.second, updateNodeApplyParams.pathTaken.get())));
+                        *_positionalChild, *pair.second, &updateNodeApplyParams.pathTaken->fr())));
                 for (FieldIndex i = 0; i < updateNodeApplyParams.pathToCreate->numParts() + 1;
                      ++i) {
-                    updateNodeApplyParams.pathTaken->removeLastPart();
+                    updateNodeApplyParams.pathTaken->fr().removeLastPart();
                 }
                 invariant(insertResult.second);
                 mergedChild = insertResult.first;

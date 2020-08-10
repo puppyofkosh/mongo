@@ -57,7 +57,7 @@ public:
 
 protected:
     ModifyResult updateExistingElement(mutablebson::Element* element,
-                                       std::shared_ptr<FieldRef> elementPath) const final;
+                                       std::shared_ptr<PathTaken> elementPath) const final;
     void setValueForNewElement(mutablebson::Element* element) const final;
 
     bool allowCreation() const final {
