@@ -28,6 +28,7 @@
  */
 
 #include "mongo/db/update/log_builder.h"
+#include "mongo/db/update/update_executor.h"
 #include "mongo/db/field_ref.h"
 #include "mongo/util/str.h"
 
@@ -118,20 +119,20 @@ Status LogBuilder::setVersion(UpdateOplogEntryVersion oplogVersion) {
     return _logRoot.pushFront(_version);
 }
 
-Status LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element elt) {
-    return addToSetsWithNewFieldName(path.dottedField(), elt);
+Status LogBuilder::logUpdatedField(const PathTaken& path, mutablebson::Element elt) {
+    return addToSetsWithNewFieldName(path.fr().dottedField(), elt);
 }
 
-Status LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
-    return addToSetsWithNewFieldName(path.dottedField(), elt);
+Status LogBuilder::logUpdatedField(const PathTaken& path, BSONElement elt) {
+    return addToSetsWithNewFieldName(path.fr().dottedField(), elt);
 }
 
-Status LogBuilder::logCreatedField(const FieldRef& path,
+Status LogBuilder::logCreatedField(const PathTaken& path,
                                    int idxOfFirstNewComponent,
                                    mutablebson::Element elt) {
-    return addToSetsWithNewFieldName(path.dottedField(), elt);
+    return addToSetsWithNewFieldName(path.fr().dottedField(), elt);
 }
-Status LogBuilder::logDeletedField(const FieldRef& path) {
-    return addToUnsets(path.dottedField());
+Status LogBuilder::logDeletedField(const PathTaken& path) {
+    return addToUnsets(path.fr().dottedField());
 }
 }  // namespace mongo

@@ -369,9 +369,9 @@ void ModifierNode::logUpdate(LogBuilderBase* logBuilder,
               modifyResult == ModifyResult::kCreated);
     if (modifyResult == ModifyResult::kCreated) {
         invariant(createdFieldIdx);
-        uassertStatusOK(logBuilder->logCreatedField(pathTaken.fr(), *createdFieldIdx, element));
+        uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
     } else {
-        uassertStatusOK(logBuilder->logUpdatedField(pathTaken.fr(), element));
+        uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
     }
 }
 

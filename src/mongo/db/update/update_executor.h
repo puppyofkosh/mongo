@@ -40,6 +40,71 @@ namespace mongo {
 class CollatorInterface;
 class FieldRef;
 
+    // TODO: Comments and maybe move this to a separate class.
+    enum class FieldComponentType { kObject, kArray};
+
+    // Maybe call FieldRefWithTypes or something. Also add stuff about invariant
+    // on sizes.
+    struct PathTaken {
+    public:
+        PathTaken() = default;
+        PathTaken(FieldRef path, std::vector<FieldComponentType> types)
+            :_path(std::move(path)), _types(std::move(types))
+        {
+            invariant(_types.size() == _path.numParts() ||
+                      _types.size() + 1 == _path.numParts());
+        }
+
+        bool allTypesKnown() const {
+            // Can only push when all types of existing components are known.
+            return _path.numParts() == _types.size();
+        }
+        
+        void push(StringData field, FieldComponentType type) {
+            invariant(allTypesKnown());
+            _path.appendPart(field);
+            _types.push_back(type);
+        }
+
+        void push(StringData field, bool isArray) {
+            invariant(allTypesKnown());
+            push(field, isArray ? FieldComponentType::kArray : FieldComponentType::kObject);
+        }
+
+        void push(StringData field) {
+            invariant(allTypesKnown());
+            _path.appendPart(field);
+        }
+
+        void pop() {
+            const bool haveAllTypes = allTypesKnown();
+            _path.removeLastPart();
+            if (haveAllTypes) {
+                _types.pop_back();
+            }
+        }
+
+        FieldRef& fr() {
+            return _path;
+        }
+
+        const FieldRef& fr() const {
+            return _path;
+        }
+
+        const std::vector<FieldComponentType>& types() const {
+            return _types;
+        }
+
+        std::vector<FieldComponentType>& types() {
+            return _types;
+        }
+    private:
+        FieldRef _path;
+        std::vector<FieldComponentType> _types;
+    };
+
+    
 /**
  * Provides an interface for applying an update to a document.
  */

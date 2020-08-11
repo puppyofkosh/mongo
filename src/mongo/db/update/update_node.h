@@ -53,48 +53,6 @@ class FieldRef;
 using ApplyParams = UpdateExecutor::ApplyParams;
 using ApplyResult = UpdateExecutor::ApplyResult;
 
-    enum class FieldComponentType { kObject, kArray};
-    struct PathTaken {
-    public:
-        PathTaken() = default;
-        PathTaken(FieldRef path, std::vector<FieldComponentType> types)
-            :_path(std::move(path)), _types(std::move(types))
-        {}
-        
-        void push(StringData field, FieldComponentType type) {
-            _path.appendPart(field);
-            _types.push_back(type);
-        }
-
-        void push(StringData field, bool isArray) {
-            push(field, isArray ? FieldComponentType::kArray : FieldComponentType::kObject);
-        }
-
-        void pop() {
-            _path.removeLastPart();
-            _types.pop_back();
-        }
-
-        FieldRef& fr() {
-            return _path;
-        }
-
-        const FieldRef& fr() const {
-            return _path;
-        }
-
-        const std::vector<FieldComponentType>& types() const {
-            return _types;
-        }
-
-        std::vector<FieldComponentType>& types() {
-            return _types;
-        }
-    private:
-        FieldRef _path;
-        std::vector<FieldComponentType> _types;
-    };
-
 /**
  * Update modifier expressions are stored as a prefix tree of UpdateNodes, where two modifiers that
  * share a field path prefix share a path prefix in the tree. The prefix tree is used to enforce

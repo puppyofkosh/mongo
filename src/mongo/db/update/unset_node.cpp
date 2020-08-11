@@ -86,7 +86,7 @@ void UnsetNode::logUpdate(LogBuilderBase* logBuilder,
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate);
     invariant(!createdFieldIdx);
-    uassertStatusOK(logBuilder->logDeletedField(pathTaken.fr()));
+    uassertStatusOK(logBuilder->logDeletedField(pathTaken));
 }
 
 }  // namespace mongo

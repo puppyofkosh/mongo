@@ -38,6 +38,7 @@
 
 namespace mongo {
 class FieldRef;
+class PathTaken;
 namespace v2_log_builder {
 /**
  * These are structs for a "diff tree" that is constructed while the update is applied. There are
@@ -132,12 +133,12 @@ public:
     /**
      * Overload methods from the LogBuilder interface.
      */
-    Status logUpdatedField(const FieldRef& path, mutablebson::Element elt) override;
-    Status logUpdatedField(const FieldRef& path, BSONElement) override;
-    Status logCreatedField(const FieldRef& path,
+    Status logUpdatedField(const PathTaken& path, mutablebson::Element elt) override;
+    Status logUpdatedField(const PathTaken& path, BSONElement) override;
+    Status logCreatedField(const PathTaken& path,
                            int idxOfFirstNewComponent,
                            mutablebson::Element elt) override;
-    Status logDeletedField(const FieldRef& path) override;
+    Status logDeletedField(const PathTaken& path) override;
 
     /**
      * Converts the in-memory tree to a $v:2 delta oplog entry.
@@ -146,26 +147,28 @@ public:
 
 private:
     // Helpers for maintaining/updating the tree.
-    std::unique_ptr<Node> createNewInternalNode(StringData fullPath, bool newPath);
+    std::unique_ptr<Node> createNewInternalNode(const PathTaken& fullPath,
+                                                size_t indexOfChildPathComponent,
+                                                bool newPath);
     Node* createInternalNode(DocumentNode* parent,
-                             const FieldRef& fullPath,
+                             const PathTaken& fullPath,
                              size_t indexOfChildPathComponent,
                              bool newPath);
     Node* createInternalNode(ArrayNode* parent,
-                             const FieldRef& fullPath,
+                             const PathTaken& fullPath,
                              size_t indexOfChildPathComponent,
                              size_t childPathComponentValue,
                              bool newPath);
 
     // Helpers for adding nodes at a certain path. Returns false if the path was invalid/did
     // not exist.
-    bool addNodeAtPathHelper(const FieldRef& path,
+    bool addNodeAtPathHelper(const PathTaken& path,
                              size_t pathIdx,
                              Node* root,
                              std::unique_ptr<Node> nodeToAdd,
                              boost::optional<size_t> idxOfFirstNewComponent);
 
-    bool addNodeAtPath(const FieldRef& path,
+    bool addNodeAtPath(const PathTaken& path,
                        Node* root,
                        std::unique_ptr<Node> nodeToAdd,
                        boost::optional<size_t> idxOfFirstNewComponent);

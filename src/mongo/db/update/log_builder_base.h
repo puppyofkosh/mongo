@@ -35,6 +35,7 @@
 
 namespace mongo {
 class FieldRef;
+class PathTaken;
 
 /**
  * Interface for building oplog entries while running a modifier-style update. Provides
@@ -53,8 +54,8 @@ public:
      * These methods are used to log a modification to an existing field at given path. The field
      * name provided in the 'elt' argument is ignored.
      */
-    virtual Status logUpdatedField(const FieldRef& path, mutablebson::Element elt) = 0;
-    virtual Status logUpdatedField(const FieldRef& path, BSONElement elt) = 0;
+    virtual Status logUpdatedField(const PathTaken& path, mutablebson::Element elt) = 0;
+    virtual Status logUpdatedField(const PathTaken& path, BSONElement elt) = 0;
 
     /**
      * This method is used to log creation of a new field at the given path. The
@@ -64,13 +65,13 @@ public:
      *
      * The field name in the 'elt' argument is ignored.
      */
-    virtual Status logCreatedField(const FieldRef& path,
+    virtual Status logCreatedField(const PathTaken& path,
                                    int idxOfFirstNewComponent,
                                    mutablebson::Element elt) = 0;
     /**
      * Logs deletion of a field.
      */
-    virtual Status logDeletedField(const FieldRef& path) = 0;
+    virtual Status logDeletedField(const PathTaken& path) = 0;
 
     /**
      * Serializes to a BSONObj which can be put into the 'o' section of an update oplog entry.

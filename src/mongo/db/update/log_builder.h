@@ -36,6 +36,8 @@
 
 namespace mongo {
 
+    class PathTaken;
+    
 /**
  * LogBuilder abstracts away some of the details of producing a properly constructed oplog $v:1
  * modifier-style update entry. It manages separate regions into which it accumulates $set and
@@ -59,12 +61,12 @@ public:
      * Overloads from LogBuilderBase. Each of these methods logs a modification to the document
      * in _logRoot.
      */
-    Status logUpdatedField(const FieldRef& path, mutablebson::Element elt) override;
-    Status logUpdatedField(const FieldRef& path, BSONElement) override;
-    Status logCreatedField(const FieldRef& path,
+    Status logUpdatedField(const PathTaken& path, mutablebson::Element elt) override;
+    Status logUpdatedField(const PathTaken& path, BSONElement) override;
+    Status logCreatedField(const PathTaken& path,
                            int idxOfFirstNewComponent,
                            mutablebson::Element elt) override;
-    Status logDeletedField(const FieldRef& path) override;
+    Status logDeletedField(const PathTaken& path) override;
 
     /** Return the Document to which the logging root belongs. */
     inline mutablebson::Document& getDocument() {

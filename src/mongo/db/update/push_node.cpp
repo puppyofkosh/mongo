@@ -336,9 +336,9 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
     if (modifyResult == ModifyResult::kNormalUpdate || modifyResult == ModifyResult::kCreated) {
         if (modifyResult == ModifyResult::kCreated) {
             invariant(createdFieldIdx);
-            uassertStatusOK(logBuilder->logCreatedField(pathTaken.fr(), *createdFieldIdx, element));
+            uassertStatusOK(logBuilder->logCreatedField(pathTaken, *createdFieldIdx, element));
         } else {
-            uassertStatusOK(logBuilder->logUpdatedField(pathTaken.fr(), element));
+            uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
         }
     } else if (modifyResult == ModifyResult::kArrayAppendUpdate) {
         // This update only modified the array by appending entries to the end. Rather than writing
@@ -348,13 +348,14 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
         const auto arraySize = countChildren(element);
 
         // We have to copy the field ref provided in order to use FieldRefTempAppend.
-        FieldRef pathTakenCopy(pathTaken.fr().dottedField());
+        PathTaken pathTakenCopy = pathTaken;
+        invariant(pathTakenCopy.allTypesKnown());
 
         invariant(arraySize > numAppended);
         auto position = arraySize - numAppended;
         for (const auto& valueToLog : _valuesToPush) {
             const std::string positionAsString = std::to_string(position);
-            FieldRef::FieldRefTempAppend tempAppend(pathTakenCopy, positionAsString);
+            FieldRef::FieldRefTempAppend tempAppend(pathTakenCopy.fr(), positionAsString);
             uassertStatusOK(logBuilder->logUpdatedField(pathTakenCopy, valueToLog));
 
             ++position;

@@ -180,14 +180,14 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
         if (nModified > 1) {
             // Log the entire array.
             uassertStatusOK(
-                logBuilder->logUpdatedField(updateNodeApplyParams.pathTaken->fr(), applyParams.element));
+                logBuilder->logUpdatedField(*updateNodeApplyParams.pathTaken, applyParams.element));
         } else if (nModified == 1) {
             // Log the modified array element.
             invariant(modifiedElement);
             FieldRef::FieldRefTempAppend tempAppend(updateNodeApplyParams.pathTaken->fr(),
                                                     modifiedElement->getFieldName());
             uassertStatusOK(
-                logBuilder->logUpdatedField(updateNodeApplyParams.pathTaken->fr(), *modifiedElement));
+                logBuilder->logUpdatedField(*updateNodeApplyParams.pathTaken, *modifiedElement));
         }
     }
 

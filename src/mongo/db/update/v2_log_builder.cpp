@@ -31,10 +31,11 @@
 
 #include "mongo/db/field_ref.h"
 #include "mongo/db/update/update_oplog_entry_serialization.h"
+#include "mongo/db/update/update_executor.h"
 #include "mongo/util/str.h"
 
 namespace mongo::v2_log_builder {
-Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element elt) {
+Status V2LogBuilder::logUpdatedField(const PathTaken& path, mutablebson::Element elt) {
     invariant(elt.ok());
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
@@ -47,7 +48,7 @@ Status V2LogBuilder::logUpdatedField(const FieldRef& path, mutablebson::Element 
     return Status::OK();
 }
 
-Status V2LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
+Status V2LogBuilder::logUpdatedField(const PathTaken& path, BSONElement elt) {
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
                             &_root,
@@ -59,7 +60,7 @@ Status V2LogBuilder::logUpdatedField(const FieldRef& path, BSONElement elt) {
     return Status::OK();
 }
 
-Status V2LogBuilder::logCreatedField(const FieldRef& path,
+Status V2LogBuilder::logCreatedField(const PathTaken& path,
                                      int idxOfFirstNewComponent,
                                      mutablebson::Element elt) {
     invariant(elt.ok());
@@ -69,7 +70,7 @@ Status V2LogBuilder::logCreatedField(const FieldRef& path,
     return Status::OK();
 }
 
-Status V2LogBuilder::logDeletedField(const FieldRef& path) {
+Status V2LogBuilder::logDeletedField(const PathTaken& path) {
     invariant(addNodeAtPath(path, &_root, std::make_unique<DeleteNode>(), boost::none));
 
     return Status::OK();
@@ -108,36 +109,42 @@ BSONElement convertToBSONElement(const stdx::variant<BSONElement, mutablebson::E
 }
     }
 
-std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(StringData fullPath, bool newPath) {
+std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(const PathTaken& fullPath,
+                                                          size_t indexOfChildPathComponent,
+                                                          bool newPath) {
+    const auto pathStr = fullPath.fr().dottedSubstring(0, indexOfChildPathComponent + 1);
+
     std::unique_ptr<Node> newNode;
-    if (_arrayPaths->count(fullPath)) {
+    if (_arrayPaths->count(pathStr)) {
+        invariant(fullPath.types()[indexOfChildPathComponent] == FieldComponentType::kArray);
         return std::make_unique<ArrayNode>();
     } else {
+        invariant(fullPath.types()[indexOfChildPathComponent] == FieldComponentType::kObject);
         return std::make_unique<DocumentNode>(newPath);
     }
 }
 
 Node* V2LogBuilder::createInternalNode(DocumentNode* parent,
-                                       const FieldRef& fullPath,
+                                       const PathTaken& fullPath,
                                        size_t indexOfChildPathComponent,
                                        bool newPath) {
-    const auto pathStr = fullPath.dottedSubstring(0, indexOfChildPathComponent + 1);
-    std::unique_ptr<Node> newNode = createNewInternalNode(pathStr, newPath);
+    std::unique_ptr<Node> newNode = createNewInternalNode(fullPath,
+                                                          indexOfChildPathComponent,
+                                                          newPath);
     auto ret = newNode.get();
     auto [it, inserted] =
-        parent->children.emplace(fullPath.getPart(indexOfChildPathComponent), std::move(newNode));
+        parent->children.emplace(fullPath.fr().getPart(indexOfChildPathComponent), std::move(newNode));
     invariant(inserted);
 
     return ret;
 }
 
 Node* V2LogBuilder::createInternalNode(ArrayNode* parent,
-                                       const FieldRef& fullPath,
+                                       const PathTaken& fullPath,
                                        size_t indexOfChildPathComponent,
                                        size_t childPathComponentValue,
                                        bool newPath) {
-    const auto pathStr = fullPath.dottedSubstring(0, indexOfChildPathComponent + 1);
-    std::unique_ptr<Node> newNode = createNewInternalNode(pathStr, newPath);
+    std::unique_ptr<Node> newNode = createNewInternalNode(fullPath, indexOfChildPathComponent, newPath);
     auto ret = newNode.get();
     auto [it, inserted] = parent->children.emplace(childPathComponentValue, std::move(newNode));
     invariant(inserted);
@@ -145,14 +152,14 @@ Node* V2LogBuilder::createInternalNode(ArrayNode* parent,
     return ret;
 }
 
-bool V2LogBuilder::addNodeAtPath(const FieldRef& path,
+bool V2LogBuilder::addNodeAtPath(const PathTaken& path,
                                  Node* root,
                                  std::unique_ptr<Node> nodeToAdd,
                                  boost::optional<size_t> idxOfFirstNewComponent) {
     return addNodeAtPathHelper(path, 0, root, std::move(nodeToAdd), idxOfFirstNewComponent);
 }
 
-bool V2LogBuilder::addNodeAtPathHelper(const FieldRef& path,
+bool V2LogBuilder::addNodeAtPathHelper(const PathTaken& path,
                                        size_t pathIdx,
                                        Node* root,
                                        std::unique_ptr<Node> nodeToAdd,
@@ -163,8 +170,8 @@ bool V2LogBuilder::addNodeAtPathHelper(const FieldRef& path,
 
     if (root->type() == NodeType::kDocument) {
         DocumentNode* docNode = static_cast<DocumentNode*>(root);
-        const auto part = path.getPart(pathIdx);
-        if (pathIdx == static_cast<size_t>(path.numParts() - 1)) {
+        const auto part = path.fr().getPart(pathIdx);
+        if (pathIdx == static_cast<size_t>(path.fr().numParts() - 1)) {
             docNode->children.emplace(part, std::move(nodeToAdd));
             return true;
         }
@@ -180,12 +187,12 @@ bool V2LogBuilder::addNodeAtPathHelper(const FieldRef& path,
         MONGO_UNREACHABLE;
     } else if (root->type() == NodeType::kArray) {
         ArrayNode* arrNode = static_cast<ArrayNode*>(root);
-        const auto part = path.getPart(pathIdx);
+        const auto part = path.fr().getPart(pathIdx);
         invariant(FieldRef::isNumericPathComponentStrict(part));
         auto optInd = str::parseUnsignedBase10Integer(part);
         invariant(optInd);
 
-        if (pathIdx == static_cast<size_t>(path.numParts() - 1)) {
+        if (pathIdx == static_cast<size_t>(path.fr().numParts() - 1)) {
             arrNode->children.emplace(*optInd, std::move(nodeToAdd));
             return true;
         }
