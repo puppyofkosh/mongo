@@ -112,14 +112,15 @@ BSONElement convertToBSONElement(const stdx::variant<BSONElement, mutablebson::E
 std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(const PathTaken& fullPath,
                                                           size_t indexOfChildPathComponent,
                                                           bool newPath) {
+    invariant(indexOfChildPathComponent < fullPath.fr().numParts());
     const auto pathStr = fullPath.fr().dottedSubstring(0, indexOfChildPathComponent + 1);
 
     std::unique_ptr<Node> newNode;
     if (_arrayPaths->count(pathStr)) {
-        invariant(fullPath.types()[indexOfChildPathComponent] == FieldComponentType::kArray);
+        invariant(fullPath.types()[indexOfChildPathComponent+1] == FieldComponentType::kArrayIndex);
         return std::make_unique<ArrayNode>();
     } else {
-        invariant(fullPath.types()[indexOfChildPathComponent] == FieldComponentType::kObject);
+        invariant(fullPath.types()[indexOfChildPathComponent+1] == FieldComponentType::kFieldName);
         return std::make_unique<DocumentNode>(newPath);
     }
 }

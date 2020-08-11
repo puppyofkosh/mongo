@@ -127,7 +127,8 @@ void applyChild(const UpdateNode& child,
         // updating the 'pathTaken' FieldRef.
         updateNodeApplyParams->pathTaken->push(field,
                                                childElement.getType() == BSONType::Array ?
-                                               FieldComponentType::kArray : FieldComponentType::kObject);
+                                               FieldComponentType::kArrayIndex :
+                                               FieldComponentType::kFieldName);
     } else {
         // We are traversing path components that do not exist in our document. Any update modifier
         // that creates new path components (i.e., any modifiers that return true for
@@ -404,6 +405,7 @@ BSONObj UpdateObjectNode::serialize() const {
 
 UpdateExecutor::ApplyResult UpdateObjectNode::apply(
     ApplyParams applyParams, UpdateNodeApplyParams updateNodeApplyParams) const {
+    invariant(updateNodeApplyParams.pathTaken->good());
     bool applyPositional = _positionalChild.get();
     if (applyPositional) {
         uassert(ErrorCodes::BadValue,
@@ -414,7 +416,7 @@ UpdateExecutor::ApplyResult UpdateObjectNode::apply(
     auto applyResult = ApplyResult::noopResult();
 
     for (const auto& pair : _children) {
-
+        invariant(updateNodeApplyParams.pathTaken->good());
         // If this child has the same field name as the positional child, they must be merged and
         // applied.
         if (applyPositional && pair.first == applyParams.matchedField) {
@@ -438,6 +440,7 @@ UpdateExecutor::ApplyResult UpdateObjectNode::apply(
                      ++i) {
                     updateNodeApplyParams.pathTaken->fr().removeLastPart();
                 }
+                invariant(updateNodeApplyParams.pathTaken->good());
                 invariant(insertResult.second);
                 mergedChild = insertResult.first;
             }

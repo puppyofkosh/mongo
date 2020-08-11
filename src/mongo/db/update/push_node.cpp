@@ -349,8 +349,6 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
 
         // We have to copy the field ref provided in order to use FieldRefTempAppend.
         PathTaken pathTakenCopy = pathTaken;
-        invariant(pathTakenCopy.allTypesKnown());
-
         invariant(arraySize > numAppended);
         auto position = arraySize - numAppended;
         for (const auto& valueToLog : _valuesToPush) {

@@ -42,6 +42,21 @@ public:
     ~UpdateNodeTest() override = default;
 
 protected:
+    // Test helper for making a minimal "path taken" from a field ref to a leaf
+    // (non-object). Assumes that all numeric path components are array indexes. Tests which use
+    // numeric field names in objects must manually create a PathTaken.
+    static PathTaken pathTakenFromFieldRef(const FieldRef& fr) {
+        std::vector<FieldComponentType> types;
+
+        // We don't include a part for the last component, which may be a leaf.
+        for (int i = 0; i < fr.numParts(); ++i) {
+            types.push_back(fr.isNumericPathComponentStrict(i) ? FieldComponentType::kArrayIndex
+                            : FieldComponentType::kFieldName);
+        }
+
+        return PathTaken(fr, std::move(types));
+    }
+    
     void setUp() override {
         resetApplyParams();
 
@@ -97,14 +112,8 @@ protected:
         _pathToCreate->parse(path);
     }
 
-    void setPathTaken(StringData path) {
-        _pathTaken->fr().clear();
-        _pathTaken->fr().parse(path);
-    }
-
-    // TODO: Go through tests and call this.
-    void setPathTakenTypes(std::vector<FieldComponentType> types) {
-        _pathTaken->types() = std::move(types);
+    void setPathTaken(const PathTaken& pathTaken) {
+        *_pathTaken = pathTaken;
     }
 
     void setMatchedField(StringData matchedField) {

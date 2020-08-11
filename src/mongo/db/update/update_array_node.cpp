@@ -124,8 +124,14 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
             // Merge all of the updates for this array element.
             invariant(updates->second.size() > 0);
             auto mergedChild = updates->second[0];
-            FieldRef::FieldRefTempAppend tempAppend(updateNodeApplyParams.pathTaken->fr(),
-                                                    childElement.getFieldName());
+            updateNodeApplyParams.pathTaken->push(childElement.getFieldName(),
+                                                  FieldComponentType::kArrayIndex);
+            ON_BLOCK_EXIT([&updateNodeApplyParams]() {
+                    updateNodeApplyParams.pathTaken->pop();
+                });
+            
+            // FieldRef::FieldRefTempAppend tempAppend(updateNodeApplyParams.pathTaken->fr(),
+            //                                         childElement.getFieldName());
             for (size_t j = 1; j < updates->second.size(); ++j) {
 
                 // Use the cached merge result, if it is available.
@@ -184,8 +190,11 @@ UpdateExecutor::ApplyResult UpdateArrayNode::apply(
         } else if (nModified == 1) {
             // Log the modified array element.
             invariant(modifiedElement);
-            FieldRef::FieldRefTempAppend tempAppend(updateNodeApplyParams.pathTaken->fr(),
-                                                    modifiedElement->getFieldName());
+
+            // Temporarily append the array index.
+            updateNodeApplyParams.pathTaken->push(modifiedElement->getFieldName(),
+                                                  FieldComponentType::kArrayIndex);
+            ON_BLOCK_EXIT([&updateNodeApplyParams]() {updateNodeApplyParams.pathTaken->pop();});
             uassertStatusOK(
                 logBuilder->logUpdatedField(*updateNodeApplyParams.pathTaken, *modifiedElement));
         }

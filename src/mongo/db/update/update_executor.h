@@ -41,7 +41,8 @@ class CollatorInterface;
 class FieldRef;
 
     // TODO: Comments and maybe move this to a separate class.
-    enum class FieldComponentType { kObject, kArray};
+    // Maybe call PathComponentType?
+    enum class FieldComponentType { kFieldName, kArrayIndex};
 
     // Maybe call FieldRefWithTypes or something. Also add stuff about invariant
     // on sizes.
@@ -51,37 +52,28 @@ class FieldRef;
         PathTaken(FieldRef path, std::vector<FieldComponentType> types)
             :_path(std::move(path)), _types(std::move(types))
         {
-            invariant(_types.size() == _path.numParts() ||
-                      _types.size() + 1 == _path.numParts());
+            invariant(_types.size() == _path.numParts());
         }
 
-        bool allTypesKnown() const {
-            // Can only push when all types of existing components are known.
+        bool good() const {
             return _path.numParts() == _types.size();
         }
-        
+
         void push(StringData field, FieldComponentType type) {
-            invariant(allTypesKnown());
+            invariant(good());
             _path.appendPart(field);
             _types.push_back(type);
         }
 
-        void push(StringData field, bool isArray) {
-            invariant(allTypesKnown());
-            push(field, isArray ? FieldComponentType::kArray : FieldComponentType::kObject);
-        }
-
-        void push(StringData field) {
-            invariant(allTypesKnown());
-            _path.appendPart(field);
+        void push(StringData field, bool isArrayIdx) {
+            push(field, isArrayIdx ? FieldComponentType::kArrayIndex :
+                 FieldComponentType::kFieldName);
         }
 
         void pop() {
-            const bool haveAllTypes = allTypesKnown();
+            invariant(good());
             _path.removeLastPart();
-            if (haveAllTypes) {
-                _types.pop_back();
-            }
+            _types.pop_back();
         }
 
         FieldRef& fr() {

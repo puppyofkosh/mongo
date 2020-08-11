@@ -276,21 +276,28 @@ UpdateExecutor::ApplyResult ModifierNode::applyToNonexistentElement(
         std::vector<FieldComponentType> fullPathTypes;
         if (updateNodeApplyParams.pathTaken->fr().empty()) {
             fullPathFr = *updateNodeApplyParams.pathToCreate;
-            fullPathTypes.assign(fullPathFr.numParts() - 1, FieldComponentType::kObject);
+            // Newly created paths consist only of objects.
+            fullPathTypes.assign(fullPathFr.numParts(), FieldComponentType::kFieldName);
         } else {
             fullPathFr =
                 FieldRef(str::stream() << updateNodeApplyParams.pathTaken->fr().dottedField() << "."
                                        << updateNodeApplyParams.pathToCreate->dottedField());
             fullPathTypes = updateNodeApplyParams.pathTaken->types();
+            const bool isCreatingArrayElem = applyParams.element.getType() == BSONType::Array;
+
+            fullPathTypes.push_back(isCreatingArrayElem ?
+                                    FieldComponentType::kArrayIndex :
+                                    FieldComponentType::kFieldName);
             for (auto i = 0; i < updateNodeApplyParams.pathToCreate->numParts() - 1; ++i) {
-                fullPathTypes.push_back(FieldComponentType::kObject);
+                fullPathTypes.push_back(FieldComponentType::kFieldName);
             }
 
             // If adding an element to an array, only mark the path to the array itself as modified.
-            if (applyParams.modifiedPaths && applyParams.element.getType() == BSONType::Array) {
+            if (applyParams.modifiedPaths && isCreatingArrayElem) {
                 applyParams.modifiedPaths->keepShortest(updateNodeApplyParams.pathTaken->fr());
             }
         }
+        invariant(fullPathTypes.size() == fullPathFr.numParts());
 
         ApplyResult applyResult;
 

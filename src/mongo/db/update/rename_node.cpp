@@ -244,7 +244,7 @@ UpdateExecutor::ApplyResult RenameNode::apply(ApplyParams applyParams,
     // We're guaranteed that the entire path exists and consists of only objects, except
     // for the last component which may be of any type.
     for (auto i = 0; i < fromFieldRef.numParts() - 1; ++i) {
-        pathTaken->push(fromFieldRef.getPart(i), FieldComponentType::kObject);
+        pathTaken->push(fromFieldRef.getPart(i), FieldComponentType::kFieldName);
     }
     pathTaken->fr().appendPart(fromFieldRef.getPart(fromFieldRef.numParts() - 1));
 
