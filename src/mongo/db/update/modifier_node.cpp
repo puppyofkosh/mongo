@@ -148,6 +148,11 @@ UpdateExecutor::ApplyResult ModifierNode::applyToExistingElement(
     invariant(updateNodeApplyParams.pathToCreate->empty());
     invariant(applyParams.element.ok());
 
+    if (applyParams.element.getType() == BSONType::Array) {
+        updateNodeApplyParams.modifiedArrayPaths->insert(
+            updateNodeApplyParams.pathTaken->fr().dottedField().toString());
+    }
+
     mutablebson::ConstElement leftSibling = applyParams.element.leftSibling();
     mutablebson::ConstElement rightSibling = applyParams.element.rightSibling();
 

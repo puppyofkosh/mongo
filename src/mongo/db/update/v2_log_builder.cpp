@@ -36,6 +36,7 @@
 
 namespace mongo::v2_log_builder {
 Status V2LogBuilder::logUpdatedField(const PathTaken& path, mutablebson::Element elt) {
+    invariant(path.good());
     invariant(elt.ok());
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
@@ -49,6 +50,7 @@ Status V2LogBuilder::logUpdatedField(const PathTaken& path, mutablebson::Element
 }
 
 Status V2LogBuilder::logUpdatedField(const PathTaken& path, BSONElement elt) {
+    invariant(path.good());
     auto newNode = std::make_unique<UpdateNode>(elt);
     invariant(addNodeAtPath(path,
                             &_root,
@@ -63,6 +65,7 @@ Status V2LogBuilder::logUpdatedField(const PathTaken& path, BSONElement elt) {
 Status V2LogBuilder::logCreatedField(const PathTaken& path,
                                      int idxOfFirstNewComponent,
                                      mutablebson::Element elt) {
+    invariant(path.good());
     invariant(elt.ok());
     auto newNode = std::make_unique<InsertNode>(elt);
     invariant(addNodeAtPath(path, &_root, std::move(newNode), idxOfFirstNewComponent));
@@ -71,6 +74,7 @@ Status V2LogBuilder::logCreatedField(const PathTaken& path,
 }
 
 Status V2LogBuilder::logDeletedField(const PathTaken& path) {
+    invariant(path.good());
     invariant(addNodeAtPath(path, &_root, std::make_unique<DeleteNode>(), boost::none));
 
     return Status::OK();
@@ -113,13 +117,15 @@ std::unique_ptr<Node> V2LogBuilder::createNewInternalNode(const PathTaken& fullP
                                                           size_t indexOfChildPathComponent,
                                                           bool newPath) {
     invariant(indexOfChildPathComponent < fullPath.fr().numParts());
+    invariant(fullPath.good());
     const auto pathStr = fullPath.fr().dottedSubstring(0, indexOfChildPathComponent + 1);
 
     std::unique_ptr<Node> newNode;
-    if (_arrayPaths->count(pathStr)) {
-        invariant(fullPath.types()[indexOfChildPathComponent+1] == FieldComponentType::kArrayIndex);
+    if (fullPath.types()[indexOfChildPathComponent+1] == FieldComponentType::kArrayIndex) {
+        invariant(_arrayPaths->count(pathStr));
         return std::make_unique<ArrayNode>();
     } else {
+        invariant(!_arrayPaths->count(pathStr));
         invariant(fullPath.types()[indexOfChildPathComponent+1] == FieldComponentType::kFieldName);
         return std::make_unique<DocumentNode>(newPath);
     }

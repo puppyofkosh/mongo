@@ -126,7 +126,7 @@ void applyChild(const UpdateNode& child,
         // represents the Element indicated by the 'field' name or index, which we indicate by
         // updating the 'pathTaken' FieldRef.
         updateNodeApplyParams->pathTaken->push(field,
-                                               childElement.getType() == BSONType::Array ?
+                                               applyParams->element.getType() == BSONType::Array ?
                                                FieldComponentType::kArrayIndex :
                                                FieldComponentType::kFieldName);
     } else {
@@ -178,16 +178,17 @@ void applyChild(const UpdateNode& child,
             applyParams->element = childElement;
             updateNodeApplyParams->pathTaken->push(
                 updateNodeApplyParams->pathToCreate->getPart(0),
-                childElement.getType() == BSONType::Array);
+                applyParams->element.getType() == BSONType::Array);
 
             // Either the path was fully created or not created at all.
             for (size_t i = 1; i < updateNodeApplyParams->pathToCreate->numParts(); ++i) {
+                const BSONType parentType = applyParams->element.getType();
                 applyParams->element =
                     getChild(applyParams->element, updateNodeApplyParams->pathToCreate->getPart(i));
                 invariant(applyParams->element.ok());
                 updateNodeApplyParams->pathTaken->push(
                     updateNodeApplyParams->pathToCreate->getPart(i),
-                    applyParams->element.getType() == BSONType::Array);
+                    parentType == BSONType::Array);
             }
 
             updateNodeApplyParams->pathToCreate->clear();

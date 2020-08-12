@@ -353,7 +353,9 @@ void PushNode::logUpdate(LogBuilderBase* logBuilder,
         auto position = arraySize - numAppended;
         for (const auto& valueToLog : _valuesToPush) {
             const std::string positionAsString = std::to_string(position);
-            FieldRef::FieldRefTempAppend tempAppend(pathTakenCopy.fr(), positionAsString);
+
+            pathTakenCopy.push(positionAsString, FieldComponentType::kArrayIndex);
+            ON_BLOCK_EXIT([&pathTakenCopy]() {pathTakenCopy.pop();});
             uassertStatusOK(logBuilder->logUpdatedField(pathTakenCopy, valueToLog));
 
             ++position;

@@ -63,6 +63,11 @@ class FieldRef;
             invariant(good());
             _path.appendPart(field);
             _types.push_back(type);
+
+            // First component should always be object.
+            if (_types.size() == 1) {
+                invariant(_types.front() != FieldComponentType::kArrayIndex);
+            }
         }
 
         void push(StringData field, bool isArrayIdx) {
