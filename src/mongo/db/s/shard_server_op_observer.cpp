@@ -46,6 +46,7 @@
 #include "mongo/db/s/sharding_initialization_mongod.h"
 #include "mongo/db/s/sharding_state.h"
 #include "mongo/db/s/type_shard_identity.h"
+#include "mongo/db/update/update_oplog_entry_serialization.h"
 #include "mongo/logv2/log.h"
 #include "mongo/s/balancer_configuration.h"
 #include "mongo/s/catalog/type_shard_collection.h"
@@ -309,28 +310,23 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             return NamespaceString(coll);
         }());
 
-        // Parse the '$set' update
-        BSONElement setElement;
-        Status setStatus =
-            bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
-        if (setStatus.isOK()) {
-            BSONObj setField = setElement.Obj();
+        auto enterCriticalSectionFieldNewVal = update_oplog_entry::extractNewValueForField(
+            args.updateArgs.update, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
+        auto refreshingFieldNewVal = update_oplog_entry::extractNewValueForField(
+            args.updateArgs.update, ShardCollectionType::kRefreshingFieldName);
 
-            // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit()
-            AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
+        // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit().
+        AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
+        if (refreshingFieldNewVal.isBoolean() && !refreshingFieldNewVal.boolean()) {
+            opCtx->recoveryUnit()->registerChange(
+                std::make_unique<CollectionVersionLogOpHandler>(opCtx, updatedNss));
+        }
 
-            auto refreshingField = setField.getField(ShardCollectionType::kRefreshingFieldName);
-            if (refreshingField.isBoolean() && !refreshingField.boolean()) {
-                opCtx->recoveryUnit()->registerChange(
-                    std::make_unique<CollectionVersionLogOpHandler>(opCtx, updatedNss));
-            }
-
-            if (setField.hasField(ShardCollectionType::kEnterCriticalSectionCounterFieldName)) {
-                // Force subsequent uses of the namespace to refresh the filtering metadata so they
-                // can synchronize with any work happening on the primary (e.g., migration critical
-                // section).
-                CollectionShardingRuntime::get(opCtx, updatedNss)->clearFilteringMetadata(opCtx);
-            }
+        if (enterCriticalSectionFieldNewVal.ok()) {
+            // Force subsequent uses of the namespace to refresh the filtering metadata so they
+            // can synchronize with any work happening on the primary (e.g., migration critical
+            // section).
+            CollectionShardingRuntime::get(opCtx, updatedNss)->clearFilteringMetadata(opCtx);
         }
     }
 
@@ -353,19 +349,14 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             40478,
             bsonExtractStringField(args.updateArgs.criteria, ShardDatabaseType::name.name(), &db));
 
-        // Parse the '$set' update
-        BSONElement setElement;
-        Status setStatus =
-            bsonExtractTypedField(args.updateArgs.update, StringData("$set"), Object, &setElement);
-        if (setStatus.isOK()) {
-            BSONObj setField = setElement.Obj();
+        auto enterCriticalSectionCounterFieldNewVal = update_oplog_entry::extractNewValueForField(
+            args.updateArgs.update, ShardDatabaseType::enterCriticalSectionCounter.name());
 
-            if (setField.hasField(ShardDatabaseType::enterCriticalSectionCounter.name())) {
-                AutoGetDb autoDb(opCtx, db, MODE_X);
-                auto dss = DatabaseShardingState::get(opCtx, db);
-                auto dssLock = DatabaseShardingState::DSSLock::lockExclusive(opCtx, dss);
-                dss->setDbVersion(opCtx, boost::none, dssLock);
-            }
+        if (enterCriticalSectionCounterFieldNewVal.ok()) {
+            AutoGetDb autoDb(opCtx, db, MODE_X);
+            auto dss = DatabaseShardingState::get(opCtx, db);
+            auto dssLock = DatabaseShardingState::DSSLock::lockExclusive(opCtx, dss);
+            dss->setDbVersion(opCtx, boost::none, dssLock);
         }
     }
 
@@ -373,11 +364,10 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
         if (!isStandaloneOrPrimary(opCtx))
             return;
 
-        BSONElement unsetElement;
-        Status status = bsonExtractTypedField(
-            args.updateArgs.update, StringData("$unset"), Object, &unsetElement);
+        const bool wasPendingFieldRemoved =
+            update_oplog_entry::isFieldRemovedByUpdate(args.updateArgs.update, "pending");
 
-        if (unsetElement.Obj().hasField("pending")) {
+        if (wasPendingFieldRemoved) {
             auto deletionTask = RangeDeletionTask::parse(
                 IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
 

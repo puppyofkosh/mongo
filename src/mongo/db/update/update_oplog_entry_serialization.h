@@ -44,12 +44,7 @@ constexpr size_t kSizeOfDeltaOplogEntryMetadata = 15;
 /**
  * Given a diff, produce the contents for the 'o' field of a $v: 2 delta-style oplog entry.
  */
-inline BSONObj makeDeltaOplogEntry(const doc_diff::Diff& diff) {
-    BSONObjBuilder builder;
-    builder.append("$v", static_cast<int>(UpdateOplogEntryVersion::kDeltaV2));
-    builder.append(kDiffObjectFieldName, diff);
-    return builder.obj();
-}
+BSONObj makeDeltaOplogEntry(const doc_diff::Diff& diff);
 
 /**
  * Produce the contents of the 'o' field of a replacement style oplog entry.
@@ -57,4 +52,28 @@ inline BSONObj makeDeltaOplogEntry(const doc_diff::Diff& diff) {
 inline BSONObj makeReplacementOplogEntry(const BSONObj& replacement) {
     return replacement;
 }
+
+/**
+ * Given a serialized $v:1 or $v:2 update, this function will attempt to recover the new value for
+ * the top-level field provided in 'fieldName'. Will return:
+ *
+ * -An EOO BSONElement if the field was deleted as part of the update or if the field's new value
+ * cannot be recovered from the update object. The latter case can happen when a field is not
+ * modified by the update at all, or when the field is an object and one of its subfields is
+ * modified.
+ * -A BSONElement with field's new value if it was added or set to a new value as part of the
+ * update.
+ *
+ * 'fieldName' *MUST* be a top-level field. It may not contain dots.
+ *
+ * It is a programming error to call this function with a value for 'updateObj' that is not a $v:1
+ * or $v:2 update. Calling this function with a replacement-style update is illegal.
+ */
+BSONElement extractNewValueForField(const BSONObj& updateObj, StringData fieldName);
+
+/**
+ * Given a serialized $v:1 or $v:2 update, this function will determine whether the given field was
+ * deleted by the update. 'fieldName' must be a top-level field, and may not include any dots.
+ */
+bool isFieldRemovedByUpdate(const BSONObj& updateObj, StringData fieldName);
 }  // namespace mongo::update_oplog_entry
