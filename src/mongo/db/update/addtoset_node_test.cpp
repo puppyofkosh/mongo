@@ -247,7 +247,7 @@ TEST_F(AddToSetNodeTest, ApplyDoNotAddExistingElements) {
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { u: { a: [ 0, 1 ] } } }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
     }
@@ -270,7 +270,7 @@ TEST_F(AddToSetNodeTest, ApplyDoNotDeduplicateExistingElements) {
     ASSERT_EQUALS(fromjson("{a: [0, 0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { u: { a: [ 0, 0, 1 ] } } }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 0, 1]}}"), getOplogEntry());
     }
@@ -292,7 +292,7 @@ TEST_F(AddToSetNodeTest, ApplyNoElementsToAdd) {
     ASSERT_EQUALS(fromjson("{a: [0]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: {} }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
     }
@@ -314,7 +314,7 @@ TEST_F(AddToSetNodeTest, ApplyNoNonDuplicateElementsToAdd) {
     ASSERT_EQUALS(fromjson("{a: [0]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: {} }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
     }
@@ -337,7 +337,7 @@ TEST_F(AddToSetNodeTest, ApplyCreateArray) {
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { i: { a: [ 0, 1 ] } } }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
     }
@@ -359,7 +359,7 @@ TEST_F(AddToSetNodeTest, ApplyCreateEmptyArrayIsNotNoop) {
     ASSERT_EQUALS(fromjson("{a: []}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: []}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { i: { a: [] } } }"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: []}}"), getOplogEntry());
     }
@@ -384,7 +384,7 @@ TEST_F(AddToSetNodeTest, ApplyDeduplicationOfElementsToAddRespectsCollation) {
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: ['abc', 'def']}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     }
@@ -409,7 +409,7 @@ TEST_F(AddToSetNodeTest, ApplyComparisonToExistingElementsRespectsCollation) {
     ASSERT_EQUALS(fromjson("{a: ['ABC', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['ABC', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: ['ABC', 'def']}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['ABC', 'def']}}"), getOplogEntry());
     }
@@ -435,7 +435,7 @@ TEST_F(AddToSetNodeTest, ApplyRespectsCollationFromSetCollator) {
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: ['abc', 'def']}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     }
@@ -483,7 +483,7 @@ TEST_F(AddToSetNodeTest, ApplyNestedArray) {
     ASSERT_EQUALS(fromjson("{ _id : 1, a : [ 1, [ 1 ] ] }"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $set : { 'a.1' : [ 1 ] } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u1: [1]}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{ $set : { 'a.1' : [ 1 ] } }"), getOplogEntry());
     }
@@ -505,7 +505,7 @@ TEST_F(AddToSetNodeTest, ApplyIndexesNotAffected) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [0, 1]}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
     }
