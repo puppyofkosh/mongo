@@ -51,12 +51,13 @@ public:
      * If 'replacementDocContainsIdField' is false then the _id field from the original document
      * will be preserved.
      *
-     * This function will ignore the log mode provided in 'applyParams'. The 'oplogEntry' field
-     * of the returned ApplyResult is always empty.
+     * This function will ignore the log mode provided in 'applyParams' and instead use
+     * the 'generateOplogEntry' parameter.
      */
     static ApplyResult applyReplacementUpdate(ApplyParams applyParams,
                                               const BSONObj& replacementDoc,
-                                              bool replacementDocContainsIdField);
+                                              bool replacementDocContainsIdField,
+                                              bool generateOplogEntry);
 
     /**
      * Initializes the node with the document to replace with. Any zero-valued timestamps (except

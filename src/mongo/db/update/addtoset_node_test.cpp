@@ -314,9 +314,9 @@ TEST_F(AddToSetNodeTest, ApplyNoNonDuplicateElementsToAdd) {
     ASSERT_EQUALS(fromjson("{a: [0]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-    ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
     } else {
-    ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
     }
 
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
@@ -337,9 +337,9 @@ TEST_F(AddToSetNodeTest, ApplyCreateArray) {
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
     } else {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
     }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
@@ -384,9 +384,9 @@ TEST_F(AddToSetNodeTest, ApplyDeduplicationOfElementsToAddRespectsCollation) {
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     } else {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
@@ -435,9 +435,9 @@ TEST_F(AddToSetNodeTest, ApplyRespectsCollationFromSetCollator) {
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     } else {
-    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
     }
 
     ASSERT_EQUALS(getModifiedPaths(), "{a}");

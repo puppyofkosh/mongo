@@ -41,31 +41,6 @@ BSONObj makeDeltaOplogEntry(const doc_diff::Diff& diff) {
 }
 
 namespace {
-// Given an update document, stored in the 'o' field of an oplog entry, determine the version.  If
-// the version cannot be determined, or the update appears to be a replacement, returns
-// boost::none.
-boost::optional<UpdateOplogEntryVersion> extractUpdateVersion(const BSONObj& updateDocument) {
-    // Use the "$v" field to determine which type of update this is. Note $v:1 updates were allowed
-    // to omit the $v field so that case must be handled carefully.
-    auto vElt = updateDocument[kUpdateOplogEntryVersionFieldName];
-
-    if (!vElt.ok()) {
-        // We're dealing with a $v:1 entry if the first field name starts with a '$'. Otherwise
-        // it's a replacement update, which does not have a specific version name.
-        if (updateDocument.firstElementFieldNameStringData().startsWith("$")) {
-            return UpdateOplogEntryVersion::kUpdateNodeV1;
-        }
-
-        // This is not a $v:1 oplog entry or $v:2 oplog entry. Fall through to the end.
-    } else if (vElt.numberInt() == static_cast<int>(UpdateOplogEntryVersion::kUpdateNodeV1)) {
-        return UpdateOplogEntryVersion::kUpdateNodeV1;
-    } else if (vElt.numberInt() == static_cast<int>(UpdateOplogEntryVersion::kDeltaV2)) {
-        return UpdateOplogEntryVersion::kDeltaV2;
-    }
-
-    return boost::none;
-}
-
 BSONElement extractNewValueForFieldFromV1Entry(const BSONObj& oField, StringData fieldName) {
     // Check the '$set' section.
     auto setElt = oField["$set"];
@@ -100,18 +75,18 @@ BSONElement extractNewValueForFieldFromV2Entry(const BSONObj& oField, StringData
     return BSONElement();
 }
 
-bool isFieldRemovedByV1Update(const BSONObj& oField, StringData fieldName) {
+FieldRemovedStatus isFieldRemovedByV1Update(const BSONObj& oField, StringData fieldName) {
     auto unsetElt = oField["$unset"];
     if (unsetElt.ok()) {
         invariant(unsetElt.type() == BSONType::Object);
         if (unsetElt.embeddedObject()[fieldName].ok()) {
-            return true;
+            return FieldRemovedStatus::kFieldRemoved;
         }
     }
-    return false;
+    return FieldRemovedStatus::kFieldNotRemoved;
 }
 
-bool isFieldRemovedByV2Update(const BSONObj& oField, StringData fieldName) {
+FieldRemovedStatus isFieldRemovedByV2Update(const BSONObj& oField, StringData fieldName) {
     auto diffField = oField[kDiffObjectFieldName];
 
     // Every $v:2 oplog entry should have a 'diff' field that is an object.
@@ -121,44 +96,74 @@ bool isFieldRemovedByV2Update(const BSONObj& oField, StringData fieldName) {
     boost::optional<StringData> nextDelete;
     while ((nextDelete = reader.nextDelete())) {
         if (*nextDelete == fieldName) {
-            return true;
+            return FieldRemovedStatus::kFieldRemoved;
         }
     }
-    return false;
+    return FieldRemovedStatus::kFieldNotRemoved;
 }
 }  // namespace
+
+// Given an update document, stored in the 'o' field of an oplog entry, determine the version.  If
+// the version cannot be determined, or the update appears to be a replacement, returns
+// boost::none.
+boost::optional<UpdateType> extractUpdateType(const BSONObj& updateDocument) {
+    // Use the "$v" field to determine which type of update this is. Note $v:1 updates were allowed
+    // to omit the $v field so that case must be handled carefully.
+    auto vElt = updateDocument[kUpdateOplogEntryVersionFieldName];
+
+    if (!vElt.ok()) {
+        // We're dealing with a $v:1 entry if the first field name starts with a '$'. Otherwise
+        // it's a replacement update, which does not have a specific version name.
+        if (updateDocument.firstElementFieldNameStringData().startsWith("$")) {
+            return UpdateType::kV1Modifier;
+        }
+
+        // The version field is missing and the first field is not prefixed by "$". This means we
+        // have a replacement update.
+        return UpdateType::kReplacement;
+    } else if (vElt.numberInt() == static_cast<int>(UpdateOplogEntryVersion::kUpdateNodeV1)) {
+        return UpdateType::kV1Modifier;
+    } else if (vElt.numberInt() == static_cast<int>(UpdateOplogEntryVersion::kDeltaV2)) {
+        return UpdateType::kV2Delta;
+    }
+
+    return boost::none;
+}
 
 BSONElement extractNewValueForField(const BSONObj& oField, StringData fieldName) {
     invariant(fieldName.find('.') == std::string::npos, "field name cannot contain dots");
 
-    auto version = extractUpdateVersion(oField);
-    // If the version was not recognized, there is clearly a bug we cannot recover from.
-    invariant(version);
+    auto type = extractUpdateType(oField);
+    invariant(type, "Unrecognized oplog entry version");
 
-    if (*version == UpdateOplogEntryVersion::kUpdateNodeV1) {
+    if (*type == UpdateType::kV1Modifier) {
         return extractNewValueForFieldFromV1Entry(oField, fieldName);
-    } else if (*version == UpdateOplogEntryVersion::kDeltaV2) {
+    } else if (*type == UpdateType::kV2Delta) {
         return extractNewValueForFieldFromV2Entry(oField, fieldName);
+    } else if (*type == UpdateType::kReplacement) {
+        return oField[fieldName];
     }
 
     // Clearly an unsupported format.
     MONGO_UNREACHABLE;
 }
 
-bool isFieldRemovedByUpdate(const BSONObj& oField, StringData fieldName) {
+FieldRemovedStatus isFieldRemovedByUpdate(const BSONObj& oField, StringData fieldName) {
     invariant(fieldName.find('.') == std::string::npos, "field name cannot contain dots");
 
-    auto version = extractUpdateVersion(oField);
-    // If the version was not recognized, there is clearly a bug we cannot recover from.
-    invariant(version);
+    auto type = extractUpdateType(oField);
+    invariant(type, "Unrecognized oplog entry version");
 
-    if (*version == UpdateOplogEntryVersion::kUpdateNodeV1) {
+    if (*type == UpdateType::kV1Modifier) {
         return isFieldRemovedByV1Update(oField, fieldName);
-    } else if (*version == UpdateOplogEntryVersion::kDeltaV2) {
+    } else if (*type == UpdateType::kV2Delta) {
         return isFieldRemovedByV2Update(oField, fieldName);
+    } else if (*type == UpdateType::kReplacement) {
+        // The field was definitely *not* removed if it's still in the post image. Otherwise,
+        // we cannot tell if it was removed without looking at the pre image.
+        return oField.hasField(fieldName) ? FieldRemovedStatus::kFieldNotRemoved
+                                          : FieldRemovedStatus::kUnknown;
     }
-
-    // Clearly an unsupported format.
     MONGO_UNREACHABLE;
 }
 }  // namespace mongo::update_oplog_entry

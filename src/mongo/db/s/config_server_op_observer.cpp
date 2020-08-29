@@ -181,9 +181,15 @@ void ConfigServerOpObserver::onApplyOps(OperationContext* opCtx,
         return;
     }
 
-    auto newTopologyTime = update_oplog_entry::extractNewValueForField(updateElem.embeddedObject(),
-                                                                       ShardType::topologyTime())
-                               .timestamp();
+    auto updateObj = updateElem.embeddedObject();
+    if (update_oplog_entry::extractUpdateType(updateObj) ==
+        update_oplog_entry::UpdateType::kReplacement) {
+        return;
+    }
+
+    auto newTopologyTime =
+        update_oplog_entry::extractNewValueForField(updateObj, ShardType::topologyTime())
+            .timestamp();
     if (newTopologyTime == Timestamp()) {
         return;
     }

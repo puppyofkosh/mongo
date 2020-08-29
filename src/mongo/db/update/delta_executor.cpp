@@ -44,8 +44,11 @@ DeltaExecutor::ApplyResult DeltaExecutor::applyUpdate(
     const auto& postImage = applyDiffOutput.postImage;
     auto postImageHasId = postImage.hasField("_id");
 
-    auto result = ObjectReplaceExecutor::applyReplacementUpdate(
-        std::move(applyParams), postImage, postImageHasId);
+    auto result = ObjectReplaceExecutor::applyReplacementUpdate(std::move(applyParams),
+                                                                postImage,
+                                                                postImageHasId,
+                                                                true  // generateOplogEntry
+    );
     result.indexesAffected = applyDiffOutput.indexesAffected;
     return result;
 }

@@ -42,6 +42,26 @@ static inline constexpr StringData kDiffObjectFieldName = "diff"_sd;
 constexpr size_t kSizeOfDeltaOplogEntryMetadata = 15;
 
 /**
+ * Represents the "type" of an update oplog entry. For historical reasons these do not always
+ * correspond to the value in the $v field of the entry. To determine the type of an update oplog
+ * entry use extractUpdateType().
+ *
+ * Pipeline updates are not represented here because they are always logged with replacement
+ * entries or $v:2 delta entries.
+ */
+enum class UpdateType {
+    kReplacement,
+    kV1Modifier,
+    kV2Delta,
+};
+
+/**
+ * Used for indicating whether a field was removed or not. 'kUnknown' represents the case where it
+ * cannot be determined whether a field was removed by just examining the update.
+ */
+enum class FieldRemovedStatus { kFieldRemoved, kFieldNotRemoved, kUnknown };
+
+/**
  * Given a diff, produce the contents for the 'o' field of a $v: 2 delta-style oplog entry.
  */
 BSONObj makeDeltaOplogEntry(const doc_diff::Diff& diff);
@@ -54,8 +74,14 @@ inline BSONObj makeReplacementOplogEntry(const BSONObj& replacement) {
 }
 
 /**
- * Given a serialized $v:1 or $v:2 update, this function will attempt to recover the new value for
- * the top-level field provided in 'fieldName'. Will return:
+ * Given the 'o' field of an update oplog entry, determine its type. If the type cannot be
+ * determined, boost::none is returned.
+ */
+boost::optional<UpdateType> extractUpdateType(const BSONObj& oField);
+
+/**
+ * Given the 'o' field of an update oplog entry, this function will attempt to recover the new
+ * value for the top-level field provided in 'fieldName'. Will return:
  *
  * -An EOO BSONElement if the field was deleted as part of the update or if the field's new value
  * cannot be recovered from the update object. The latter case can happen when a field is not
@@ -66,14 +92,22 @@ inline BSONObj makeReplacementOplogEntry(const BSONObj& replacement) {
  *
  * 'fieldName' *MUST* be a top-level field. It may not contain dots.
  *
- * It is a programming error to call this function with a value for 'updateObj' that is not a $v:1
- * or $v:2 update. Calling this function with a replacement-style update is illegal.
+ * It is a programming error to call this function with a value for 'updateObj' that is not a valid
+ * update.
  */
 BSONElement extractNewValueForField(const BSONObj& updateObj, StringData fieldName);
 
 /**
- * Given a serialized $v:1 or $v:2 update, this function will determine whether the given field was
- * deleted by the update. 'fieldName' must be a top-level field, and may not include any dots.
+ * Given the 'o' field of an update oplog entry document, this function will determine whether the
+ * given field was deleted by the update. 'fieldName' must be a top-level field, and may not
+ * include any dots.
+ *
+ * If this function is passed a replacement style update it may return 'kUnknown' because it is
+ * impossible to determine whether a field was deleted during a replacement update without
+ * examining the pre-image.
+ *
+ * It is a programming error to call this function with a value for 'updateObj' that is not a valid
+ * update.
  */
-bool isFieldRemovedByUpdate(const BSONObj& updateObj, StringData fieldName);
+FieldRemovedStatus isFieldRemovedByUpdate(const BSONObj& updateObj, StringData fieldName);
 }  // namespace mongo::update_oplog_entry

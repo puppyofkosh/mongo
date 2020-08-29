@@ -167,20 +167,21 @@ namespace {
 void appendElementToBuilder(stdx::variant<mutablebson::Element, BSONElement> elem,
                             StringData fieldName,
                             BSONObjBuilder* builder) {
-    stdx::visit(visit_helper::Overloaded{
-                    [&](mutablebson::Element element) {
-                        if (element.hasValue()) {
-                            builder->appendAs(element.getValue(), fieldName);
-                        } else if (element.getType() == BSONType::Object) {
-                            BSONObjBuilder subBuilder(builder->subobjStart(fieldName));
-                            element.writeTo(&subBuilder);
-                        } else {
-                            BSONArrayBuilder subBuilder(builder->subarrayStart(fieldName));
-                            element.writeArrayTo(&subBuilder);
-                        }
-                    },
-                    [&](BSONElement element) { builder->appendAs(element, fieldName); }},
-                elem);
+    stdx::visit(
+        visit_helper::Overloaded{
+            [&](mutablebson::Element element) {
+                if (element.hasValue()) {
+                    builder->appendAs(element.getValue(), fieldName);
+                } else if (element.getType() == BSONType::Object) {
+                    BSONObjBuilder subBuilder(builder->subobjStart(fieldName));
+                    element.writeTo(&subBuilder);
+                } else {
+                    BSONArrayBuilder subBuilder(builder->subarrayStart(fieldName));
+                    element.writeArrayTo(&subBuilder);
+                }
+            },
+            [&](BSONElement element) { builder->appendAs(element, fieldName); }},
+        elem);
 }
 void serializeNewlyCreatedDocument(DocumentNode* const node, BSONObjBuilder* out) {
     for (auto&& fieldName : node->inserts) {

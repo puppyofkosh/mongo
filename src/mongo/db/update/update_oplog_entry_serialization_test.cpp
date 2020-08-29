@@ -46,8 +46,8 @@ TEST(UpdateOplogSerializationTest, ReadV1EntryWithVersionField) {
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "a"), setField["a"]);
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "b"), setField["b"]);
 
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "a"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "z"));
+    ASSERT(isFieldRemovedByUpdate(o, "a") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "z") == FieldRemovedStatus::kFieldNotRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV1EntryWithoutVersionField) {
@@ -57,8 +57,8 @@ TEST(UpdateOplogSerializationTest, ReadV1EntryWithoutVersionField) {
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "a"), setField["a"]);
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "b"), setField["b"]);
 
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "a"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "z"));
+    ASSERT(isFieldRemovedByUpdate(o, "a") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "z") == FieldRemovedStatus::kFieldNotRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV1EntryWithSetAndUnset) {
@@ -71,10 +71,10 @@ TEST(UpdateOplogSerializationTest, ReadV1EntryWithSetAndUnset) {
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "c"), BSONElement());
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "d"), BSONElement());
 
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "a"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "b"));
-    ASSERT_TRUE(isFieldRemovedByUpdate(o, "c"));
-    ASSERT_TRUE(isFieldRemovedByUpdate(o, "d"));
+    ASSERT(isFieldRemovedByUpdate(o, "a") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "b") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "c") == FieldRemovedStatus::kFieldRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "d") == FieldRemovedStatus::kFieldRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV1EntryWhichIncludesDottedPath) {
@@ -89,9 +89,9 @@ TEST(UpdateOplogSerializationTest, ReadV1EntryWhichIncludesDottedPath) {
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "x"), setField["x"]);
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "y"), BSONElement());
 
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "x"));
-    ASSERT_TRUE(isFieldRemovedByUpdate(o, "y"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "z"));
+    ASSERT(isFieldRemovedByUpdate(o, "x") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "y") == FieldRemovedStatus::kFieldRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "z") == FieldRemovedStatus::kFieldNotRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV2Entry) {
@@ -105,11 +105,11 @@ TEST(UpdateOplogSerializationTest, ReadV2Entry) {
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "updatedField"), v2Entry["u"]["updatedField"]);
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "insertedField"), v2Entry["i"]["insertedField"]);
 
-    ASSERT_TRUE(isFieldRemovedByUpdate(o, "deletedField1"));
-    ASSERT_TRUE(isFieldRemovedByUpdate(o, "deletedField2"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "updatedField"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "insertedField"));
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "nonexistentField"));
+    ASSERT(isFieldRemovedByUpdate(o, "deletedField1") == FieldRemovedStatus::kFieldRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "deletedField2") == FieldRemovedStatus::kFieldRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "updatedField") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "insertedField") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "nonexistentField") == FieldRemovedStatus::kFieldNotRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV1EntryWithSubfieldModified) {
@@ -118,7 +118,7 @@ TEST(UpdateOplogSerializationTest, ReadV1EntryWithSubfieldModified) {
 
     // We cannot recover the entire new value for field 'a' so an EOO element is returned.
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "a"), BSONElement());
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "a"));
+    ASSERT(isFieldRemovedByUpdate(o, "a") == FieldRemovedStatus::kFieldNotRemoved);
 }
 
 TEST(UpdateOplogSerializationTest, ReadV2EntryWithSubfieldModified) {
@@ -127,7 +127,17 @@ TEST(UpdateOplogSerializationTest, ReadV2EntryWithSubfieldModified) {
 
     // We cannot recover the entire new value for field 'a' so an EOO element is returned.
     ASSERT_BSONELT_EQ(extractNewValueForField(o, "a"), BSONElement());
-    ASSERT_FALSE(isFieldRemovedByUpdate(o, "a"));
+    ASSERT(isFieldRemovedByUpdate(o, "a") == FieldRemovedStatus::kFieldNotRemoved);
+}
+
+TEST(UpdateOplogSerializationTest, ReadReplacementEntry) {
+    BSONObj o(BSON("foo" << 1 << "bar" << 2));
+
+    ASSERT_EQ(extractNewValueForField(o, "foo"), o["foo"]);
+    ASSERT_EQ(extractNewValueForField(o, "bar"), o["bar"]);
+
+    ASSERT(isFieldRemovedByUpdate(o, "bar") == FieldRemovedStatus::kFieldNotRemoved);
+    ASSERT(isFieldRemovedByUpdate(o, "baz") == FieldRemovedStatus::kUnknown);
 }
 
 DEATH_TEST(UpdateOplogSerializationTest, CannotExtractDottedField, "cannot contain dots") {
@@ -136,6 +146,14 @@ DEATH_TEST(UpdateOplogSerializationTest, CannotExtractDottedField, "cannot conta
 
 DEATH_TEST(UpdateOplogSerializationTest, CannotReadDottedField, "cannot contain dots") {
     isFieldRemovedByUpdate(BSONObj(), "a.b");
+}
+
+DEATH_TEST(UpdateOplogSerializationTest, CannotExtractFromNonExistentVersion, "Unrecognized") {
+    extractNewValueForField(BSON("$v" << 10), "a");
+}
+
+DEATH_TEST(UpdateOplogSerializationTest, CannotReadNonExistentVersion, "Unrecognized") {
+    isFieldRemovedByUpdate(BSON("$v" << 10), "a");
 }
 }  // namespace
 }  // namespace mongo::update_oplog_entry

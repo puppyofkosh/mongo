@@ -49,6 +49,7 @@ public:
         _useV2LogBuilder = true;
         ServiceContextTest::run();
     }
+
 protected:
     // Creates a RuntimeUpdatePath from a string, assuming that all numeric path components are
     // array indexes. Tests which use numeric field names in objects must manually create a

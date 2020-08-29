@@ -281,7 +281,12 @@ void ShardServerOpObserver::onInserts(OperationContext* opCtx,
 }
 
 void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateEntryArgs& args) {
-    if (args.nss == NamespaceString::kShardConfigCollectionsNamespace) {
+    const auto& updateDoc = args.updateArgs.update;
+    // Most of these handlers do not need to run when the update is a full document replacement.
+    const bool isReplacementUpdate =
+        (update_oplog_entry::extractUpdateType(updateDoc) ==
+         boost::make_optional(update_oplog_entry::UpdateType::kReplacement));
+    if (args.nss == NamespaceString::kShardConfigCollectionsNamespace && !isReplacementUpdate) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {
             return;
@@ -311,9 +316,9 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
         }());
 
         auto enterCriticalSectionFieldNewVal = update_oplog_entry::extractNewValueForField(
-            args.updateArgs.update, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
+            updateDoc, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
         auto refreshingFieldNewVal = update_oplog_entry::extractNewValueForField(
-            args.updateArgs.update, ShardCollectionType::kRefreshingFieldName);
+            updateDoc, ShardCollectionType::kRefreshingFieldName);
 
         // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit().
         AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
@@ -330,7 +335,7 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
         }
     }
 
-    if (args.nss == NamespaceString::kShardConfigDatabasesNamespace) {
+    if (args.nss == NamespaceString::kShardConfigDatabasesNamespace && !isReplacementUpdate) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {
             return;
@@ -350,7 +355,7 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             bsonExtractStringField(args.updateArgs.criteria, ShardDatabaseType::name.name(), &db));
 
         auto enterCriticalSectionCounterFieldNewVal = update_oplog_entry::extractNewValueForField(
-            args.updateArgs.update, ShardDatabaseType::enterCriticalSectionCounter.name());
+            updateDoc, ShardDatabaseType::enterCriticalSectionCounter.name());
 
         if (enterCriticalSectionCounterFieldNewVal.ok()) {
             AutoGetDb autoDb(opCtx, db, MODE_X);
@@ -360,14 +365,14 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
         }
     }
 
-    if (args.nss == NamespaceString::kRangeDeletionNamespace) {
+    if (args.nss == NamespaceString::kRangeDeletionNamespace && !isReplacementUpdate) {
         if (!isStandaloneOrPrimary(opCtx))
             return;
 
-        const bool wasPendingFieldRemoved =
+        const auto pendingFieldRemovedStatus =
             update_oplog_entry::isFieldRemovedByUpdate(args.updateArgs.update, "pending");
 
-        if (wasPendingFieldRemoved) {
+        if (pendingFieldRemovedStatus == update_oplog_entry::FieldRemovedStatus::kFieldRemoved) {
             auto deletionTask = RangeDeletionTask::parse(
                 IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
 
