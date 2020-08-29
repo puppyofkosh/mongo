@@ -135,7 +135,11 @@ TEST_F(AddToSetNodeTest, ApplyNonEach) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [0, 1]}}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -153,7 +157,11 @@ TEST_F(AddToSetNodeTest, ApplyNonEachArray) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, [1]]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, [1]]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [0, [1]]}}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, [1]]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -171,7 +179,11 @@ TEST_F(AddToSetNodeTest, ApplyEach) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 1, 2]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1, 2]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [ 0, 1, 2 ]}}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1, 2]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -189,7 +201,11 @@ TEST_F(AddToSetNodeTest, ApplyToEmptyArray) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [1, 2]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [1, 2]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [1, 2]}}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [1, 2]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -207,7 +223,12 @@ TEST_F(AddToSetNodeTest, ApplyDeduplicateElementsToAdd) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: [0, 1]}}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -225,7 +246,12 @@ TEST_F(AddToSetNodeTest, ApplyDoNotAddExistingElements) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -243,7 +269,11 @@ TEST_F(AddToSetNodeTest, ApplyDoNotDeduplicateExistingElements) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 0, 1]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 0, 1]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -261,7 +291,11 @@ TEST_F(AddToSetNodeTest, ApplyNoElementsToAdd) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -279,7 +313,12 @@ TEST_F(AddToSetNodeTest, ApplyNoNonDuplicateElementsToAdd) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+    ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+    ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -297,7 +336,11 @@ TEST_F(AddToSetNodeTest, ApplyCreateArray) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: [0, 1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    } else {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -315,7 +358,11 @@ TEST_F(AddToSetNodeTest, ApplyCreateEmptyArrayIsNotNoop) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: []}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: []}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: []}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: []}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -336,7 +383,11 @@ TEST_F(AddToSetNodeTest, ApplyDeduplicationOfElementsToAddRespectsCollation) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: ['abc', 'def']}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+    } else {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -357,7 +408,11 @@ TEST_F(AddToSetNodeTest, ApplyComparisonToExistingElementsRespectsCollation) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: ['ABC', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: ['ABC', 'def']}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['ABC', 'def']}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['ABC', 'def']}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -379,7 +434,12 @@ TEST_F(AddToSetNodeTest, ApplyRespectsCollationFromSetCollator) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: ['abc', 'def']}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: ['abc', 'def']}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+    } else {
+    ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: ['abc', 'def']}}"), getOplogEntry());
+    }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -422,7 +482,12 @@ TEST_F(AddToSetNodeTest, ApplyNestedArray) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{ _id : 1, a : [ 1, [ 1 ] ] }"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{ $set : { 'a.1' : [ 1 ] } }"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{ $set : { 'a.1' : [ 1 ] } }"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{ $set : { 'a.1' : [ 1 ] } }"), getOplogEntry());
+    }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a.1}");
 }
 
@@ -439,7 +504,11 @@ TEST_F(AddToSetNodeTest, ApplyIndexesNotAffected) {
     ASSERT_FALSE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: [0, 1]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [0, 1]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
