@@ -208,7 +208,12 @@ void writeArrayDiff(const ArrayNode& node, BSONObjBuilder* builder) {
             appendElementToBuilder(valueNode.elt,
                                    std::string(1, doc_diff::kUpdateSectionFieldName) + idxAsStr,
                                    builder);
-            continue;
+        } else if (child->type() == NodeType::kInsert) {
+            // In $v:2 entries, array updates and inserts are treated the same.
+            const auto& valueNode = checked_cast<const InsertNode&>(*child);
+            appendElementToBuilder(valueNode.elt,
+                                   std::string(1, doc_diff::kUpdateSectionFieldName) + idxAsStr,
+                                   builder);
         } else if (child->type() == NodeType::kDocument &&
                    checked_cast<DocumentNode*>(child.get())->created) {
             // This represents that the array element is being created which has a sub-object.
