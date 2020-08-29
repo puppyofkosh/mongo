@@ -81,8 +81,21 @@ function pruneOptionalFields(event, expected) {
 function assertChangeStreamEventEq(actualEvent, expectedEvent) {
     const testEvent = pruneOptionalFields(Object.assign({}, actualEvent), expectedEvent);
 
+    const testExpectedEvent = Object.assign({}, expectedEvent);
+
+    // TODO SERVER-50301: The 'truncatedArrays' field may not appear in the updateDescription
+    // depending on whether $v:2 update oplog entries are enabled. When the expected event has an
+    // empty 'truncatedFields' we do not require that the actual event contain the field. When $v:2
+    // update oplog entries are enabled on all configurations, this logic can be removed.
+    if (testEvent.hasOwnProperty("updateDescription") &&
+        !testEvent.updateDescription.hasOwnProperty("truncatedArrays")) {
+        if (testExpectedEvent.hasOwnProperty("updateDescription")) {
+            delete testExpectedEvent.updateDescription.truncatedArrays;
+        }
+    }
+
     assert.docEq(testEvent,
-                 expectedEvent,
+                 testExpectedEvent,
                  "Change did not match expected change. Expected change: " + tojson(expectedEvent) +
                      ", Actual change: " + tojson(testEvent));
 }

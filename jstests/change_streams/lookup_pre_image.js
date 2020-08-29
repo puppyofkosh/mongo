@@ -66,6 +66,10 @@ latestChange = cst.getOneChange(csNoPreImages);
 assert.eq(latestChange.operationType, "update");
 assert(!latestChange.hasOwnProperty("fullDocumentBeforeChange"));
 assert.docEq(latestChange.fullDocument, {_id: "x", foo: "baz"});
+
+// TODO SERVER-50301 : The 'truncatedArrays' field may or may not appear depending on whether $v:2
+// log entries are enabled.
+delete latestChange.updateDescription.truncatedArrays;
 assert.docEq(latestChange.updateDescription, {updatedFields: {foo: "baz"}, removedFields: []});
 // Add the expected "fullDocumentBeforeChange" and confirm that both pre-image cursors see it.
 latestChange.fullDocumentBeforeChange = {
@@ -119,6 +123,10 @@ latestChange = cst.getOneChange(csNoPreImages);
 assert.eq(latestChange.operationType, "update");
 assert(!latestChange.hasOwnProperty("fullDocumentBeforeChange"));
 assert.docEq(latestChange.fullDocument, {_id: "y", foo: "baz"});
+
+// TODO SERVER-50301: The 'truncatedArrays' field may or may not appear depending on whether $v:2
+// log entries are enabled.
+delete latestChange.updateDescription.truncatedArrays;
 assert.docEq(latestChange.updateDescription, {updatedFields: {foo: "baz"}, removedFields: []});
 // The "whenAvailable" cursor returns an event without the pre-image.
 assert.docEq(latestChange, cst.getOneChange(csPreImageWhenAvailableCursor));
