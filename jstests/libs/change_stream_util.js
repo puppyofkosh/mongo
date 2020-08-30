@@ -59,7 +59,8 @@ function assertInvalidateOp({cursor, opType}) {
     return null;
 }
 
-function pruneOptionalFields(event, expected) {
+// TODO: Rename this function and have it add a truncatedArrays field if necessary.
+function canonicalizeEventForTesting(event, expected) {
     if (!expected.hasOwnProperty("_id"))
         delete event._id;
 
@@ -72,6 +73,19 @@ function pruneOptionalFields(event, expected) {
     if (!expected.hasOwnProperty("lsid"))
         delete event.lsid;
 
+    // TODO SERVER-50301: The 'truncatedArrays' field may not appear in the updateDescription
+    // depending on whether $v:2 update oplog entries are enabled. When the expected event has an
+    // empty 'truncatedFields' we do not require that the actual event contain the field. This
+    // logic can be removed when $v:2 update oplog entries are enabled on all configurations.
+    if (expected.hasOwnProperty("updateDescription") &&
+        Array.isArray(expected.updateDescription.truncatedArrays) &&
+        expected.updateDescription.truncatedArrays.length == 0) {
+        if (event.hasOwnProperty("updateDescription") &&
+            !event.updateDescription.hasOwnProperty("truncatedArrays")) {
+            event.updateDescription.truncatedArrays = [];
+        }
+    }
+    
     return event;
 }
 /**
@@ -79,23 +93,10 @@ function pruneOptionalFields(event, expected) {
  * resume token and clusterTime unless they are explicitly listed in the expectedEvent.
  */
 function assertChangeStreamEventEq(actualEvent, expectedEvent) {
-    const testEvent = pruneOptionalFields(Object.assign({}, actualEvent), expectedEvent);
-
-    const testExpectedEvent = Object.assign({}, expectedEvent);
-
-    // TODO SERVER-50301: The 'truncatedArrays' field may not appear in the updateDescription
-    // depending on whether $v:2 update oplog entries are enabled. When the expected event has an
-    // empty 'truncatedFields' we do not require that the actual event contain the field. When $v:2
-    // update oplog entries are enabled on all configurations, this logic can be removed.
-    if (testEvent.hasOwnProperty("updateDescription") &&
-        !testEvent.updateDescription.hasOwnProperty("truncatedArrays")) {
-        if (testExpectedEvent.hasOwnProperty("updateDescription")) {
-            delete testExpectedEvent.updateDescription.truncatedArrays;
-        }
-    }
+    const testEvent = canonicalizeEventForTesting(Object.assign({}, actualEvent), expectedEvent);
 
     assert.docEq(testEvent,
-                 testExpectedEvent,
+                 expectedEvent,
                  "Change did not match expected change. Expected change: " + tojson(expectedEvent) +
                      ", Actual change: " + tojson(testEvent));
 }
