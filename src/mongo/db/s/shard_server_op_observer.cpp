@@ -286,7 +286,7 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
     const bool isReplacementUpdate =
         (update_oplog_entry::extractUpdateType(updateDoc) ==
          boost::make_optional(update_oplog_entry::UpdateType::kReplacement));
-    if (args.nss == NamespaceString::kShardConfigCollectionsNamespace && !isReplacementUpdate) {
+    if (args.nss == NamespaceString::kShardConfigCollectionsNamespace) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {
             return;
@@ -315,27 +315,29 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             return NamespaceString(coll);
         }());
 
-        auto enterCriticalSectionFieldNewVal = update_oplog_entry::extractNewValueForField(
-            updateDoc, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
-        auto refreshingFieldNewVal = update_oplog_entry::extractNewValueForField(
-            updateDoc, ShardCollectionType::kRefreshingFieldName);
+        if (!isReplacementUpdate) {
+            auto enterCriticalSectionFieldNewVal = update_oplog_entry::extractNewValueForField(
+                updateDoc, ShardCollectionType::kEnterCriticalSectionCounterFieldName);
+            auto refreshingFieldNewVal = update_oplog_entry::extractNewValueForField(
+                updateDoc, ShardCollectionType::kRefreshingFieldName);
 
-        // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit().
-        AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
-        if (refreshingFieldNewVal.isBoolean() && !refreshingFieldNewVal.boolean()) {
-            opCtx->recoveryUnit()->registerChange(
-                std::make_unique<CollectionVersionLogOpHandler>(opCtx, updatedNss));
-        }
+            // Need the WUOW to retain the lock for CollectionVersionLogOpHandler::commit().
+            AutoGetCollection autoColl(opCtx, updatedNss, MODE_IX);
+            if (refreshingFieldNewVal.isBoolean() && !refreshingFieldNewVal.boolean()) {
+                opCtx->recoveryUnit()->registerChange(
+                    std::make_unique<CollectionVersionLogOpHandler>(opCtx, updatedNss));
+            }
 
-        if (enterCriticalSectionFieldNewVal.ok()) {
-            // Force subsequent uses of the namespace to refresh the filtering metadata so they
-            // can synchronize with any work happening on the primary (e.g., migration critical
-            // section).
-            CollectionShardingRuntime::get(opCtx, updatedNss)->clearFilteringMetadata(opCtx);
+            if (enterCriticalSectionFieldNewVal.ok()) {
+                // Force subsequent uses of the namespace to refresh the filtering metadata so they
+                // can synchronize with any work happening on the primary (e.g., migration critical
+                // section).
+                CollectionShardingRuntime::get(opCtx, updatedNss)->clearFilteringMetadata(opCtx);
+            }
         }
     }
 
-    if (args.nss == NamespaceString::kShardConfigDatabasesNamespace && !isReplacementUpdate) {
+    if (args.nss == NamespaceString::kShardConfigDatabasesNamespace) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {
             return;
@@ -354,33 +356,37 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             40478,
             bsonExtractStringField(args.updateArgs.criteria, ShardDatabaseType::name.name(), &db));
 
-        auto enterCriticalSectionCounterFieldNewVal = update_oplog_entry::extractNewValueForField(
-            updateDoc, ShardDatabaseType::enterCriticalSectionCounter.name());
+        if (!isReplacementUpdate) {
+            auto enterCriticalSectionCounterFieldNewVal = update_oplog_entry::extractNewValueForField(
+                updateDoc, ShardDatabaseType::enterCriticalSectionCounter.name());
 
-        if (enterCriticalSectionCounterFieldNewVal.ok()) {
-            AutoGetDb autoDb(opCtx, db, MODE_X);
-            auto dss = DatabaseShardingState::get(opCtx, db);
-            auto dssLock = DatabaseShardingState::DSSLock::lockExclusive(opCtx, dss);
-            dss->setDbVersion(opCtx, boost::none, dssLock);
+            if (enterCriticalSectionCounterFieldNewVal.ok()) {
+                AutoGetDb autoDb(opCtx, db, MODE_X);
+                auto dss = DatabaseShardingState::get(opCtx, db);
+                auto dssLock = DatabaseShardingState::DSSLock::lockExclusive(opCtx, dss);
+                dss->setDbVersion(opCtx, boost::none, dssLock);
+            }
         }
     }
 
-    if (args.nss == NamespaceString::kRangeDeletionNamespace && !isReplacementUpdate) {
+    if (args.nss == NamespaceString::kRangeDeletionNamespace) {
         if (!isStandaloneOrPrimary(opCtx))
             return;
 
-        const auto pendingFieldRemovedStatus =
-            update_oplog_entry::isFieldRemovedByUpdate(args.updateArgs.update, "pending");
+        if (!isReplacementUpdate) {
+            const auto pendingFieldRemovedStatus =
+                update_oplog_entry::isFieldRemovedByUpdate(args.updateArgs.update, "pending");
 
-        if (pendingFieldRemovedStatus == update_oplog_entry::FieldRemovedStatus::kFieldRemoved) {
-            auto deletionTask = RangeDeletionTask::parse(
-                IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
+            if (pendingFieldRemovedStatus == update_oplog_entry::FieldRemovedStatus::kFieldRemoved) {
+                auto deletionTask = RangeDeletionTask::parse(
+                    IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
 
-            if (deletionTask.getDonorShardId() != ShardingState::get(opCtx)->shardId()) {
-                // Range deletion tasks for moved away chunks are scheduled through the
-                // MigrationCoordinator, so only schedule a task for received chunks.
-                opCtx->recoveryUnit()->registerChange(
-                    std::make_unique<SubmitRangeDeletionHandler>(opCtx, deletionTask));
+                if (deletionTask.getDonorShardId() != ShardingState::get(opCtx)->shardId()) {
+                    // Range deletion tasks for moved away chunks are scheduled through the
+                    // MigrationCoordinator, so only schedule a task for received chunks.
+                    opCtx->recoveryUnit()->registerChange(
+                        std::make_unique<SubmitRangeDeletionHandler>(opCtx, deletionTask));
+                }
             }
         }
     }

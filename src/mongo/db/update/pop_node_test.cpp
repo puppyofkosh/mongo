@@ -115,7 +115,11 @@ TEST_F(PopNodeTest, NoopWhenFirstPathComponentDoesNotExist) {
     ASSERT_TRUE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{b: [1, 2, 3]}"), doc);
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -133,7 +137,11 @@ TEST_F(PopNodeTest, NoopWhenPathPartiallyExists) {
     ASSERT_TRUE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {}}"), doc);
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b.c}", getModifiedPaths());
 }
 
@@ -151,7 +159,11 @@ TEST_F(PopNodeTest, NoopWhenNumericalPathComponentExceedsArrayLength) {
     ASSERT_TRUE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: []}"), doc);
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.0}", getModifiedPaths());
 }
 
@@ -215,7 +227,11 @@ TEST_F(PopNodeTest, NoopWhenPathContainsAnEmptyArray) {
     ASSERT_TRUE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: []}}"), doc);
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -233,7 +249,11 @@ TEST_F(PopNodeTest, PopsSingleElementFromTheBack) {
     ASSERT_FALSE(result.noop);
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: []}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': []}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': []}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': []}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -251,7 +271,11 @@ TEST_F(PopNodeTest, PopsSingleElementFromTheFront) {
     ASSERT_FALSE(result.noop);
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: []}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': []}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': []}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': []}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -269,7 +293,11 @@ TEST_F(PopNodeTest, PopsFromTheBackOfMultiElementArray) {
     ASSERT_FALSE(result.noop);
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: [1, 2]}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': [1, 2]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [1, 2]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [1, 2]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -287,7 +315,11 @@ TEST_F(PopNodeTest, PopsFromTheFrontOfMultiElementArray) {
     ASSERT_FALSE(result.noop);
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: [2, 3]}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': [2, 3]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [2, 3]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [2, 3]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -305,7 +337,11 @@ TEST_F(PopNodeTest, PopsFromTheFrontOfMultiElementArrayWithoutAffectingIndexes) 
     ASSERT_FALSE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: [2, 3]}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': [2, 3]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [2, 3]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [2, 3]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -322,7 +358,11 @@ TEST_F(PopNodeTest, SucceedsWithNullUpdateIndexData) {
     ASSERT_FALSE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: [1, 2]}}"), doc);
-    ASSERT_EQUALS(fromjson("{$set: {'a.b': [1, 2]}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [1, 2]}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': [1, 2]}}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 
@@ -414,7 +454,11 @@ TEST_F(PopNodeTest, NoopOnImmutablePathSucceeds) {
     ASSERT_TRUE(result.noop);
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: []}}"), doc);
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
     ASSERT_EQUALS("{a.b}", getModifiedPaths());
 }
 

@@ -163,7 +163,11 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentAnd) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(fromjson("{a: 0}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: 0}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentOr) {
@@ -178,7 +182,11 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentOr) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: 1}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentXor) {
@@ -193,7 +201,11 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentXor) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{$set: {a: 1}}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentAnd) {
@@ -208,7 +220,11 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentAnd) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b0100), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(BSON("$set" << BSON("a" << 0b0100)), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0100)), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0100)), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentOr) {
@@ -223,7 +239,11 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentOr) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b0111), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(BSON("$set" << BSON("a" << 0b0111)), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0111)), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0111)), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentXor) {
@@ -238,7 +258,11 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentXor) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b0011), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(BSON("$set" << BSON("a" << 0b0011)), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0011)), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0011)), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyShouldReportNoOp) {
@@ -253,7 +277,11 @@ TEST_F(BitNodeTest, ApplyShouldReportNoOp) {
     ASSERT_TRUE(result.noop);
     ASSERT_EQUALS(BSON("a" << static_cast<int>(1)), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(fromjson("{}"), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyMultipleBitOps) {
@@ -273,7 +301,11 @@ TEST_F(BitNodeTest, ApplyMultipleBitOps) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b0101011001100110), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(BSON("$set" << BSON("a" << 0b0101011001100110)), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0101011001100110)), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0101011001100110)), getOplogEntry());
+    }
 }
 
 TEST_F(BitNodeTest, ApplyRepeatedBitOps) {
@@ -288,7 +320,11 @@ TEST_F(BitNodeTest, ApplyRepeatedBitOps) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b10010110), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    ASSERT_EQUALS(BSON("$set" << BSON("a" << 0b10010110)), getLogDoc());
+    if (v2LogBuilderUsed()) {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b10010110)), getOplogEntry());
+    } else {
+        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b10010110)), getOplogEntry());
+    }
 }
 
 }  // namespace

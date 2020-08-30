@@ -142,11 +142,15 @@ TEST_F(CurrentDateNodeTest, ApplyTrue) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::Date);
 
-    ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
-    ASSERT_TRUE(getLogDoc().root()["$set"].ok());
-    ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
-    ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
-    ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
+        ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
+        ASSERT_TRUE(getLogDoc().root()["$set"].ok());
+        ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
+        ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
+        ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyFalse) {
@@ -166,11 +170,15 @@ TEST_F(CurrentDateNodeTest, ApplyFalse) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::Date);
 
-    ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
-    ASSERT_TRUE(getLogDoc().root()["$set"].ok());
-    ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
-    ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
-    ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
+        ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
+        ASSERT_TRUE(getLogDoc().root()["$set"].ok());
+        ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
+        ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
+        ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyDate) {
@@ -190,11 +198,15 @@ TEST_F(CurrentDateNodeTest, ApplyDate) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::Date);
 
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
     ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyTimestamp) {
@@ -214,11 +226,15 @@ TEST_F(CurrentDateNodeTest, ApplyTimestamp) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::bsonTimestamp);
 
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
     ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::bsonTimestamp);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyFieldDoesNotExist) {
@@ -238,11 +254,15 @@ TEST_F(CurrentDateNodeTest, ApplyFieldDoesNotExist) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::Date);
 
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
     ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyIndexesNotAffected) {
@@ -262,11 +282,15 @@ TEST_F(CurrentDateNodeTest, ApplyIndexesNotAffected) {
     ASSERT_TRUE(doc.root()["a"].ok());
     ASSERT_EQUALS(doc.root()["a"].getType(), BSONType::Date);
 
+    if (v2LogBuilderUsed()) {
+        MONGO_UNREACHABLE;
+    } else {
     ASSERT_EQUALS(getLogDoc().root().countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"].countChildren(), 1U);
     ASSERT_TRUE(getLogDoc().root()["$set"]["a"].ok());
     ASSERT_EQUALS(getLogDoc().root()["$set"]["a"].getType(), BSONType::Date);
+    }
 }
 
 TEST_F(CurrentDateNodeTest, ApplyNoIndexDataOrLogBuilder) {

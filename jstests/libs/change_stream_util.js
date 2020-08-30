@@ -85,7 +85,7 @@ function canonicalizeEventForTesting(event, expected) {
             event.updateDescription.truncatedArrays = [];
         }
     }
-    
+
     return event;
 }
 /**
