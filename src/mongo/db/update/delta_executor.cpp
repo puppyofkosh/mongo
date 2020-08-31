@@ -33,6 +33,7 @@
 
 #include "mongo/bson/mutable/document.h"
 #include "mongo/db/update/object_replace_executor.h"
+#include "mongo/db/update/update_oplog_entry_serialization.h"
 
 namespace mongo {
 
@@ -46,10 +47,9 @@ DeltaExecutor::ApplyResult DeltaExecutor::applyUpdate(
 
     auto result = ObjectReplaceExecutor::applyReplacementUpdate(std::move(applyParams),
                                                                 postImage,
-                                                                postImageHasId,
-                                                                true  // generateOplogEntry
-    );
+                                                                postImageHasId);
     result.indexesAffected = applyDiffOutput.indexesAffected;
+    result.oplogEntry = update_oplog_entry::makeDeltaOplogEntry(_diff);
     return result;
 }
 }  // namespace mongo

@@ -72,10 +72,7 @@ ObjectReplaceExecutor::ObjectReplaceExecutor(BSONObj replacement)
 }
 
 UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyReplacementUpdate(
-    ApplyParams applyParams,
-    const BSONObj& replacementDoc,
-    bool replacementDocContainsIdField,
-    bool generateOplogEntry) {
+    ApplyParams applyParams, const BSONObj& replacementDoc, bool replacementDocContainsIdField) {
     auto originalDoc = applyParams.element.getDocument().getObject();
 
     // Check for noop.
@@ -145,17 +142,16 @@ UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyReplacementUpdate(
         }
     }
 
-    auto ret = ApplyResult{};
-    if (!ret.noop && generateOplogEntry) {
-        ret.oplogEntry = update_oplog_entry::makeReplacementOplogEntry(
-            applyParams.element.getDocument().getObject());
-    }
-
-    return ret;
+    return ApplyResult{};
 }
 
 UpdateExecutor::ApplyResult ObjectReplaceExecutor::applyUpdate(ApplyParams applyParams) const {
-    const bool generateOplogEntry = true;
-    return applyReplacementUpdate(applyParams, _replacementDoc, _containsId, generateOplogEntry);
+    auto ret = applyReplacementUpdate(applyParams, _replacementDoc, _containsId);
+
+    if (!ret.noop && applyParams.logMode != ApplyParams::LogMode::kDoNotGenerateOplogEntry) {
+        ret.oplogEntry = update_oplog_entry::makeReplacementOplogEntry(
+            applyParams.element.getDocument().getObject());
+    }
+    return ret;
 }
 }  // namespace mongo

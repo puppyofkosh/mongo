@@ -286,6 +286,7 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
     const bool isReplacementUpdate =
         (update_oplog_entry::extractUpdateType(updateDoc) ==
          boost::make_optional(update_oplog_entry::UpdateType::kReplacement));
+
     if (args.nss == NamespaceString::kShardConfigCollectionsNamespace) {
         // Notification of routing table changes are only needed on secondaries
         if (isStandaloneOrPrimary(opCtx)) {

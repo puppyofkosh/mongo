@@ -100,11 +100,8 @@ UpdateExecutor::ApplyResult PipelineExecutor::applyUpdate(ApplyParams applyParam
 
     // Replace the pre-image document in applyParams with the post image we got from running the
     // post image.
-    auto ret = ObjectReplaceExecutor::applyReplacementUpdate(applyParams,
-                                                             transformedDoc,
-                                                             transformedDocHasIdField,
-                                                             false  // generateOplogEntry
-    );
+    auto ret = ObjectReplaceExecutor::applyReplacementUpdate(
+        applyParams, transformedDoc, transformedDocHasIdField);
     // The oplog entry should not have been populated yet.
     invariant(ret.oplogEntry.isEmpty());
 
