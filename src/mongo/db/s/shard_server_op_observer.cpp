@@ -358,8 +358,9 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             bsonExtractStringField(args.updateArgs.criteria, ShardDatabaseType::name.name(), &db));
 
         if (!isReplacementUpdate) {
-            auto enterCriticalSectionCounterFieldNewVal = update_oplog_entry::extractNewValueForField(
-                updateDoc, ShardDatabaseType::enterCriticalSectionCounter.name());
+            auto enterCriticalSectionCounterFieldNewVal =
+                update_oplog_entry::extractNewValueForField(
+                    updateDoc, ShardDatabaseType::enterCriticalSectionCounter.name());
 
             if (enterCriticalSectionCounterFieldNewVal.ok()) {
                 AutoGetDb autoDb(opCtx, db, MODE_X);
@@ -378,7 +379,8 @@ void ShardServerOpObserver::onUpdate(OperationContext* opCtx, const OplogUpdateE
             const auto pendingFieldRemovedStatus =
                 update_oplog_entry::isFieldRemovedByUpdate(args.updateArgs.update, "pending");
 
-            if (pendingFieldRemovedStatus == update_oplog_entry::FieldRemovedStatus::kFieldRemoved) {
+            if (pendingFieldRemovedStatus ==
+                update_oplog_entry::FieldRemovedStatus::kFieldRemoved) {
                 auto deletionTask = RangeDeletionTask::parse(
                     IDLParserErrorContext("ShardServerOpObserver"), args.updateArgs.updatedDoc);
 

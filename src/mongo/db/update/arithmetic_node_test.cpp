@@ -100,7 +100,7 @@ TEST(ArithmeticNodeTest, InitFailsForObjectElement) {
     Status result = node.init(update["$mul"]["a"], expCtx);
     ASSERT_NOT_OK(result);
     ASSERT_EQ(result.code(), ErrorCodes::TypeMismatch);
-    ASSERT_EQ(result.reason(), "Cannot multiply with non-numeric argument: {a: { b: 6 }}");
+    ASSERT_EQ(result.reason(), "Cannot multiply with non-numeric argument: {a: {b: 6}}");
 }
 
 TEST(ArithmeticNodeTest, InitFailsForArrayElement) {
@@ -127,11 +127,8 @@ TEST_F(ArithmeticNodeTest, ApplyIncNoOp) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 5}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -149,11 +146,8 @@ TEST_F(ArithmeticNodeTest, ApplyMulNoOp) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 5}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -171,11 +165,8 @@ TEST_F(ArithmeticNodeTest, ApplyRoundingNoOp) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 6.022e23}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -193,11 +184,13 @@ TEST_F(ArithmeticNodeTest, ApplyEmptyPathToCreate) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 11}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
+
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 11}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: 11}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 11}}"), getOplogEntry());
     }
+
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -216,8 +209,9 @@ TEST_F(ArithmeticNodeTest, ApplyCreatePath) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {d: 5, b: {c: 6}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
+
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b.c': 6}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {b: {c: 6}}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b.c': 6}}"), getOplogEntry());
     }
@@ -257,7 +251,7 @@ TEST_F(ArithmeticNodeTest, ApplyCreatePathFromRoot) {
     ASSERT_EQUALS(fromjson("{c: 5, a: {b: 6}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 6}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: {b: 6}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 6}}"), getOplogEntry());
     }
@@ -280,7 +274,7 @@ TEST_F(ArithmeticNodeTest, ApplyPositional) {
     ASSERT_EQUALS(fromjson("{a: [0, 7, 2]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.1': 7}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u1: 7}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.1': 7}}"), getOplogEntry());
     }
@@ -320,11 +314,8 @@ TEST_F(ArithmeticNodeTest, ApplyNonViablePathToCreateFromReplicationIsNoOp) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 5}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a.b}");
 }
 
@@ -411,7 +402,8 @@ TEST_F(ArithmeticNodeTest, TypePromotionFromIntToDecimalIsNotANoOp) {
     ASSERT_EQUALS(fromjson("{a: NumberDecimal(\"5.0\")}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.0\")}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: NumberDecimal(\"5.0\")}}}"),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.0\")}}"), getOplogEntry());
     }
@@ -433,7 +425,8 @@ TEST_F(ArithmeticNodeTest, TypePromotionFromLongToDecimalIsNotANoOp) {
     ASSERT_EQUALS(fromjson("{a: NumberDecimal(\"5.0\")}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.0\")}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: NumberDecimal(\"5.0\")}}}"),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.0\")}}"), getOplogEntry());
     }
@@ -455,7 +448,8 @@ TEST_F(ArithmeticNodeTest, TypePromotionFromDoubleToDecimalIsNotANoOp) {
     ASSERT_EQUALS(fromjson("{a: NumberDecimal(\"5.25\")}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.25\")}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: NumberDecimal(\"5.25\")}}}"),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"5.25\")}}"), getOplogEntry());
     }
@@ -494,7 +488,8 @@ TEST_F(ArithmeticNodeTest, IncrementedDecimalStaysDecimal) {
     ASSERT_EQUALS(fromjson("{a: NumberDecimal(\"11.5\")}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"11.5\")}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: NumberDecimal(\"11.5\")}}}"),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: NumberDecimal(\"11.5\")}}"), getOplogEntry());
     }
@@ -718,7 +713,7 @@ TEST_F(ArithmeticNodeTest, ApplyEmptyIndexData) {
     ASSERT_EQUALS(fromjson("{a: 3}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 3}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: 3}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 3}}"), getOplogEntry());
     }
@@ -772,7 +767,7 @@ TEST_F(ArithmeticNodeTest, ApplyPathNotViableArray) {
         node.apply(getApplyParams(doc.root()["a"]), getUpdateNodeApplyParams()),
         AssertionException,
         ErrorCodes::PathNotViable,
-        "Cannot create field 'b' in element {a: [ { b: 1 } ]}");
+        "Cannot create field 'b' in element {a: [ {b: 1} ]}");
 }
 
 TEST_F(ArithmeticNodeTest, ApplyInPlaceDottedPath) {
@@ -1054,7 +1049,7 @@ TEST_F(ArithmeticNodeTest, ApplyLogDottedPath) {
     ASSERT_EQUALS(fromjson("{a: [{b:0}, {b:1}, {b:2}]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u2: {b: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
     }
@@ -1074,7 +1069,7 @@ TEST_F(ArithmeticNodeTest, LogEmptyArray) {
     ASSERT_EQUALS(fromjson("{a: [null, null, {b:2}]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u2: {b: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
     }
@@ -1094,7 +1089,7 @@ TEST_F(ArithmeticNodeTest, LogEmptyObject) {
     ASSERT_EQUALS(fromjson("{a: {'2': {b: 2}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {2: {b: 2}}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
     }
@@ -1118,7 +1113,7 @@ TEST_F(ArithmeticNodeTest, ApplyDeserializedDocNotNoOp) {
     ASSERT_EQUALS(fromjson("{a: 1, b: NumberInt(0)}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {b: NumberInt(0)}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {b: 0}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {b: NumberInt(0)}}"), getOplogEntry());
     }
@@ -1141,11 +1136,8 @@ TEST_F(ArithmeticNodeTest, ApplyToDeserializedDocNoOp) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: NumberInt(2)}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a}");
 }
 
@@ -1165,11 +1157,8 @@ TEST_F(ArithmeticNodeTest, ApplyToDeserializedDocNestedNoop) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: NumberInt(1)}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
     ASSERT_EQUALS(getModifiedPaths(), "{a.b}");
 }
 
@@ -1190,7 +1179,7 @@ TEST_F(ArithmeticNodeTest, ApplyToDeserializedDocNestedNotNoop) {
     ASSERT_EQUALS(fromjson("{a: {b: 3}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 3}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {u: {b: 3}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 3}}"), getOplogEntry());
     }

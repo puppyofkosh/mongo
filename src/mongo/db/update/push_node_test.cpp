@@ -630,9 +630,11 @@ TEST_F(PushNodeTest, ApplyWithMixedSort) {
     ASSERT_EQUALS(fromjson("{a: [-1, 3, 4, 't', {a: 1}, {b: 1}]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [-1, 3, 4, 't', {a: 1}, {b: 1}]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [-1, 3, 4, 't', {a: 1}, {b: 1}]}}"),
+                          getOplogEntry());
     } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [-1, 3, 4, 't', {a: 1}, {b: 1}]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [-1, 3, 4, 't', {a: 1}, {b: 1}]}}"),
+                          getOplogEntry());
     }
     ASSERT_EQUALS("{a}", getModifiedPaths());
 }
@@ -652,9 +654,11 @@ TEST_F(PushNodeTest, ApplyWithReverseMixedSort) {
     ASSERT_EQUALS(fromjson("{a: [{b: 1}, {a: 1}, 't', 4, 3, -1]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [{b: 1}, {a: 1}, 't', 4, 3, -1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [{b: 1}, {a: 1}, 't', 4, 3, -1]}}"),
+                          getOplogEntry());
     } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [{b: 1}, {a: 1}, 't', 4, 3, -1]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [{b: 1}, {a: 1}, 't', 4, 3, -1]}}"),
+                          getOplogEntry());
     }
     ASSERT_EQUALS("{a}", getModifiedPaths());
 }
@@ -674,9 +678,11 @@ TEST_F(PushNodeTest, ApplyWithEmbeddedFieldSort) {
     ASSERT_EQUALS(fromjson("{a: [3, 't', {b: 1}, 4, -1, {a: 1}]}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [3, 't', {b: 1}, 4, -1, {a: 1}]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [3, 't', {b: 1}, 4, -1, {a: 1}]}}"),
+                          getOplogEntry());
     } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [3, 't', {b: 1}, 4, -1, {a: 1}]}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: [3, 't', {b: 1}, 4, -1, {a: 1}]}}"),
+                          getOplogEntry());
     }
     ASSERT_EQUALS("{a}", getModifiedPaths());
 }

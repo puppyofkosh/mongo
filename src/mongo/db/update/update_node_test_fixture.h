@@ -174,6 +174,14 @@ protected:
         return _logBuilder->serialize();
     }
 
+    bool isOplogEntryNoop() const {
+        if (v2LogBuilderUsed()) {
+            return getOplogEntry().woCompare(fromjson("{$v:2, diff: {}}")) == 0;
+        } else {
+            return getOplogEntry().isEmpty();
+        }
+    }
+
 private:
     std::vector<std::unique_ptr<FieldRef>> _immutablePathsVector;
     FieldRefSet _immutablePaths;

@@ -293,9 +293,11 @@ TEST_F(RenameNodeTest, ToMissingDottedField) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{b: {c: {d: [{a:2, b:1}]}}}"), doc);
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'b.c.d': [{a:2, b:1}]}, $unset: {'a': true}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'b.c.d': [{a:2, b:1}]}, $unset: {'a': true}}"),
+                          getOplogEntry());
     } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'b.c.d': [{a:2, b:1}]}, $unset: {'a': true}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$set: {'b.c.d': [{a:2, b:1}]}, $unset: {'a': true}}"),
+                          getOplogEntry());
     }
     ASSERT_EQUALS(getModifiedPaths(), "{a, b.c.d}");
 }

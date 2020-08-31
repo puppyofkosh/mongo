@@ -45,9 +45,8 @@ DeltaExecutor::ApplyResult DeltaExecutor::applyUpdate(
     const auto& postImage = applyDiffOutput.postImage;
     auto postImageHasId = postImage.hasField("_id");
 
-    auto result = ObjectReplaceExecutor::applyReplacementUpdate(std::move(applyParams),
-                                                                postImage,
-                                                                postImageHasId);
+    auto result = ObjectReplaceExecutor::applyReplacementUpdate(
+        std::move(applyParams), postImage, postImageHasId);
     result.indexesAffected = applyDiffOutput.indexesAffected;
     result.oplogEntry = update_oplog_entry::makeDeltaOplogEntry(_diff);
     return result;
