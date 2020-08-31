@@ -387,6 +387,11 @@ public:
     /** Write this Element to the provided object builder. */
     void writeTo(BSONObjBuilder* builder) const;
 
+    /**
+     * Writes the children of this Element to provided builder. This Element must be of type Object.
+     */
+    void writeChildren(BSONObjBuilder* builder) const;
+
     /** Write this Element to the provided array builder. This Element must be of type
      *  mongo::Array.
      */

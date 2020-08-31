@@ -174,7 +174,7 @@ void appendElementToBuilder(stdx::variant<mutablebson::Element, BSONElement> ele
                     builder->appendAs(element.getValue(), fieldName);
                 } else if (element.getType() == BSONType::Object) {
                     BSONObjBuilder subBuilder(builder->subobjStart(fieldName));
-                    element.writeTo(&subBuilder);
+                    element.writeChildren(&subBuilder);
                 } else {
                     BSONArrayBuilder subBuilder(builder->subarrayStart(fieldName));
                     element.writeArrayTo(&subBuilder);
