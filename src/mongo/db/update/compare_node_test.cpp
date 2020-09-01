@@ -70,11 +70,8 @@ TEST_F(CompareNodeTest, ApplyMaxSameNumber) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMinSameNumber) {
@@ -91,11 +88,8 @@ TEST_F(CompareNodeTest, ApplyMinSameNumber) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMaxNumberIsLess) {
@@ -112,11 +106,8 @@ TEST_F(CompareNodeTest, ApplyMaxNumberIsLess) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMinNumberIsMore) {
@@ -133,11 +124,8 @@ TEST_F(CompareNodeTest, ApplyMinNumberIsMore) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMaxSameValInt) {
@@ -154,11 +142,8 @@ TEST_F(CompareNodeTest, ApplyMaxSameValInt) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 1.0}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMaxSameValIntZero) {
@@ -175,11 +160,8 @@ TEST_F(CompareNodeTest, ApplyMaxSameValIntZero) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 0.0}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMinSameValIntZero) {
@@ -196,11 +178,8 @@ TEST_F(CompareNodeTest, ApplyMinSameValIntZero) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 0.0}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMissingFieldMinNumber) {
@@ -218,7 +197,7 @@ TEST_F(CompareNodeTest, ApplyMissingFieldMinNumber) {
     ASSERT_EQUALS(fromjson("{a: 0}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {i: {a: 0}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
     }
@@ -239,7 +218,7 @@ TEST_F(CompareNodeTest, ApplyExistingNumberMinNumber) {
     ASSERT_EQUALS(fromjson("{a: 0}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 0}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
     }
@@ -260,7 +239,7 @@ TEST_F(CompareNodeTest, ApplyMissingFieldMaxNumber) {
     ASSERT_EQUALS(fromjson("{a: 0}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {i: {a: 0}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
     }
@@ -281,7 +260,7 @@ TEST_F(CompareNodeTest, ApplyExistingNumberMaxNumber) {
     ASSERT_EQUALS(fromjson("{a: 2}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 2}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 2}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 2}}"), getOplogEntry());
     }
@@ -302,7 +281,7 @@ TEST_F(CompareNodeTest, ApplyExistingDateMaxDate) {
     ASSERT_EQUALS(fromjson("{a: {$date: 123123123}}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {$date: 123123123}}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: {$date: 123123123}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {$date: 123123123}}}"), getOplogEntry());
     }
@@ -323,7 +302,7 @@ TEST_F(CompareNodeTest, ApplyExistingEmbeddedDocMaxDoc) {
     ASSERT_EQUALS(fromjson("{a: {b: 3}}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {b: 3}}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: {b: 3}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {b: 3}}}"), getOplogEntry());
     }
@@ -343,11 +322,8 @@ TEST_F(CompareNodeTest, ApplyExistingEmbeddedDocMaxNumber) {
     ASSERT_FALSE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: {b: 2}}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(CompareNodeTest, ApplyMinRespectsCollation) {
@@ -367,8 +343,9 @@ TEST_F(CompareNodeTest, ApplyMinRespectsCollation) {
     ASSERT_TRUE(result.indexesAffected);
     ASSERT_EQUALS(fromjson("{a: 'dba'}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
+
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'dba'}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 'dba'}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'dba'}}"), getOplogEntry());
     }
@@ -393,7 +370,7 @@ TEST_F(CompareNodeTest, ApplyMinRespectsCollationFromSetCollator) {
     ASSERT_EQUALS(fromjson("{a: 'dba'}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'dba'}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 'dba'}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'dba'}}"), getOplogEntry());
     }
@@ -418,7 +395,7 @@ TEST_F(CompareNodeTest, ApplyMaxRespectsCollationFromSetCollator) {
     ASSERT_EQUALS(fromjson("{a: 'abd'}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'abd'}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 'abd'}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 'abd'}}"), getOplogEntry());
     }
@@ -465,7 +442,7 @@ TEST_F(CompareNodeTest, ApplyIndexesNotAffected) {
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v:2, diff: {u: {a: 1}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
     }

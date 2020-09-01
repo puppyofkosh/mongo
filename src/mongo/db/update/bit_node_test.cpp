@@ -164,7 +164,7 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentAnd) {
     ASSERT_EQUALS(fromjson("{a: 0}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: 0}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 0}}"), getOplogEntry());
     }
@@ -183,7 +183,7 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentOr) {
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: 1}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
     }
@@ -202,7 +202,7 @@ TEST_F(BitNodeTest, ApplyAndLogEmptyDocumentXor) {
     ASSERT_EQUALS(fromjson("{a: 1}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: 1}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 1}}"), getOplogEntry());
     }
@@ -221,7 +221,8 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentAnd) {
     ASSERT_EQUALS(BSON("a" << 0b0100), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0100)), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(BSON("$v" << 2 << "diff" << BSON("u" << BSON("a" << 0b0100))),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0100)), getOplogEntry());
     }
@@ -240,7 +241,8 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentOr) {
     ASSERT_EQUALS(BSON("a" << 0b0111), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0111)), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(BSON("$v" << 2 << "diff" << BSON("u" << BSON("a" << 0b0111))),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0111)), getOplogEntry());
     }
@@ -259,7 +261,8 @@ TEST_F(BitNodeTest, ApplyAndLogSimpleDocumentXor) {
     ASSERT_EQUALS(BSON("a" << 0b0011), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0011)), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(BSON("$v" << 2 << "diff" << BSON("u" << BSON("a" << 0b0011))),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0011)), getOplogEntry());
     }
@@ -277,11 +280,8 @@ TEST_F(BitNodeTest, ApplyShouldReportNoOp) {
     ASSERT_TRUE(result.noop);
     ASSERT_EQUALS(BSON("a" << static_cast<int>(1)), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
-    if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    } else {
-        ASSERT_BSONOBJ_EQ(fromjson("{}"), getOplogEntry());
-    }
+
+    ASSERT_TRUE(isOplogEntryNoop());
 }
 
 TEST_F(BitNodeTest, ApplyMultipleBitOps) {
@@ -301,8 +301,10 @@ TEST_F(BitNodeTest, ApplyMultipleBitOps) {
     ASSERT_FALSE(result.noop);
     ASSERT_EQUALS(BSON("a" << 0b0101011001100110), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
+
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0101011001100110)), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(BSON("$v" << 2 << "diff" << BSON("u" << BSON("a" << 0b0101011001100110))),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b0101011001100110)), getOplogEntry());
     }
@@ -321,7 +323,8 @@ TEST_F(BitNodeTest, ApplyRepeatedBitOps) {
     ASSERT_EQUALS(BSON("a" << 0b10010110), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b10010110)), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(BSON("$v" << 2 << "diff" << BSON("u" << BSON("a" << 0b10010110))),
+                          getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(BSON("$set" << BSON("a" << 0b10010110)), getOplogEntry());
     }

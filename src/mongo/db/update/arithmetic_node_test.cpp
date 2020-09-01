@@ -100,7 +100,7 @@ TEST(ArithmeticNodeTest, InitFailsForObjectElement) {
     Status result = node.init(update["$mul"]["a"], expCtx);
     ASSERT_NOT_OK(result);
     ASSERT_EQ(result.code(), ErrorCodes::TypeMismatch);
-    ASSERT_EQ(result.reason(), "Cannot multiply with non-numeric argument: {a: {b: 6}}");
+    ASSERT_EQ(result.reason(), "Cannot multiply with non-numeric argument: {a: { b: 6 }}");
 }
 
 TEST(ArithmeticNodeTest, InitFailsForArrayElement) {
@@ -767,7 +767,7 @@ TEST_F(ArithmeticNodeTest, ApplyPathNotViableArray) {
         node.apply(getApplyParams(doc.root()["a"]), getUpdateNodeApplyParams()),
         AssertionException,
         ErrorCodes::PathNotViable,
-        "Cannot create field 'b' in element {a: [ {b: 1} ]}");
+        "Cannot create field 'b' in element {a: [ { b: 1 } ]}");
 }
 
 TEST_F(ArithmeticNodeTest, ApplyInPlaceDottedPath) {
@@ -1089,7 +1089,7 @@ TEST_F(ArithmeticNodeTest, LogEmptyObject) {
     ASSERT_EQUALS(fromjson("{a: {'2': {b: 2}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {2: {b: 2}}}}}"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {'2': {b: 2}}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
     }
