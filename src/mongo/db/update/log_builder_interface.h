@@ -32,6 +32,7 @@
 #include "mongo/base/status.h"
 #include "mongo/base/string_data.h"
 #include "mongo/bson/mutable/document.h"
+#include "mongo/db/update/update_oplog_entry_version.h"
 
 namespace mongo {
 class RuntimeUpdatePath;
@@ -48,6 +49,11 @@ class LogBuilderInterface {
 public:
     virtual ~LogBuilderInterface() = default;
 
+    /**
+     * Returns which version of oplog entry this LogBuilder is constructing.
+     */
+    virtual UpdateOplogEntryVersion oplogEntryVersion() const = 0;
+    
     /**
      * These methods are used to log a modification to an existing field at given path. The field
      * name provided in the 'elt' argument is ignored.

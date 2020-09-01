@@ -149,6 +149,10 @@ class V2LogBuilder : public LogBuilderInterface {
 public:
     V2LogBuilder() : _root(false){};
 
+    UpdateOplogEntryVersion oplogEntryVersion() const override {
+        return UpdateOplogEntryVersion::kDeltaV2;
+    }
+    
     /**
      * Overload methods from the LogBuilder interface.
      */

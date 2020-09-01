@@ -52,6 +52,10 @@ public:
      */
     V1LogBuilder(mutablebson::Element logRoot, bool includeVersionField = false);
 
+    UpdateOplogEntryVersion oplogEntryVersion() const override {
+        return UpdateOplogEntryVersion::kUpdateNodeV1;
+    }
+
     /**
      * Overloads from LogBuilderInterface. Each of these methods logs a modification to the document
      * in _logRoot. The field name given in the mutablebson element or BSONElement is ignored

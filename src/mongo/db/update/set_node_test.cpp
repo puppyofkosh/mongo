@@ -117,7 +117,7 @@ TEST_F(SetNodeTest, ApplyCreatePath) {
     ASSERT_EQUALS(fromjson("{a: {d: 5, b: {c: 6}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { i: { b: { c: 6 } } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {b: {c: 6}}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b.c': 6}}"), getOplogEntry());
@@ -140,7 +140,7 @@ TEST_F(SetNodeTest, ApplyCreatePathFromRoot) {
     ASSERT_EQUALS(fromjson("{c: 5, a: {b: 6}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { i: { a: { b: 6 } } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: {b: 6}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 6}}"), getOplogEntry());
     }
@@ -163,7 +163,7 @@ TEST_F(SetNodeTest, ApplyPositional) {
     ASSERT_EQUALS(fromjson("{a: [0, 6, 2]}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { a: true, u1: 6 } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u1: 6}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.1': 6}}"), getOplogEntry());
     }
@@ -782,7 +782,7 @@ TEST_F(SetNodeTest, ApplyLogDottedPath) {
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { a: true, u2: { b: 2 } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u2: {b: 2}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
@@ -804,7 +804,7 @@ TEST_F(SetNodeTest, LogEmptyArray) {
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { a: true, u2: { b: 2 } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u2: {b: 2}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
@@ -825,7 +825,7 @@ TEST_F(SetNodeTest, LogEmptyObject) {
     ASSERT_EQUALS(fromjson("{a: {'2': {b: 2}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { i: { '2': { b: 2 } } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {'2': {b: 2}}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.2.b': 2}}"), getOplogEntry());
@@ -1012,7 +1012,7 @@ TEST_F(SetNodeTest, Set6) {
     ASSERT_EQUALS(fromjson("{_id: 1, r: {a:2, b:2}}"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sr: { u: { a: 2 } } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sr: {u: {a: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'r.a': 2}}"), getOplogEntry());
     }
@@ -1035,7 +1035,7 @@ TEST_F(SetNodeTest, Set6FromRepl) {
     ASSERT_EQUALS(fromjson("{_id: 1, r: {a:2, b:2} }"), doc);
     ASSERT_TRUE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sr: { u: { a: 2 } } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sr: {u: {a: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'r.a': 2}}"), getOplogEntry());
     }
@@ -1142,7 +1142,7 @@ TEST_F(SetNodeTest, ApplyCanCreateDollarPrefixedFieldNameWhenValidateForStorageI
     ASSERT_EQUALS(fromjson("{$bad: 1}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { i: { $bad: 1 } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {$bad: 1}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {$bad: 1}}"), getOplogEntry());
     }
@@ -1254,7 +1254,7 @@ TEST_F(SetNodeTest, ApplyCanOverwritePrefixToCreateImmutablePath) {
     ASSERT_EQUALS(fromjson("{a: {b: 2}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { u: { a: { b: 2 } } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: {b: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {b: 2}}}"), getOplogEntry());
     }
@@ -1277,7 +1277,7 @@ TEST_F(SetNodeTest, ApplyCanOverwritePrefixOfImmutablePathIfNoopOnImmutablePath)
     ASSERT_EQUALS(fromjson("{a: {b: 2, c: 3}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { u: { a: { b: 2, c: 3 } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {u: {a: {b: 2, c: 3}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: {b: 2, c: 3}}}"), getOplogEntry());
@@ -1373,7 +1373,7 @@ TEST_F(SetNodeTest, ApplyCanCreateImmutablePath) {
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { i: { b: 2 } } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {b: 2}}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.b': 2}}"), getOplogEntry());
     }
@@ -1397,7 +1397,7 @@ TEST_F(SetNodeTest, ApplyCanCreatePrefixOfImmutablePath) {
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { i: { a: 2 } } }"), getOplogEntry());
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {i: {a: 2}}}"), getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {a: 2}}"), getOplogEntry());
     }
@@ -1421,7 +1421,7 @@ TEST_F(SetNodeTest, ApplySetFieldInNonExistentArrayElementAffectsIndexOnSiblingF
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { a: true, u1: { c: 2 } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, u1: {c: 2}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.1.c': 2}}"), getOplogEntry());
@@ -1446,7 +1446,7 @@ TEST_F(SetNodeTest, ApplySetFieldInExistingArrayElementDoesNotAffectIndexOnSibli
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
 
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { a: true, s0: { i: { c: 2 } } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {a: true, s0: {i: {c: 2}}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.0.c': 2}}"), getOplogEntry());
@@ -1471,7 +1471,7 @@ TEST_F(SetNodeTest, ApplySetFieldInNonExistentNumericFieldDoesNotAffectIndexOnSi
     ASSERT_EQUALS(fromjson("{a: {'0': {b: 0}, '1': {c: 2}}}"), doc);
     ASSERT_FALSE(doc.isInPlaceModeEnabled());
     if (v2LogBuilderUsed()) {
-        ASSERT_BSONOBJ_EQ(fromjson("{ $v: 2, diff: { sa: { i: { '1': { c: 2 } } } } }"),
+        ASSERT_BSONOBJ_EQ(fromjson("{$v: 2, diff: {sa: {i: {'1': {c: 2}}}}}"),
                           getOplogEntry());
     } else {
         ASSERT_BSONOBJ_EQ(fromjson("{$set: {'a.1.c': 2}}"), getOplogEntry());

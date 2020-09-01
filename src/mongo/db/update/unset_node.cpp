@@ -86,12 +86,30 @@ void UnsetNode::logUpdate(LogBuilderInterface* logBuilder,
     invariant(logBuilder);
     invariant(modifyResult == ModifyResult::kNormalUpdate);
     invariant(!createdFieldIdx);
-    if (pathTaken.types().back() == RuntimeUpdatePath::ComponentType::kArrayIndex) {
-        // If $unset is applied to an array index, the value was set to null.
-        invariant(element.getType() == BSONType::jstNULL);
-        uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
-    } else {
+
+    // NOTE: When logging using the $v:1 format, $unsets of paths which end in array indexes
+    // are logged as $unsets, even though the behavior of these operations is to _set_ the array
+    // index to null.
+    //
+    // In $v:2 these modifications are logged as "updates" of the array index to the value null.
+    // While we could change $v:1 to log $unsets of array indexes as a $set (e.g. {$set:
+    // {"path.to.arr.index.0": null}}) and unify the behavior between the two versions, this would
+    // be an unnecessary change in behavior.
+    //
+    // TODO: SERVER-50301 Remove this special logic when support for $v:1 oplog entries is removed.
+
+    if (logBuilder->oplogEntryVersion() == UpdateOplogEntryVersion::kUpdateNodeV1) {
         uassertStatusOK(logBuilder->logDeletedField(pathTaken));
+    } else {
+        invariant(logBuilder->oplogEntryVersion() == UpdateOplogEntryVersion::kDeltaV2);
+
+        if (pathTaken.types().back() == RuntimeUpdatePath::ComponentType::kArrayIndex) {
+            // If $unset is applied to an array index, the value was set to null.
+            invariant(element.getType() == BSONType::jstNULL);
+            uassertStatusOK(logBuilder->logUpdatedField(pathTaken, element));
+        } else {
+            uassertStatusOK(logBuilder->logDeletedField(pathTaken));
+        }
     }
 }
 
