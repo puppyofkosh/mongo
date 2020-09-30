@@ -315,6 +315,11 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortKeyGeneraror(
     uasserted(4822883, "Sort key generator in not supported in SBE yet");
 }
 
+std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
+    const QuerySolutionNode* root) {
+    uasserted(5073800, "Sort merge not supported in SBE yet");
+}    
+
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
     const QuerySolutionNode* root) {
     using namespace std::literals;
@@ -633,7 +638,9 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::build(const QuerySolution
             {STAGE_PROJECTION_DEFAULT, std::mem_fn(&SlotBasedStageBuilder::buildProjectionDefault)},
             {STAGE_OR, &SlotBasedStageBuilder::buildOr},
             {STAGE_TEXT, &SlotBasedStageBuilder::buildText},
-            {STAGE_RETURN_KEY, &SlotBasedStageBuilder::buildReturnKey}};
+            {STAGE_RETURN_KEY, &SlotBasedStageBuilder::buildReturnKey},
+            {STAGE_SORT_MERGE, &SlotBasedStageBuilder::buildSortMerge}
+    };
 
     uassert(4822884,
             str::stream() << "Can't build exec tree for node: " << root->toString(),
