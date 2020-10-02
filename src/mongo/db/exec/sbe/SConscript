@@ -28,6 +28,7 @@ sbeEnv.Library(
         'stages/limit_skip.cpp',
         'stages/loop_join.cpp',
         'stages/makeobj.cpp',
+        'stages/merge_sort.cpp',
         'stages/project.cpp',
         'stages/sort.cpp',
         'stages/spool.cpp',

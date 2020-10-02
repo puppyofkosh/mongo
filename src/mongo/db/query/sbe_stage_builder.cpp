@@ -38,6 +38,7 @@
 #include "mongo/db/exec/sbe/stages/limit_skip.h"
 #include "mongo/db/exec/sbe/stages/loop_join.h"
 #include "mongo/db/exec/sbe/stages/makeobj.h"
+#include "mongo/db/exec/sbe/stages/merge_sort.h"
 #include "mongo/db/exec/sbe/stages/project.h"
 #include "mongo/db/exec/sbe/stages/scan.h"
 #include "mongo/db/exec/sbe/stages/sort.h"
@@ -317,7 +318,32 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortKeyGeneraror(
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
     const QuerySolutionNode* root) {
-    uasserted(5073800, "Sort merge not supported in SBE yet");
+    // TODO: REMOVE
+    //uasserted(5073800, "Sort merge not supported in SBE yet");
+    //
+    
+    std::vector<std::unique_ptr<sbe::PlanStage>> inputStages;
+    std::vector<sbe::value::SlotVector> inputSlots;
+
+    // TODO: static_cast
+    auto mergeSortNode = dynamic_cast<const MergeSortNode*>(root);
+    invariant(mergeSortNode);
+
+    for (auto&& child : mergeSortNode->children) {
+        inputStages.push_back(build(child));
+        std::cout << "ian: Building child of type " << (int)child->getType() << std::endl;
+        invariant(_data.resultSlot);
+        invariant(_data.recordIdSlot);
+        inputSlots.push_back({*_data.resultSlot, *_data.recordIdSlot});
+    }
+
+    _data.resultSlot = _slotIdGenerator.generate();
+    _data.recordIdSlot = _slotIdGenerator.generate();
+    auto stage = sbe::makeS<sbe::UnionStage>(std::move(inputStages),
+                                             std::move(inputSlots),
+                                             sbe::makeSV(*_data.resultSlot, *_data.recordIdSlot),
+                                             root->nodeId());
+    return stage;
 }    
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(

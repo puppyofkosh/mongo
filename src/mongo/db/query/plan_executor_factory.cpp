@@ -120,10 +120,13 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> make(
     auto&& [rootStage, data] = root;
 
     LOGV2_DEBUG(4822860,
-                5,
+                0,
                 "SBE plan",
                 "slots"_attr = data.debugString(),
                 "stages"_attr = sbe::DebugPrinter{}.print(rootStage.get()));
+
+    std::cout << "ian: slots are\n" << data.debugString() << std::endl;
+    std::cout << "ian: stages are\n" << sbe::DebugPrinter{}.print(rootStage.get()) << std::endl;
 
     rootStage->prepare(data.ctx);
 
@@ -150,10 +153,14 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> make(
     auto&& [rootStage, data] = root;
 
     LOGV2_DEBUG(4822861,
-                5,
+                0,
                 "SBE plan",
                 "slots"_attr = data.debugString(),
                 "stages"_attr = sbe::DebugPrinter{}.print(rootStage.get()));
+
+    // TODO: Delete
+    std::cout << "ian: slots are\n" << data.debugString() << std::endl;
+    std::cout << "ian: stages are\n" << sbe::DebugPrinter{}.print(rootStage.get()) << std::endl;
 
     auto exec = new PlanExecutorSBE(opCtx,
                                     std::move(cq),
