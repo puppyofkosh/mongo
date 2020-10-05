@@ -318,31 +318,78 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortKeyGeneraror(
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
     const QuerySolutionNode* root) {
-    // TODO: REMOVE
-    //uasserted(5073800, "Sort merge not supported in SBE yet");
-    //
-    
-    std::vector<std::unique_ptr<sbe::PlanStage>> inputStages;
-    std::vector<sbe::value::SlotVector> inputSlots;
+    // TODO SERVER-48470: Replace std::string_view with StringData.
+    using namespace std::literals;
 
-    // TODO: static_cast
-    auto mergeSortNode = dynamic_cast<const MergeSortNode*>(root);
+    auto mergeSortNode = static_cast<const MergeSortNode*>(root);
     invariant(mergeSortNode);
 
+    uassert(5073801,
+            "SORT_MERGE stage with unfetched children not supported",
+            mergeSortNode->fetched());
+
+    const auto sortPattern = SortPattern{mergeSortNode->sort, _cq.getExpCtx()};
+
+    std::vector<sbe::value::SortDirection> direction;
+
+    for (const auto& part : sortPattern) {
+        uassert(4822881, "Sorting by expression not supported", !part.expression);
+        uassert(4822882,
+                "Sorting by dotted paths not supported",
+                part.fieldPath && part.fieldPath->getPathLength() == 1);
+
+        direction.push_back(part.isAscending ? sbe::value::SortDirection::Ascending
+                            : sbe::value::SortDirection::Descending);
+    }
+
+    std::vector<std::unique_ptr<sbe::PlanStage>> inputStages;
+    std::vector<sbe::value::SlotVector> inputKeys;
+    std::vector<sbe::value::SlotVector> inputVals;
+
     for (auto&& child : mergeSortNode->children) {
-        inputStages.push_back(build(child));
         std::cout << "ian: Building child of type " << (int)child->getType() << std::endl;
+        auto childExecTree = build(child);
+
+        sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> projectMap;
+        sbe::value::SlotVector inputKeysForChild;
+        
+        for (const auto& part : sortPattern) {
+            // Slot holding the sort key.
+            auto sortFieldVar{_slotIdGenerator.generate()};
+            inputKeysForChild.push_back(sortFieldVar);
+
+            auto fieldName = part.fieldPath->getFieldName(0);
+            auto fieldNameSV = std::string_view{fieldName.rawData(),
+                                                fieldName.size()};
+            projectMap.emplace(
+                sortFieldVar,
+                sbe::makeE<sbe::EFunction>("getField"sv,
+                                           sbe::makeEs(sbe::makeE<sbe::EVariable>(*_data.resultSlot),
+                                                       sbe::makeE<sbe::EConstant>(fieldNameSV))));
+        }
+
+        childExecTree =
+            sbe::makeS<sbe::ProjectStage>(std::move(childExecTree), std::move(projectMap),
+                                          root->nodeId());
+
+        inputStages.push_back(std::move(childExecTree));
+
         invariant(_data.resultSlot);
         invariant(_data.recordIdSlot);
-        inputSlots.push_back({*_data.resultSlot, *_data.recordIdSlot});
+
+        inputKeys.push_back(std::move(inputKeysForChild));
+        inputVals.push_back(sbe::value::SlotVector{*_data.resultSlot, *_data.recordIdSlot});
     }
 
     _data.resultSlot = _slotIdGenerator.generate();
     _data.recordIdSlot = _slotIdGenerator.generate();
-    auto stage = sbe::makeS<sbe::UnionStage>(std::move(inputStages),
-                                             std::move(inputSlots),
-                                             sbe::makeSV(*_data.resultSlot, *_data.recordIdSlot),
-                                             root->nodeId());
+    auto stage = sbe::makeS<sbe::MergeSortStage>(std::move(inputStages),
+                                                 std::move(inputKeys),
+                                                 std::move(direction),
+                                                 std::move(inputVals),
+                                                 sbe::makeSV(*_data.resultSlot,
+                                                             *_data.recordIdSlot),
+                                                 root->nodeId());
     return stage;
 }    
 
