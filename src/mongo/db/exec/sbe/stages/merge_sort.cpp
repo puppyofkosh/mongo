@@ -80,18 +80,19 @@ std::unique_ptr<PlanStage> MergeSortStage::clone() const {
 }
 
 void MergeSortStage::prepare(CompileCtx& ctx) {
-    _inputAccessors.resize(_children.size());
+    _branches.resize(_children.size());
     
     for (size_t childNum = 0; childNum < _children.size(); childNum++) {
         auto& child = _children[childNum];
-        invariant(child);
         child->prepare(ctx);
 
-        for (auto slot : _inputVals[childNum]) {
-            auto accessor = child->getAccessor(ctx, slot);
-            
-            _inputAccessors[childNum].push_back(accessor);
+        for (auto slot : _inputKeys[childNum]) {
+            _branches[childNum].inputKeyAccessors.push_back(child->getAccessor(ctx, slot));
         }
+        for (auto slot : _inputVals[childNum]) {
+            _branches[childNum].inputValAccessors.push_back(child->getAccessor(ctx, slot));
+        }
+
     }
 
     for (size_t i = 0; i <  _outputVals.size(); ++i) {

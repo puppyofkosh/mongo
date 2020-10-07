@@ -29,6 +29,8 @@
 
 #pragma once
 
+#include <queue>
+
 #include "mongo/db/exec/sbe/stages/stages.h"
 
 namespace mongo::sbe {
@@ -59,16 +61,43 @@ public:
     std::vector<DebugPrinter::Block> debugPrint() const final;
 
 private:
+    struct Branch {
+        std::vector<value::SlotAccessor*> inputKeyAccessors;
+        std::vector<value::SlotAccessor*> inputValAccessors;
+        PlanStage* node = nullptr;
+    };
+
+    struct BranchComparator {
+        BranchComparator(const std::vector<value::SortDirection>& dirs)
+            :_dirs(dirs) {}
+
+        bool operator()(const Branch&, const Branch&);
+
+        const std::vector<value::SortDirection>& _dirs;
+    };
+
+    //
+    // Initialized at construction.
+    //
+    
     const std::vector<value::SlotVector> _inputKeys;
     const std::vector<value::SortDirection> _dirs;
 
     const std::vector<value::SlotVector> _inputVals;
     const value::SlotVector _outputVals;
 
-    // The size of this array must be the same as the number of children.
-    std::vector<std::vector<value::SlotAccessor*>> _inputAccessors;
+    //
+    // Initialized at prepare().
+    //
 
     // Same size as size of each element of _inputVals.
     std::vector<value::ViewOfValueAccessor> _outAccessors;
+
+    std::vector<Branch> _branches;
+
+    //
+    // Reinitialized at each call to open().
+    //
+    //std::priority_queue<Branch*, std::vector<Branch>, BranchComparator> _heap;
 };
 }  // namespace mongo::sbe
