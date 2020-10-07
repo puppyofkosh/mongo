@@ -62,18 +62,21 @@ public:
 
 private:
     struct Branch {
+        PlanStage* root = nullptr;
+
         std::vector<value::SlotAccessor*> inputKeyAccessors;
         std::vector<value::SlotAccessor*> inputValAccessors;
-        PlanStage* node = nullptr;
     };
 
     struct BranchComparator {
         BranchComparator(const std::vector<value::SortDirection>& dirs)
-            :_dirs(dirs) {}
+            :_dirs(&dirs) {}
 
-        bool operator()(const Branch&, const Branch&);
+        bool operator()(const Branch*, const Branch*);
 
-        const std::vector<value::SortDirection>& _dirs;
+        // Guaranteed to never be nullptr. Stored as pointer instead of reference to allow for
+        // assignment operators.
+        const std::vector<value::SortDirection>* _dirs;
     };
 
     //
@@ -91,13 +94,13 @@ private:
     //
 
     // Same size as size of each element of _inputVals.
-    std::vector<value::ViewOfValueAccessor> _outAccessors;
+    std::vector<value::OwnedValueAccessor> _outAccessors;
 
     std::vector<Branch> _branches;
 
     //
     // Reinitialized at each call to open().
     //
-    //std::priority_queue<Branch*, std::vector<Branch>, BranchComparator> _heap;
+    std::priority_queue<Branch*, std::vector<Branch*>, BranchComparator> _heap;
 };
 }  // namespace mongo::sbe

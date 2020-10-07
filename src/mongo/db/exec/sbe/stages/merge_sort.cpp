@@ -47,7 +47,8 @@ namespace sbe {
       _inputKeys(std::move(inputKeys)),
       _dirs(std::move(dirs)),
       _inputVals(std::move(inputVals)),
-      _outputVals(std::move(outputVals)) {
+      _outputVals(std::move(outputVals)),
+      _heap(_dirs) {
     _children = std::move(inputStages);
 
     invariant(_inputKeys.size() == _children.size());
@@ -86,6 +87,7 @@ void MergeSortStage::prepare(CompileCtx& ctx) {
         auto& child = _children[childNum];
         child->prepare(ctx);
 
+        _branches[childNum].root = child.get();
         for (auto slot : _inputKeys[childNum]) {
             _branches[childNum].inputKeyAccessors.push_back(child->getAccessor(ctx, slot));
         }
@@ -96,7 +98,7 @@ void MergeSortStage::prepare(CompileCtx& ctx) {
     }
 
     for (size_t i = 0; i <  _outputVals.size(); ++i) {
-        _outAccessors.emplace_back(value::ViewOfValueAccessor{});
+        _outAccessors.emplace_back(value::OwnedValueAccessor{});
     }
 }
 
@@ -111,15 +113,53 @@ value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId 
 }
 
 void MergeSortStage::open(bool reOpen) {
-    MONGO_UNREACHABLE;
+    ++_commonStats.opens;
+
+    if (reOpen) {
+        _heap = decltype(_heap)(_dirs);
+    }
+
+    for (size_t i = 0; i < _children.size(); ++i) {
+        auto& child = _children[i];
+        child->open(reOpen);
+
+        if (child->getNext() == PlanState::ADVANCED) {
+            _heap.push(&_branches[i]);
+        }
+    }
 }
 
 PlanState MergeSortStage::getNext() {
-    MONGO_UNREACHABLE;
+    std::cout << "ian: getNext()\n";
+    if (_heap.empty()) {
+        return PlanState::IS_EOF;
+    }
+
+    std::cout << "ian: popping from heap\n";
+    auto top = _heap.top();
+    _heap.pop();
+
+    invariant(_outAccessors.size() == top->inputValAccessors.size());
+    for (size_t i = 0; i < _outAccessors.size(); ++i) {
+        auto [tag, val] = top->inputValAccessors[i]->copyOrMoveValue();
+        _outAccessors[i].reset(tag, val);
+    }
+
+    // Reinsert the branch into the heap if necessary.
+    if (top->root->getNext() == PlanState::ADVANCED) {
+        _heap.push(top);
+    }
+
+    return PlanState::ADVANCED;
 }
 
 void MergeSortStage::close() {
-    MONGO_UNREACHABLE;
+    ++_commonStats.closes;
+    for (auto& child : _children) {
+        child->close();
+    }
+
+    _heap = decltype(_heap)(_dirs);
 }
 
 std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
@@ -131,11 +171,72 @@ std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
 }
 
 const SpecificStats* MergeSortStage::getSpecificStats() const {
+    // TODO
     return nullptr;
 }
 
 std::vector<DebugPrinter::Block> MergeSortStage::debugPrint() const {
-    MONGO_UNREACHABLE;
+    std::vector<DebugPrinter::Block> ret;
+    DebugPrinter::addKeyword(ret, "sort_merge");
+
+    ret.emplace_back(DebugPrinter::Block("[`"));
+    for (size_t idx = 0; idx < _outputVals.size(); idx++) {
+        if (idx) {
+            ret.emplace_back(DebugPrinter::Block("`,"));
+        }
+        DebugPrinter::addIdentifier(ret, _outputVals[idx]);
+    }
+    ret.emplace_back(DebugPrinter::Block("`]"));
+
+    ret.emplace_back(DebugPrinter::Block::cmdIncIndent);
+    for (size_t childNum = 0; childNum < _children.size(); childNum++) {
+        ret.emplace_back(DebugPrinter::Block("[`"));
+        for (size_t idx = 0; idx < _inputVals[childNum].size(); idx++) {
+            if (idx) {
+                ret.emplace_back(DebugPrinter::Block("`,"));
+            }
+            DebugPrinter::addIdentifier(ret, _inputVals[childNum][idx]);
+        }
+        ret.emplace_back(DebugPrinter::Block("`]"));
+
+        DebugPrinter::addBlocks(ret, _children[childNum]->debugPrint());
+
+        if (childNum + 1 < _children.size()) {
+            DebugPrinter::addNewLine(ret);
+        }
+    }
+    ret.emplace_back(DebugPrinter::Block::cmdDecIndent);
+
+    return ret;
+}
+
+bool MergeSortStage::BranchComparator::operator()(const Branch* left, const Branch* right) {
+    // Because this comparator is used with std::priority_queue, which is a max heap,
+    // return _true_ when left > right.
+    
+    // TODO: Is this duplicated?
+
+    for (size_t i = 0; i <  left->inputKeyAccessors.size(); ++i) {
+        const int coeff = ((*_dirs)[i] == value::SortDirection::Ascending ? 1 : -1);
+
+        auto [lhsTag, lhsVal] = left->inputKeyAccessors[i]->getViewOfValue();
+        auto [rhsTag, rhsVal] = right->inputKeyAccessors[i]->getViewOfValue();
+
+        std::cout << "comparing " << std::make_pair(lhsTag, lhsVal) << " " <<
+            std::make_pair(rhsTag, rhsVal) << std::endl;
+
+        auto [_, val] = value::compareValue(lhsTag, lhsVal, rhsTag, rhsVal);
+        const auto result = value::bitcastTo<int32_t>(val) * coeff;
+        if (result < 0) {
+            return false;
+        }
+        if (result > 0) {
+            return true;
+        }
+        continue;
+    }
+
+    return false;
 }
 }  // namespace sbe
 }  // namespace mongo
