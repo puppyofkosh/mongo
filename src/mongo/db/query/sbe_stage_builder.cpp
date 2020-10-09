@@ -390,6 +390,16 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
                                                  sbe::makeSV(*_data.resultSlot,
                                                              *_data.recordIdSlot),
                                                  root->nodeId());
+
+    // if (mergeSortNode->dedup) {
+    //     std::cout << "Rid slot is " <<  *_data.recordIdSlot << std::endl;
+    //     stage = sbe::makeS<sbe::HashAggStage>(
+    //         std::move(stage),
+    //         sbe::makeSV(*_data.recordIdSlot),
+    //         sbe::makeEM(),
+    //         root->nodeId());
+    // }
+
     return stage;
 }    
 

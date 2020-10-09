@@ -39,7 +39,7 @@
     // TODO: Check explain output
 
     // Case where the children of the $or all require a FETCH and the sort has just one component.
-    (function testFetchedChildrenSimpleSort() {
+    (function testFetchedChildren() {
         const kFilterPredicates = [
             // $or with two children.
             {$or: [{filterFieldA: 4, filterFieldB: 4},
@@ -76,9 +76,28 @@
                 assert(isSorted(res, sortInfo.cmpFunction),
                        () => "Assertion failed for filter: " + filter + "\n" +
                        "sort pattern " + sortInfo.sortPattern);
+
+                let ids = new Set();
+                for (let doc of res) {
+                    assert(!ids.has(doc._id), () => "Duplicate _id: " + tojson(_id));
+                    ids.add(doc._id);
+                }
             }
         }
     })();
+
+    // Insert an arrays into the collection and check that the deduping works correctly.
+    assert.commandWorked(coll.insert({filterFieldA: [1,2], filterFieldB: "multikeydoc",
+                                      sortFieldA: 1, sortFieldB: 1}));
+    // Both branches of the $or will return the same document, which should be de-duped. Make sure
+    // only one document is returned from the server though.
+    // assert.eq(coll.find({$or: [{filterFieldA: 1,
+    //                             filterFieldB: "multikeydoc"},
+    //                            {filterFieldA: 2,
+    //                             filterFieldB: "multikeydoc"}]})
+    //           .sort({sortFieldA: 1})
+    //           .itcount(), 1);
+    
 
     // TODO: Delete this TODO or file a ticket.
     // TODO SERVER-XYZ: Test with children that are not fetched.
