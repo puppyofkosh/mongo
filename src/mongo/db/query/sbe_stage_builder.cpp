@@ -391,14 +391,18 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
                                                              *_data.recordIdSlot),
                                                  root->nodeId());
 
-    // if (mergeSortNode->dedup) {
-    //     std::cout << "Rid slot is " <<  *_data.recordIdSlot << std::endl;
-    //     stage = sbe::makeS<sbe::HashAggStage>(
-    //         std::move(stage),
-    //         sbe::makeSV(*_data.recordIdSlot),
-    //         sbe::makeEM(),
-    //         root->nodeId());
-    // }
+    if (mergeSortNode->dedup) {
+        std::cout << "ian: res slot is " <<  *_data.resultSlot << std::endl;
+        std::cout << "ian: Rid slot is " <<  *_data.recordIdSlot << std::endl;
+
+        //sbe::makeSV(*_data.recordIdSlot),
+        stage = sbe::makeS<sbe::HashAggStage>(
+            std::move(stage),
+            sbe::makeSV(*_data.recordIdSlot, *_data.resultSlot),
+            sbe::makeEM(),
+            root->nodeId());
+        std::cout << "made hash agg stage\n";
+    }
 
     return stage;
 }    

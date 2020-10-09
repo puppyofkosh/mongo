@@ -103,11 +103,13 @@ void MergeSortStage::prepare(CompileCtx& ctx) {
 }
 
 value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId slot) {
+    std::cout << "ian: mss getAccessor " << slot << std::endl;
     for (size_t idx = 0; idx < _outputVals.size(); idx++) {
         if (_outputVals[idx] == slot) {
             return &_outAccessors[idx];
         }
     }
+    std::cout << "not found\n";
 
     return ctx.getAccessor(slot);
 }
