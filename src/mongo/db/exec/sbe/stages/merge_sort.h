@@ -80,7 +80,7 @@ private:
     };
 
     //
-    // Initialized at construction.
+    // The following fields are initialized at construction.
     //
     
     const std::vector<value::SlotVector> _inputKeys;
@@ -90,17 +90,26 @@ private:
     const value::SlotVector _outputVals;
 
     //
-    // Initialized at prepare().
+    // The following fields are initialized at prepare().
     //
 
     // Same size as size of each element of _inputVals.
-    std::vector<value::OwnedValueAccessor> _outAccessors;
+    std::vector<value::ViewOfValueAccessor> _outAccessors;
 
     std::vector<Branch> _branches;
-
+    
     //
-    // Reinitialized at each call to open().
+    // The following fields are reinitialized at each call to open().
     //
     std::priority_queue<Branch*, std::vector<Branch*>, BranchComparator> _heap;
+
+    //
+    // The following fields may change across calls to getNext().
+    //
+
+    // Indicates the last branch which we popped from. At the beginning of a getNext()
+    // call, this branch will _not_ be in the heap and must be reinserted. This is done
+    // to avoid copying values.
+    Branch* _lastBranchPopped = nullptr;
 };
 }  // namespace mongo::sbe

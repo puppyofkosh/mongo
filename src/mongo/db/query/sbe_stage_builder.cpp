@@ -391,7 +391,8 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
                                                              *_data.recordIdSlot),
                                                  root->nodeId());
 
-    if (mergeSortNode->dedup) {
+    // TODO: Reenable
+    if (mergeSortNode->dedup && false) {
         std::cout << "ian: res slot is " <<  *_data.resultSlot << std::endl;
         std::cout << "ian: Rid slot is " <<  *_data.recordIdSlot << std::endl;
 

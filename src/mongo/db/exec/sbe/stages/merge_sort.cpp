@@ -98,7 +98,7 @@ void MergeSortStage::prepare(CompileCtx& ctx) {
     }
 
     for (size_t i = 0; i <  _outputVals.size(); ++i) {
-        _outAccessors.emplace_back(value::OwnedValueAccessor{});
+        _outAccessors.emplace_back(value::ViewOfValueAccessor{});
     }
 }
 
@@ -129,27 +129,29 @@ void MergeSortStage::open(bool reOpen) {
             _heap.push(&_branches[i]);
         }
     }
+    _lastBranchPopped = nullptr;
 }
 
 PlanState MergeSortStage::getNext() {
     std::cout << "ian: getNext()\n";
-    if (_heap.empty()) {
+
+    if (_lastBranchPopped && _lastBranchPopped->root->getNext() == PlanState::ADVANCED) {
+        // This branch was removed in the last call to getNext() on the stage.
+        _heap.push(_lastBranchPopped);
+        _lastBranchPopped = nullptr;
+    } else if (_heap.empty()) {
         return PlanState::IS_EOF;
     }
 
     std::cout << "ian: popping from heap\n";
     auto top = _heap.top();
     _heap.pop();
+    _lastBranchPopped = top;
 
     invariant(_outAccessors.size() == top->inputValAccessors.size());
     for (size_t i = 0; i < _outAccessors.size(); ++i) {
-        auto [tag, val] = top->inputValAccessors[i]->copyOrMoveValue();
+        auto [tag, val] = top->inputValAccessors[i]->getViewOfValue();
         _outAccessors[i].reset(tag, val);
-    }
-
-    // Reinsert the branch into the heap if necessary.
-    if (top->root->getNext() == PlanState::ADVANCED) {
-        _heap.push(top);
     }
 
     return PlanState::ADVANCED;
@@ -173,7 +175,7 @@ std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
 }
 
 const SpecificStats* MergeSortStage::getSpecificStats() const {
-    // TODO
+    // TODO: ian
     return nullptr;
 }
 
