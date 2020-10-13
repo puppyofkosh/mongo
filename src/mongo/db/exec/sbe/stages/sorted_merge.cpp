@@ -29,7 +29,7 @@
 
 #include "mongo/platform/basic.h"
 
-#include "mongo/db/exec/sbe/stages/merge_sort.h"
+#include "mongo/db/exec/sbe/stages/sorted_merge.h"
 
 #include "mongo/db/exec/sbe/expressions/expression.h"
 

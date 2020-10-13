@@ -45,6 +45,7 @@
 #include "mongo/db/exec/sbe/stages/text_match.h"
 #include "mongo/db/exec/sbe/stages/traverse.h"
 #include "mongo/db/exec/sbe/stages/union.h"
+#include "mongo/db/exec/sbe/stages/unique.h"
 #include "mongo/db/fts/fts_index_format.h"
 #include "mongo/db/fts/fts_query_impl.h"
 #include "mongo/db/fts/fts_spec.h"
@@ -382,12 +383,12 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
     _data.resultSlot = _slotIdGenerator.generate();
     _data.recordIdSlot = _slotIdGenerator.generate();
     auto stage =
-        sbe::makeS<sbe::MergeSortStage>(std::move(inputStages),
-                                        std::move(inputKeys),
-                                        std::move(direction),
-                                        std::move(inputVals),
-                                        sbe::makeSV(*_data.resultSlot, *_data.recordIdSlot),
-                                        root->nodeId());
+        sbe::makeS<sbe::SortedMergeStage>(std::move(inputStages),
+                                          std::move(inputKeys),
+                                          std::move(direction),
+                                          std::move(inputVals),
+                                          sbe::makeSV(*_data.resultSlot, *_data.recordIdSlot),
+                                          root->nodeId());
 
     // TODO: Reenable
     if (mergeSortNode->dedup && false) {
