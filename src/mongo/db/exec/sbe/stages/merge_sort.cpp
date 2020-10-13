@@ -47,8 +47,7 @@ namespace sbe {
       _inputKeys(std::move(inputKeys)),
       _dirs(std::move(dirs)),
       _inputVals(std::move(inputVals)),
-      _outputVals(std::move(outputVals)),
-      _heap(_dirs) {
+      _outputVals(std::move(outputVals)) {
     _children = std::move(inputStages);
 
     invariant(_inputKeys.size() == _children.size());
@@ -81,25 +80,33 @@ std::unique_ptr<PlanStage> MergeSortStage::clone() const {
 }
 
 void MergeSortStage::prepare(CompileCtx& ctx) {
-    _branches.resize(_children.size());
+    std::vector<SortedStreamMerger<PlanStage>::Branch> branches(_children.size());
     
     for (size_t childNum = 0; childNum < _children.size(); childNum++) {
         auto& child = _children[childNum];
         child->prepare(ctx);
 
-        _branches[childNum].root = child.get();
+        branches[childNum].stream = child.get();
         for (auto slot : _inputKeys[childNum]) {
-            _branches[childNum].inputKeyAccessors.push_back(child->getAccessor(ctx, slot));
+            branches[childNum].inputKeyAccessors.push_back(child->getAccessor(ctx, slot));
         }
         for (auto slot : _inputVals[childNum]) {
-            _branches[childNum].inputValAccessors.push_back(child->getAccessor(ctx, slot));
+            branches[childNum].inputValAccessors.push_back(child->getAccessor(ctx, slot));
         }
-
     }
 
     for (size_t i = 0; i <  _outputVals.size(); ++i) {
         _outAccessors.emplace_back(value::ViewOfValueAccessor{});
     }
+
+    std::vector<value::ViewOfValueAccessor*> accessorPtrs;
+    for (auto&& outAccessor : _outAccessors) {
+        accessorPtrs.push_back(&outAccessor);
+    }
+
+    _merger.emplace(std::move(branches),
+                    _dirs,
+                    std::move(accessorPtrs));
 }
 
 value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId slot) {
@@ -117,44 +124,17 @@ value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId 
 void MergeSortStage::open(bool reOpen) {
     ++_commonStats.opens;
 
-    if (reOpen) {
-        _heap = decltype(_heap)(_dirs);
-    }
+    _merger->clear();
 
     for (size_t i = 0; i < _children.size(); ++i) {
         auto& child = _children[i];
         child->open(reOpen);
-
-        if (child->getNext() == PlanState::ADVANCED) {
-            _heap.push(&_branches[i]);
-        }
     }
-    _lastBranchPopped = nullptr;
+    _merger->init();
 }
 
 PlanState MergeSortStage::getNext() {
-    std::cout << "ian: getNext()\n";
-
-    if (_lastBranchPopped && _lastBranchPopped->root->getNext() == PlanState::ADVANCED) {
-        // This branch was removed in the last call to getNext() on the stage.
-        _heap.push(_lastBranchPopped);
-        _lastBranchPopped = nullptr;
-    } else if (_heap.empty()) {
-        return PlanState::IS_EOF;
-    }
-
-    std::cout << "ian: popping from heap\n";
-    auto top = _heap.top();
-    _heap.pop();
-    _lastBranchPopped = top;
-
-    invariant(_outAccessors.size() == top->inputValAccessors.size());
-    for (size_t i = 0; i < _outAccessors.size(); ++i) {
-        auto [tag, val] = top->inputValAccessors[i]->getViewOfValue();
-        _outAccessors[i].reset(tag, val);
-    }
-
-    return PlanState::ADVANCED;
+    return _merger->getNext();
 }
 
 void MergeSortStage::close() {
@@ -163,7 +143,7 @@ void MergeSortStage::close() {
         child->close();
     }
 
-    _heap = decltype(_heap)(_dirs);
+    _merger->clear();
 }
 
 std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
@@ -212,35 +192,6 @@ std::vector<DebugPrinter::Block> MergeSortStage::debugPrint() const {
     ret.emplace_back(DebugPrinter::Block::cmdDecIndent);
 
     return ret;
-}
-
-bool MergeSortStage::BranchComparator::operator()(const Branch* left, const Branch* right) {
-    // Because this comparator is used with std::priority_queue, which is a max heap,
-    // return _true_ when left > right.
-    
-    // TODO: Is this duplicated?
-
-    for (size_t i = 0; i <  left->inputKeyAccessors.size(); ++i) {
-        const int coeff = ((*_dirs)[i] == value::SortDirection::Ascending ? 1 : -1);
-
-        auto [lhsTag, lhsVal] = left->inputKeyAccessors[i]->getViewOfValue();
-        auto [rhsTag, rhsVal] = right->inputKeyAccessors[i]->getViewOfValue();
-
-        std::cout << "comparing " << std::make_pair(lhsTag, lhsVal) << " " <<
-            std::make_pair(rhsTag, rhsVal) << std::endl;
-
-        auto [_, val] = value::compareValue(lhsTag, lhsVal, rhsTag, rhsVal);
-        const auto result = value::bitcastTo<int32_t>(val) * coeff;
-        if (result < 0) {
-            return false;
-        }
-        if (result > 0) {
-            return true;
-        }
-        continue;
-    }
-
-    return false;
 }
 }  // namespace sbe
 }  // namespace mongo

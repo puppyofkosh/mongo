@@ -33,6 +33,8 @@
 
 #include "mongo/db/exec/sbe/stages/stages.h"
 
+#include "mongo/db/exec/sbe/stages/sorted_stream_merger.h"
+
 namespace mongo::sbe {
 // TODO: Rename to SortMerge
 class MergeSortStage final : public PlanStage {
@@ -61,55 +63,15 @@ public:
     std::vector<DebugPrinter::Block> debugPrint() const final;
 
 private:
-    struct Branch {
-        PlanStage* root = nullptr;
-
-        std::vector<value::SlotAccessor*> inputKeyAccessors;
-        std::vector<value::SlotAccessor*> inputValAccessors;
-    };
-
-    struct BranchComparator {
-        BranchComparator(const std::vector<value::SortDirection>& dirs)
-            :_dirs(&dirs) {}
-
-        bool operator()(const Branch*, const Branch*);
-
-        // Guaranteed to never be nullptr. Stored as pointer instead of reference to allow for
-        // assignment operators.
-        const std::vector<value::SortDirection>* _dirs;
-    };
-
-    //
-    // The following fields are initialized at construction.
-    //
-    
     const std::vector<value::SlotVector> _inputKeys;
     const std::vector<value::SortDirection> _dirs;
 
     const std::vector<value::SlotVector> _inputVals;
     const value::SlotVector _outputVals;
 
-    //
-    // The following fields are initialized at prepare().
-    //
-
-    // Same size as size of each element of _inputVals.
     std::vector<value::ViewOfValueAccessor> _outAccessors;
-
-    std::vector<Branch> _branches;
     
-    //
-    // The following fields are reinitialized at each call to open().
-    //
-    std::priority_queue<Branch*, std::vector<Branch*>, BranchComparator> _heap;
-
-    //
-    // The following fields may change across calls to getNext().
-    //
-
-    // Indicates the last branch which we popped from. At the beginning of a getNext()
-    // call, this branch will _not_ be in the heap and must be reinserted. This is done
-    // to avoid copying values.
-    Branch* _lastBranchPopped = nullptr;
+    // Maintains state about merging the results in order.
+    boost::optional<SortedStreamMerger<PlanStage>> _merger;
 };
 }  // namespace mongo::sbe
