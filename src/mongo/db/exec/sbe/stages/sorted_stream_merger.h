@@ -34,7 +34,7 @@
 #include "mongo/db/exec/sbe/stages/stages.h"
 
 namespace mongo::sbe {
-template<class SortedStream>
+template <class SortedStream>
 class SortedStreamMerger final {
 public:
     struct Branch {
@@ -43,22 +43,22 @@ public:
         std::vector<value::SlotAccessor*> inputKeyAccessors;
         std::vector<value::SlotAccessor*> inputValAccessors;
     };
-    
+
     SortedStreamMerger(std::vector<Branch> inputBranches,
                        std::vector<value::SortDirection> dirs,
                        std::vector<value::ViewOfValueAccessor*> outAccessors)
-        :_dirs(std::move(dirs)),
-        _outAccessors(std::move(outAccessors)),
-        _branches(std::move(inputBranches)),
-        _heap(_dirs) {
+        : _dirs(std::move(dirs)),
+          _outAccessors(std::move(outAccessors)),
+          _branches(std::move(inputBranches)),
+          _heap(_dirs) {
 
         invariant(std::all_of(
-                      _branches.begin(),
-                      _branches.end(),
-                      [dirSize = _dirs.size(), outValSize = _outAccessors.size()](const auto& branch) {
-                          return branch.inputKeyAccessors.size() == dirSize &&
-                              branch.inputValAccessors.size() == outValSize;
-                      }));
+            _branches.begin(),
+            _branches.end(),
+            [dirSize = _dirs.size(), outValSize = _outAccessors.size()](const auto& branch) {
+                return branch.inputKeyAccessors.size() == dirSize &&
+                    branch.inputValAccessors.size() == outValSize;
+            }));
     }
 
     void clear() {
@@ -67,7 +67,7 @@ public:
 
     void init() {
         clear();
-        for (auto && branch : _branches) {
+        for (auto&& branch : _branches) {
             if (branch.stream->getNext() == PlanState::ADVANCED) {
                 _heap.push(&branch);
             }
@@ -102,10 +102,10 @@ public:
     std::vector<Branch>& branches() {
         return _branches;
     }
+
 private:
     struct BranchComparator {
-        BranchComparator(const std::vector<value::SortDirection>& dirs)
-            :_dirs(&dirs) {}
+        BranchComparator(const std::vector<value::SortDirection>& dirs) : _dirs(&dirs) {}
 
         bool operator()(const Branch*, const Branch*);
 
@@ -115,7 +115,7 @@ private:
     };
 
     const std::vector<value::SortDirection> _dirs;
-    
+
     // Same size as size of each element of _inputVals.
     std::vector<value::ViewOfValueAccessor*> _outAccessors;
 
@@ -132,21 +132,22 @@ private:
     Branch* _lastBranchPopped = nullptr;
 };
 
-template<class SortedStream>
-bool SortedStreamMerger<SortedStream>::BranchComparator::operator()(const Branch* left, const Branch* right) {
+template <class SortedStream>
+bool SortedStreamMerger<SortedStream>::BranchComparator::operator()(const Branch* left,
+                                                                    const Branch* right) {
     // Because this comparator is used with std::priority_queue, which is a max heap,
     // return _true_ when left > right.
-    
+
     // TODO: Is this duplicated?
 
-    for (size_t i = 0; i <  left->inputKeyAccessors.size(); ++i) {
+    for (size_t i = 0; i < left->inputKeyAccessors.size(); ++i) {
         const int coeff = ((*_dirs)[i] == value::SortDirection::Ascending ? 1 : -1);
 
         auto [lhsTag, lhsVal] = left->inputKeyAccessors[i]->getViewOfValue();
         auto [rhsTag, rhsVal] = right->inputKeyAccessors[i]->getViewOfValue();
 
-        std::cout << "comparing " << std::make_pair(lhsTag, lhsVal) << " " <<
-            std::make_pair(rhsTag, rhsVal) << std::endl;
+        std::cout << "comparing " << std::make_pair(lhsTag, lhsVal) << " "
+                  << std::make_pair(rhsTag, rhsVal) << std::endl;
 
         auto [_, val] = value::compareValue(lhsTag, lhsVal, rhsTag, rhsVal);
         const auto result = value::bitcastTo<int32_t>(val) * coeff;

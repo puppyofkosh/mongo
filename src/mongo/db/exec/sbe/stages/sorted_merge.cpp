@@ -35,7 +35,7 @@
 
 namespace mongo {
 namespace sbe {
-    MergeSortStage::MergeSortStage(std::vector<std::unique_ptr<PlanStage>> inputStages,
+    SortedMergeStage::SortedMergeStage(std::vector<std::unique_ptr<PlanStage>> inputStages,
                    // Each element of 'inputKeys' must be the same size as 'dirs'.
                    std::vector<value::SlotVector> inputKeys,
                    std::vector<value::SortDirection> dirs,
@@ -68,18 +68,18 @@ namespace sbe {
                   }));
 }
 
-std::unique_ptr<PlanStage> MergeSortStage::clone() const {
+std::unique_ptr<PlanStage> SortedMergeStage::clone() const {
     std::vector<std::unique_ptr<PlanStage>> inputStages;
     inputStages.reserve(_children.size());
     for (auto& child : _children) {
         inputStages.emplace_back(child->clone());
     }
-    return std::make_unique<MergeSortStage>(
+    return std::make_unique<SortedMergeStage>(
         std::move(inputStages), _inputKeys, _dirs, _inputVals, _outputVals,
         _commonStats.nodeId);
 }
 
-void MergeSortStage::prepare(CompileCtx& ctx) {
+void SortedMergeStage::prepare(CompileCtx& ctx) {
     std::vector<SortedStreamMerger<PlanStage>::Branch> branches(_children.size());
     
     for (size_t childNum = 0; childNum < _children.size(); childNum++) {
@@ -109,7 +109,7 @@ void MergeSortStage::prepare(CompileCtx& ctx) {
                     std::move(accessorPtrs));
 }
 
-value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId slot) {
+value::SlotAccessor* SortedMergeStage::getAccessor(CompileCtx& ctx, value::SlotId slot) {
     std::cout << "ian: mss getAccessor " << slot << std::endl;
     for (size_t idx = 0; idx < _outputVals.size(); idx++) {
         if (_outputVals[idx] == slot) {
@@ -121,7 +121,7 @@ value::SlotAccessor* MergeSortStage::getAccessor(CompileCtx& ctx, value::SlotId 
     return ctx.getAccessor(slot);
 }
 
-void MergeSortStage::open(bool reOpen) {
+void SortedMergeStage::open(bool reOpen) {
     ++_commonStats.opens;
 
     _merger->clear();
@@ -133,11 +133,11 @@ void MergeSortStage::open(bool reOpen) {
     _merger->init();
 }
 
-PlanState MergeSortStage::getNext() {
+PlanState SortedMergeStage::getNext() {
     return _merger->getNext();
 }
 
-void MergeSortStage::close() {
+void SortedMergeStage::close() {
     ++_commonStats.closes;
     for (auto& child : _children) {
         child->close();
@@ -146,7 +146,7 @@ void MergeSortStage::close() {
     _merger->clear();
 }
 
-std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
+std::unique_ptr<PlanStageStats> SortedMergeStage::getStats() const {
     auto ret = std::make_unique<PlanStageStats>(_commonStats);
     for (auto&& child : _children) {
         ret->children.emplace_back(child->getStats());
@@ -154,14 +154,14 @@ std::unique_ptr<PlanStageStats> MergeSortStage::getStats() const {
     return ret;
 }
 
-const SpecificStats* MergeSortStage::getSpecificStats() const {
+const SpecificStats* SortedMergeStage::getSpecificStats() const {
     // TODO: ian
     return nullptr;
 }
 
-std::vector<DebugPrinter::Block> MergeSortStage::debugPrint() const {
+std::vector<DebugPrinter::Block> SortedMergeStage::debugPrint() const {
     std::vector<DebugPrinter::Block> ret;
-    DebugPrinter::addKeyword(ret, "sort_merge");
+    DebugPrinter::addKeyword(ret, "sorted_merge");
 
     ret.emplace_back(DebugPrinter::Block("[`"));
     for (size_t idx = 0; idx < _outputVals.size(); idx++) {

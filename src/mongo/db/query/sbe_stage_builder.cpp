@@ -38,10 +38,10 @@
 #include "mongo/db/exec/sbe/stages/limit_skip.h"
 #include "mongo/db/exec/sbe/stages/loop_join.h"
 #include "mongo/db/exec/sbe/stages/makeobj.h"
-#include "mongo/db/exec/sbe/stages/merge_sort.h"
 #include "mongo/db/exec/sbe/stages/project.h"
 #include "mongo/db/exec/sbe/stages/scan.h"
 #include "mongo/db/exec/sbe/stages/sort.h"
+#include "mongo/db/exec/sbe/stages/sorted_merge.h"
 #include "mongo/db/exec/sbe/stages/text_match.h"
 #include "mongo/db/exec/sbe/stages/traverse.h"
 #include "mongo/db/exec/sbe/stages/union.h"
@@ -339,7 +339,7 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
                 part.fieldPath && part.fieldPath->getPathLength() == 1);
 
         direction.push_back(part.isAscending ? sbe::value::SortDirection::Ascending
-                            : sbe::value::SortDirection::Descending);
+                                             : sbe::value::SortDirection::Descending);
     }
 
     std::vector<std::unique_ptr<sbe::PlanStage>> inputStages;
@@ -352,25 +352,23 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
 
         sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> projectMap;
         sbe::value::SlotVector inputKeysForChild;
-        
+
         for (const auto& part : sortPattern) {
             // Slot holding the sort key.
             auto sortFieldVar{_slotIdGenerator.generate()};
             inputKeysForChild.push_back(sortFieldVar);
 
             auto fieldName = part.fieldPath->getFieldName(0);
-            auto fieldNameSV = std::string_view{fieldName.rawData(),
-                                                fieldName.size()};
-            projectMap.emplace(
-                sortFieldVar,
-                sbe::makeE<sbe::EFunction>("getField"sv,
-                                           sbe::makeEs(sbe::makeE<sbe::EVariable>(*_data.resultSlot),
-                                                       sbe::makeE<sbe::EConstant>(fieldNameSV))));
+            auto fieldNameSV = std::string_view{fieldName.rawData(), fieldName.size()};
+            projectMap.emplace(sortFieldVar,
+                               sbe::makeE<sbe::EFunction>(
+                                   "getField"sv,
+                                   sbe::makeEs(sbe::makeE<sbe::EVariable>(*_data.resultSlot),
+                                               sbe::makeE<sbe::EConstant>(fieldNameSV))));
         }
 
-        childExecTree =
-            sbe::makeS<sbe::ProjectStage>(std::move(childExecTree), std::move(projectMap),
-                                          root->nodeId());
+        childExecTree = sbe::makeS<sbe::ProjectStage>(
+            std::move(childExecTree), std::move(projectMap), root->nodeId());
 
         inputStages.push_back(std::move(childExecTree));
 
@@ -383,30 +381,29 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildSortMerge(
 
     _data.resultSlot = _slotIdGenerator.generate();
     _data.recordIdSlot = _slotIdGenerator.generate();
-    auto stage = sbe::makeS<sbe::MergeSortStage>(std::move(inputStages),
-                                                 std::move(inputKeys),
-                                                 std::move(direction),
-                                                 std::move(inputVals),
-                                                 sbe::makeSV(*_data.resultSlot,
-                                                             *_data.recordIdSlot),
-                                                 root->nodeId());
+    auto stage =
+        sbe::makeS<sbe::MergeSortStage>(std::move(inputStages),
+                                        std::move(inputKeys),
+                                        std::move(direction),
+                                        std::move(inputVals),
+                                        sbe::makeSV(*_data.resultSlot, *_data.recordIdSlot),
+                                        root->nodeId());
 
     // TODO: Reenable
     if (mergeSortNode->dedup && false) {
-        std::cout << "ian: res slot is " <<  *_data.resultSlot << std::endl;
-        std::cout << "ian: Rid slot is " <<  *_data.recordIdSlot << std::endl;
+        std::cout << "ian: res slot is " << *_data.resultSlot << std::endl;
+        std::cout << "ian: Rid slot is " << *_data.recordIdSlot << std::endl;
 
-        //sbe::makeSV(*_data.recordIdSlot),
-        stage = sbe::makeS<sbe::HashAggStage>(
-            std::move(stage),
-            sbe::makeSV(*_data.recordIdSlot, *_data.resultSlot),
-            sbe::makeEM(),
-            root->nodeId());
+        // sbe::makeSV(*_data.recordIdSlot),
+        stage = sbe::makeS<sbe::HashAggStage>(std::move(stage),
+                                              sbe::makeSV(*_data.recordIdSlot, *_data.resultSlot),
+                                              sbe::makeEM(),
+                                              root->nodeId());
         std::cout << "made hash agg stage\n";
     }
 
     return stage;
-}    
+}
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
     const QuerySolutionNode* root) {
@@ -727,8 +724,7 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::build(const QuerySolution
             {STAGE_OR, &SlotBasedStageBuilder::buildOr},
             {STAGE_TEXT, &SlotBasedStageBuilder::buildText},
             {STAGE_RETURN_KEY, &SlotBasedStageBuilder::buildReturnKey},
-            {STAGE_SORT_MERGE, &SlotBasedStageBuilder::buildSortMerge}
-    };
+            {STAGE_SORT_MERGE, &SlotBasedStageBuilder::buildSortMerge}};
 
     uassert(4822884,
             str::stream() << "Can't build exec tree for node: " << root->toString(),

@@ -36,10 +36,9 @@
 #include "mongo/db/exec/sbe/stages/sorted_stream_merger.h"
 
 namespace mongo::sbe {
-// TODO: Rename to SortMerge
-class MergeSortStage final : public PlanStage {
+class SortedMergeStage final : public PlanStage {
 public:
-    MergeSortStage(std::vector<std::unique_ptr<PlanStage>> inputStages,
+    SortedMergeStage(std::vector<std::unique_ptr<PlanStage>> inputStages,
                    // Each element of 'inputKeys' must be the same size as 'dirs'.
                    std::vector<value::SlotVector> inputKeys,
                    std::vector<value::SortDirection> dirs,
@@ -48,7 +47,7 @@ public:
                    value::SlotVector outputVals,
                    PlanNodeId planNodeId);
 
-    ~MergeSortStage() = default;
+    ~SortedMergeStage() = default;
 
     std::unique_ptr<PlanStage> clone() const final;
 
