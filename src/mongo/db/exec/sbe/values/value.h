@@ -718,9 +718,12 @@ inline std::pair<TypeTags, Value> copyValue(TypeTags tag, Value val) {
         case TypeTags::bsonObject: {
             auto bson = getRawPointerView(val);
             auto size = ConstDataView(bson).read<LittleEndian<uint32_t>>();
-            auto dst = new uint8_t[size];
-            memcpy(dst, bson, size);
-            return {TypeTags::bsonObject, reinterpret_cast<Value>(dst)};
+
+            // Owned BSONObj memory is managed through a SharedBuffer for compatibility with the
+            // BSONObj class.
+            auto buffer = SharedBuffer::allocate(size);
+            memcpy(buffer.get(), bson, size);
+            return {TypeTags::bsonObject, reinterpret_cast<Value>(buffer.detach())};
         }
         case TypeTags::bsonObjectId: {
             auto bson = getRawPointerView(val);

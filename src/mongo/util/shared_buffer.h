@@ -56,6 +56,12 @@ public:
         return takeOwnership(mongoMalloc(sizeof(Holder) + bytes), bytes);
     }
 
+    static void deallocate(char* data) {
+        Holder* holder = reinterpret_cast<Holder*>(data - sizeof(Holder));
+        invariant(!holder->isShared());
+        Holder::deallocate(holder);
+    }
+
     /**
      * Resizes the buffer, copying the current contents.
      *
@@ -98,6 +104,16 @@ public:
         return _holder ? _holder->data() : nullptr;
     }
 
+    /**
+     * Releases ownership of the underlying buffer without decrementing the reference count.
+     *
+     * The return value points to the "data" portion of the buffer (as opposed to the Holder).  It
+     * is the caller's responsibility to free the buffer using deallocate().
+     */
+    char* detach() {
+        return reinterpret_cast<char*>(_holder.detach()) + sizeof(Holder);
+    }
+
     explicit operator bool() const {
         return bool(_holder);
     }
@@ -121,6 +137,11 @@ public:
 private:
     class Holder {
     public:
+        static void deallocate(Holder* h) {
+            h->~Holder();
+            free(h);
+        }
+
         explicit Holder(unsigned initial, size_t capacity)
             : _refCount(initial), _capacity(capacity) {
             invariant(capacity == _capacity);
@@ -133,10 +154,7 @@ private:
 
         friend void intrusive_ptr_release(Holder* h) {
             if (h->_refCount.subtractAndFetch(1) == 0) {
-                // We placement new'ed a Holder in takeOwnership above,
-                // so we must destroy the object here.
-                h->~Holder();
-                free(h);
+                deallocate(h);
             }
         }
 

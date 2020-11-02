@@ -33,17 +33,20 @@
 #include "mongo/db/exec/sbe/values/value.h"
 
 namespace mongo::sbe {
-class MakeObjStage final : public PlanStage {
+enum class MakeObjOutputType { kSbeObject, kBson };
+
+template <MakeObjOutputType O>
+class MakeObjStageBase final : public PlanStage {
 public:
-    MakeObjStage(std::unique_ptr<PlanStage> input,
-                 value::SlotId objSlot,
-                 boost::optional<value::SlotId> rootSlot,
-                 std::vector<std::string> restrictFields,
-                 std::vector<std::string> projectFields,
-                 value::SlotVector projectVars,
-                 bool forceNewObject,
-                 bool returnOldObject,
-                 PlanNodeId planNodeId);
+    MakeObjStageBase(std::unique_ptr<PlanStage> input,
+                     value::SlotId objSlot,
+                     boost::optional<value::SlotId> rootSlot,
+                     std::vector<std::string> restrictFields,
+                     std::vector<std::string> projectFields,
+                     value::SlotVector projectVars,
+                     bool forceNewObject,
+                     bool returnOldObject,
+                     PlanNodeId planNodeId);
 
     std::unique_ptr<PlanStage> clone() const final;
 
@@ -59,10 +62,14 @@ public:
 
 private:
     void projectField(value::Object* obj, size_t idx);
+    void projectField(BSONObjBuilder* bob, size_t idx);
 
     bool isFieldRestricted(const std::string_view& sv) const {
         return _restrictAllFields || _restrictFieldsSet.count(sv) != 0;
     }
+
+    void produceSbeObject();
+    void produceBsonObject();
 
     const value::SlotId _objSlot;
     const boost::optional<value::SlotId> _rootSlot;
@@ -84,4 +91,8 @@ private:
     bool _compiled{false};
     bool _restrictAllFields{false};
 };
+
+using MakeObjStage = MakeObjStageBase<MakeObjOutputType::kSbeObject>;
+using MakeBSONObjStage = MakeObjStageBase<MakeObjOutputType::kBson>;
+
 }  // namespace mongo::sbe

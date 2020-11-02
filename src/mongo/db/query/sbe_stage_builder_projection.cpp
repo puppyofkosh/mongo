@@ -334,28 +334,28 @@ public:
             {{_context->topLevel().inputSlot,
               outputSlot,
               isInclusion ? sbe::makeS<sbe::FilterStage<true>>(
-                                sbe::makeS<sbe::MakeObjStage>(std::move(inputStage),
-                                                              outputSlot,
-                                                              boost::none,
-                                                              std::vector<std::string>{},
-                                                              std::move(projectFields),
-                                                              std::move(projectSlots),
-                                                              true,
-                                                              false,
-                                                              _context->planNodeId),
+                                sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+                                                                  outputSlot,
+                                                                  boost::none,
+                                                                  std::vector<std::string>{},
+                                                                  std::move(projectFields),
+                                                                  std::move(projectSlots),
+                                                                  true,
+                                                                  false,
+                                                                  _context->planNodeId),
                                 sbe::makeE<sbe::EFunction>("isObject"sv,
                                                            sbe::makeEs(sbe::makeE<sbe::EVariable>(
                                                                _context->topLevel().inputSlot))),
                                 _context->planNodeId)
-                          : sbe::makeS<sbe::MakeObjStage>(std::move(inputStage),
-                                                          outputSlot,
-                                                          _context->topLevel().inputSlot,
-                                                          std::move(restrictFields),
-                                                          std::move(projectFields),
-                                                          std::move(projectSlots),
-                                                          false,
-                                                          true,
-                                                          _context->planNodeId)}});
+                          : sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+                                                              outputSlot,
+                                                              _context->topLevel().inputSlot,
+                                                              std::move(restrictFields),
+                                                              std::move(projectFields),
+                                                              std::move(projectSlots),
+                                                              false,
+                                                              true,
+                                                              _context->planNodeId)}});
         // We've done with the current nested level.
         _context->popLevel();
     }

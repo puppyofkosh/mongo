@@ -72,7 +72,10 @@ void releaseValue(TypeTags tag, Value val) noexcept {
         case TypeTags::ObjectId:
             delete getObjectIdView(val);
             break;
-        case TypeTags::bsonObject:
+        case TypeTags::bsonObject: {
+            SharedBuffer::deallocate(getRawPointerView(val));
+            break;
+        }
         case TypeTags::bsonArray:
         case TypeTags::bsonObjectId:
         case TypeTags::bsonBinData:

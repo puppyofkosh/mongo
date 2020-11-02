@@ -345,17 +345,17 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
                                                        field.c_str(), field.size()}))));
     }
 
-    return sbe::makeS<sbe::MakeObjStage>(sbe::makeS<sbe::ProjectStage>(std::move(inputStage),
-                                                                       std::move(projections),
-                                                                       root->nodeId()),
-                                         *_data.resultSlot,
-                                         boost::none,
-                                         std::vector<std::string>{},
-                                         pn->proj.getRequiredFields(),
-                                         fieldSlots,
-                                         true,
-                                         false,
-                                         root->nodeId());
+    return sbe::makeS<sbe::MakeBSONObjStage>(sbe::makeS<sbe::ProjectStage>(std::move(inputStage),
+                                                                           std::move(projections),
+                                                                           root->nodeId()),
+                                             *_data.resultSlot,
+                                             boost::none,
+                                             std::vector<std::string>{},
+                                             pn->proj.getRequiredFields(),
+                                             fieldSlots,
+                                             true,
+                                             false,
+                                             root->nodeId());
 }
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionCovered(
@@ -403,15 +403,15 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionCovered(
 
     _data.resultSlot = _slotIdGenerator.generate();
 
-    return sbe::makeS<sbe::MakeObjStage>(std::move(inputStage),
-                                         *_data.resultSlot,
-                                         boost::none,
-                                         std::vector<std::string>{},
-                                         std::move(keyFieldNames),
-                                         std::move(*_indexKeySlots),
-                                         true,
-                                         false,
-                                         root->nodeId());
+    return sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+                                             *_data.resultSlot,
+                                             boost::none,
+                                             std::vector<std::string>{},
+                                             std::move(keyFieldNames),
+                                             std::move(*_indexKeySlots),
+                                             true,
+                                             false,
+                                             root->nodeId());
 }
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionDefault(

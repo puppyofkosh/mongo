@@ -47,6 +47,11 @@ inline auto fieldNameView(const char* be) noexcept {
 
 void convertToBsonObj(BSONArrayBuilder& builder, value::Array* arr);
 void convertToBsonObj(BSONObjBuilder& builder, value::Object* obj);
+
+void appendValueToBsonObj(BSONObjBuilder& builder,
+                          std::string_view name,
+                          value::TypeTags,
+                          value::Value);
 }  // namespace bson
 }  // namespace sbe
 }  // namespace mongo
