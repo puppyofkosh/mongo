@@ -286,7 +286,7 @@ PlanState MakeObjStageBase<O>::getNext() {
     auto state = _children[0]->getNext();
 
     if (state == PlanState::ADVANCED) {
-        if constexpr (O == MakeObjOutputType::kSbeObject) {
+        if constexpr (O == MakeObjOutputType::Object) {
             produceSbeObject();
         } else {
             produceBsonObject();
@@ -356,6 +356,6 @@ std::vector<DebugPrinter::Block> MakeObjStageBase<O>::debugPrint() const {
 }
 
 // Explicit template instantiations.
-template class MakeObjStageBase<MakeObjOutputType::kSbeObject>;
-template class MakeObjStageBase<MakeObjOutputType::kBson>;
+template class MakeObjStageBase<MakeObjOutputType::Object>;
+template class MakeObjStageBase<MakeObjOutputType::Bson>;
 }  // namespace mongo::sbe

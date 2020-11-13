@@ -33,7 +33,7 @@
 #include "mongo/db/exec/sbe/values/value.h"
 
 namespace mongo::sbe {
-enum class MakeObjOutputType { kSbeObject, kBson };
+enum class MakeObjOutputType { Object, Bson };
 
 template <MakeObjOutputType O>
 class MakeObjStageBase final : public PlanStage {
@@ -68,7 +68,7 @@ private:
         return _restrictAllFields || _restrictFieldsSet.count(sv) != 0;
     }
 
-    void produceSbeObject();
+    void produceObject();
     void produceBsonObject();
 
     const value::SlotId _objSlot;
@@ -92,7 +92,7 @@ private:
     bool _restrictAllFields{false};
 };
 
-using MakeObjStage = MakeObjStageBase<MakeObjOutputType::kSbeObject>;
-using MakeBSONObjStage = MakeObjStageBase<MakeObjOutputType::kBson>;
+using MakeObjStage = MakeObjStageBase<MakeObjOutputType::Object>;
+using MakeBSONObjStage = MakeObjStageBase<MakeObjOutputType::Bson>;
 
 }  // namespace mongo::sbe

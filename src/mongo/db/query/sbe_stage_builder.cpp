@@ -345,6 +345,7 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
                                                        field.c_str(), field.size()}))));
     }
 
+    _data.resultSlot = _slotIdGenerator.generate();
     return sbe::makeS<sbe::MakeBSONObjStage>(sbe::makeS<sbe::ProjectStage>(std::move(inputStage),
                                                                            std::move(projections),
                                                                            root->nodeId()),
