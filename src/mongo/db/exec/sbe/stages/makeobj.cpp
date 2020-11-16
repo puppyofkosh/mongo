@@ -45,7 +45,7 @@ MakeObjStageBase<O>::MakeObjStageBase(std::unique_ptr<PlanStage> input,
                                       bool forceNewObject,
                                       bool returnOldObject,
                                       PlanNodeId planNodeId)
-    : PlanStage("mkobj"_sd, planNodeId),
+    : PlanStage(O == MakeObjOutputType::object ? "mkobj"_sd : "mkbson"_sd, planNodeId),
       _objSlot(objSlot),
       _rootSlot(rootSlot),
       _restrictFields(std::move(restrictFields)),
@@ -286,7 +286,7 @@ PlanState MakeObjStageBase<O>::getNext() {
     auto state = _children[0]->getNext();
 
     if (state == PlanState::ADVANCED) {
-        if constexpr (O == MakeObjOutputType::Object) {
+        if constexpr (O == MakeObjOutputType::object) {
             produceObject();
         } else {
             produceBsonObject();
@@ -315,7 +315,6 @@ const SpecificStats* MakeObjStageBase<O>::getSpecificStats() const {
 
 template <MakeObjOutputType O>
 std::vector<DebugPrinter::Block> MakeObjStageBase<O>::debugPrint() const {
-    // TODO: Include obj type in the output
     auto ret = PlanStage::debugPrint();
 
     DebugPrinter::addIdentifier(ret, _objSlot);
@@ -356,6 +355,6 @@ std::vector<DebugPrinter::Block> MakeObjStageBase<O>::debugPrint() const {
 }
 
 // Explicit template instantiations.
-template class MakeObjStageBase<MakeObjOutputType::Object>;
-template class MakeObjStageBase<MakeObjOutputType::Bson>;
+template class MakeObjStageBase<MakeObjOutputType::object>;
+template class MakeObjStageBase<MakeObjOutputType::bsonObject>;
 }  // namespace mongo::sbe

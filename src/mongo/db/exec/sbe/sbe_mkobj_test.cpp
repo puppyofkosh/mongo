@@ -27,10 +27,6 @@
  *    it in the license file.
  */
 
-/**
- * This file contains tests for sbe::LimitSkipStage.
- */
-
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/exec/sbe/sbe_plan_stage_test.h"
@@ -41,7 +37,6 @@ namespace mongo::sbe {
 class MkObjTest : public PlanStageTestFixture {
 public:
     enum class InputType { Bson, Object };
-
     enum class InclusionExclusion { Inclusion, Exclusion };
 
     /**
@@ -86,7 +81,7 @@ public:
         ASSERT_TRUE(mkObj->getNext() == PlanState::ADVANCED);
         auto [tag, val] = resultAccessor->getViewOfValue();
 
-        if constexpr (std::is_same_v<MakeObjStageType, MakeBSONObjStage>) {
+        if constexpr (std::is_same_v<MakeObjStageType, MakeBsonObjStage>) {
             ASSERT_TRUE(tag == value::TypeTags::bsonObject);
             auto* data = value::bitcastTo<const char*>(val);
             BSONObj obj(data);
@@ -194,7 +189,7 @@ TEST_F(MkObjTest, TestAll) {
                 ? fieldsKeptInclusion
                 : fieldsKeptExclusion;
 
-            runTestWithOptions<MakeBSONObjStage>(
+            runTestWithOptions<MakeBsonObjStage>(
                 inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);
             runTestWithOptions<MakeObjStage>(
                 inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);

@@ -66,7 +66,7 @@ static constexpr auto kSyntax = R"(
                 PLAN_NODE_ID <- ('['([0-9])+']')
 
                 OPERATOR <- PLAN_NODE_ID? (SCAN / PSCAN / SEEK / IXSCAN / IXSEEK / PROJECT / FILTER / CFILTER /
-                            MKOBJ / GROUP / HJOIN / NLJOIN / LIMIT / SKIP / COSCAN / TRAVERSE /
+                            MKOBJ / MKBSON / GROUP / HJOIN / NLJOIN / LIMIT / SKIP / COSCAN / TRAVERSE /
                             EXCHANGE / SORT / UNWIND / UNION / BRANCH / SIMPLE_PROJ / PFO /
                             ESPOOL / LSPOOL / CSPOOL / SSPOOL)
 
@@ -115,7 +115,11 @@ static constexpr auto kSyntax = R"(
 
                 FILTER <- 'filter' '{' EXPR '}' OPERATOR
                 CFILTER <- 'cfilter' '{' EXPR '}' OPERATOR
-                MKOBJ <- 'mkobj' IDENT (IDENT IDENT_LIST)? IDENT_LIST_WITH_RENAMES OPERATOR
+
+                MKOBJ_FLAG <- <'true'> / <'false'>
+                MKOBJ <- 'mkobj' IDENT (IDENT IDENT_LIST)? IDENT_LIST_WITH_RENAMES MKOBJ_FLAG MKOBJ_FLAG OPERATOR
+                MKBSON <- 'mkbson' IDENT (IDENT IDENT_LIST)? IDENT_LIST_WITH_RENAMES MKOBJ_FLAG MKOBJ_FLAG OPERATOR
+
                 GROUP <- 'group' IDENT_LIST PROJECT_LIST OPERATOR
                 HJOIN <- 'hj' LEFT RIGHT
                 LEFT <- 'left' IDENT_LIST IDENT_LIST OPERATOR
@@ -806,6 +810,9 @@ void Parser::walkUnwind(AstQuery& ast) {
 }
 
 void Parser::walkMkObj(AstQuery& ast) {
+    using namespace peg::udl;
+    using namespace std::literals;
+
     walkChildren(ast);
 
     std::string newRootName = ast.nodes[0]->identifier;
@@ -814,25 +821,39 @@ void Parser::walkMkObj(AstQuery& ast) {
 
     size_t projectListPos;
     size_t inputPos;
-    if (ast.nodes.size() == 3) {
+    size_t forceNewObjPos;
+    size_t retOldObjPos;
+
+    if (ast.nodes.size() == 5) {
         projectListPos = 1;
-        inputPos = 2;
+        forceNewObjPos = 2;
+        retOldObjPos = 3;
+        inputPos = 4;
     } else {
         oldRootName = ast.nodes[1]->identifier;
         restrictFields = std::move(ast.nodes[2]->identifiers);
         projectListPos = 3;
-        inputPos = 4;
+        forceNewObjPos = 4;
+        retOldObjPos = 5;
+        inputPos = 6;
     }
 
-    ast.stage = makeS<MakeObjStage>(std::move(ast.nodes[inputPos]->stage),
-                                    lookupSlotStrict(newRootName),
-                                    lookupSlot(oldRootName),
-                                    std::move(restrictFields),
-                                    std::move(ast.nodes[projectListPos]->renames),
-                                    lookupSlots(std::move(ast.nodes[projectListPos]->identifiers)),
-                                    false,
-                                    true,
-                                    getCurrentPlanNodeId());
+#define SBE_PARSER_CREATE_MKOBJ_STAGE(StageType)                                     \
+    makeS<StageType>(std::move(ast.nodes[inputPos]->stage),                          \
+                     lookupSlotStrict(newRootName),                                  \
+                     lookupSlot(oldRootName),                                        \
+                     std::move(restrictFields),                                      \
+                     std::move(ast.nodes[projectListPos]->renames),                  \
+                     lookupSlots(std::move(ast.nodes[projectListPos]->identifiers)), \
+                     ast.nodes[forceNewObjPos]->token == "true",                     \
+                     ast.nodes[retOldObjPos]->token == "true",                       \
+                     getCurrentPlanNodeId())
+
+    if (ast.tag == "MKOBJ"_) {
+        ast.stage = SBE_PARSER_CREATE_MKOBJ_STAGE(MakeObjStage);
+    } else {
+        ast.stage = SBE_PARSER_CREATE_MKOBJ_STAGE(MakeBsonObjStage);
+    }
 }
 
 void Parser::walkGroup(AstQuery& ast) {
@@ -1389,6 +1410,7 @@ void Parser::walk(AstQuery& ast) {
             walkUnwind(ast);
             break;
         case "MKOBJ"_:
+        case "MKBSON"_:
             walkMkObj(ast);
             break;
         case "GROUP"_:
