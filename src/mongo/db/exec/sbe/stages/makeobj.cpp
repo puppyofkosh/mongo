@@ -130,7 +130,7 @@ void MakeObjStageBase<O>::open(bool reOpen) {
 }
 
 template <MakeObjOutputType O>
-void MakeObjStageBase<O>::produceSbeObject() {
+void MakeObjStageBase<O>::produceObject() {
     auto [tag, val] = value::makeNewObject();
     auto obj = value::getObjectView(val);
     absl::flat_hash_set<size_t> alreadyProjected;
@@ -287,7 +287,7 @@ PlanState MakeObjStageBase<O>::getNext() {
 
     if (state == PlanState::ADVANCED) {
         if constexpr (O == MakeObjOutputType::Object) {
-            produceSbeObject();
+            produceObject();
         } else {
             produceBsonObject();
         }
