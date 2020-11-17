@@ -42,6 +42,7 @@ public:
                      value::SlotId objSlot,
                      boost::optional<value::SlotId> rootSlot,
                      std::vector<std::string> restrictFields,
+                     std::vector<std::string> preserveFields,
                      std::vector<std::string> projectFields,
                      value::SlotVector projectVars,
                      bool forceNewObject,
@@ -74,6 +75,7 @@ private:
     const value::SlotId _objSlot;
     const boost::optional<value::SlotId> _rootSlot;
     const std::vector<std::string> _restrictFields;
+    const std::vector<std::string> _preserveFields;
     const std::vector<std::string> _projectFields;
     const value::SlotVector _projectVars;
     const bool _forceNewObject;

@@ -843,6 +843,7 @@ void Parser::walkMkObj(AstQuery& ast) {
                      lookupSlotStrict(newRootName),                                  \
                      lookupSlot(oldRootName),                                        \
                      std::move(restrictFields),                                      \
+        std::vector<std::string>{}, /* TODO */                                       \
                      std::move(ast.nodes[projectListPos]->renames),                  \
                      lookupSlots(std::move(ast.nodes[projectListPos]->identifiers)), \
                      ast.nodes[forceNewObjPos]->token == "true",                     \
@@ -1265,6 +1266,7 @@ std::unique_ptr<PlanStage> Parser::walkPath(AstQuery& ast,
                                 outputSlot,
                                 inputSlot,
                                 std::move(fieldRestrictNames),
+                                std::vector<std::string>{}, // preserveFields
                                 std::move(fieldNames),
                                 std::move(fieldVars),
                                 newObj,

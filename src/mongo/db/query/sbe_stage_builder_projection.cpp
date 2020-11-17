@@ -337,7 +337,8 @@ public:
                                 sbe::makeS<sbe::MakeBsonObjStage>(std::move(inputStage),
                                                                   outputSlot,
                                                                   boost::none,
-                                                                  std::vector<std::string>{},
+                                                                  std::vector<std::string>{}, // restrictFields
+                                                                  std::vector<std::string>{}, // preserveFields
                                                                   std::move(projectFields),
                                                                   std::move(projectSlots),
                                                                   true,
@@ -351,6 +352,7 @@ public:
                                                               outputSlot,
                                                               _context->topLevel().inputSlot,
                                                               std::move(restrictFields),
+                                                              std::vector<std::string>{}, // preserveFields
                                                               std::move(projectFields),
                                                               std::move(projectSlots),
                                                               false,

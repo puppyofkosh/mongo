@@ -66,7 +66,8 @@ public:
             mkObj = makeS<MakeObjStageType>(std::move(scanStage),
                                             objOutSlotId,
                                             scanSlot,
-                                            fieldsToProject,
+                                            fieldsToProject, // restrictFields
+                                            std::vector<std::string>{}, // preserveFields
                                             std::vector<std::string>{},
                                             value::SlotVector{},
                                             false,
@@ -160,6 +161,7 @@ private:
                                              objOutSlotId,
                                              boost::none,
                                              std::vector<std::string>{},  // restrict fields (none).
+                                             std::vector<std::string>{},  // preserve fields (none).
                                              fieldsToInclude,
                                              std::move(fieldSlots),
                                              false,

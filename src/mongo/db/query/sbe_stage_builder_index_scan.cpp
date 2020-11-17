@@ -544,8 +544,9 @@ generateGenericMultiIntervalIndexScan(const CollectionPtr& collection,
                         sbe::makeS<sbe::CoScanStage>(ixn->nodeId()), 0, boost::none, ixn->nodeId()),
                     resultSlot,
                     boost::none,
-                    std::vector<std::string>{},
-                    std::vector<std::string>{},
+                    std::vector<std::string>{}, // restrictFields
+                    std::vector<std::string>{}, // preserveFields
+                    std::vector<std::string>{}, // projectFields
                     sbe::makeSV(),
                     true,
                     false,
