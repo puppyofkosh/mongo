@@ -334,7 +334,7 @@ public:
             {{_context->topLevel().inputSlot,
               outputSlot,
               isInclusion ? sbe::makeS<sbe::FilterStage<true>>(
-                                sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+                                sbe::makeS<sbe::MakeBsonObjStage>(std::move(inputStage),
                                                                   outputSlot,
                                                                   boost::none,
                                                                   std::vector<std::string>{},
@@ -347,7 +347,7 @@ public:
                                                            sbe::makeEs(sbe::makeE<sbe::EVariable>(
                                                                _context->topLevel().inputSlot))),
                                 _context->planNodeId)
-                          : sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+                          : sbe::makeS<sbe::MakeBsonObjStage>(std::move(inputStage),
                                                               outputSlot,
                                                               _context->topLevel().inputSlot,
                                                               std::move(restrictFields),

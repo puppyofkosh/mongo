@@ -36,8 +36,8 @@ namespace mongo::sbe {
 
 class MkObjTest : public PlanStageTestFixture {
 public:
-    enum class InputType { Bson, Object };
-    enum class InclusionExclusion { Inclusion, Exclusion };
+    enum class InputType { bson, object };
+    enum class InclusionExclusion { inclusion, exclusion };
 
     /**
      * Runs a test using the mkobj and project stage to project a document. The options are the
@@ -56,12 +56,12 @@ public:
                             // Definition of "project" depends on 'inclusionMode'
                             const std::vector<std::string>& fieldsToProject,
                             const std::vector<std::string>& expectedFieldsRemaining) {
-        auto [scanSlot, scanStage] = buildMockScan(InputType::Bson);
+        auto [scanSlot, scanStage] = buildMockScan(InputType::bson);
 
         std::unique_ptr<PlanStage> mkObj;
         value::SlotId objOutSlotId;
 
-        if (inclusionMode == InclusionExclusion::Exclusion) {
+        if (inclusionMode == InclusionExclusion::exclusion) {
             objOutSlotId = generateSlotId();
             mkObj = makeS<MakeObjStageType>(std::move(scanStage),
                                             objOutSlotId,
@@ -111,7 +111,7 @@ private:
         {
             auto inputView = value::getArrayView(inputVal);
 
-            if (type == InputType::Object) {
+            if (type == InputType::object) {
                 auto obj = value::makeNewObject();
                 auto objView = value::getObjectView(obj.second);
                 objView->push_back(
@@ -171,9 +171,9 @@ private:
 };
 
 TEST_F(MkObjTest, TestAll) {
-    std::vector<InclusionExclusion> incExcOptions{InclusionExclusion::Inclusion,
-                                                  InclusionExclusion::Exclusion};
-    std::vector<InputType> inputTypeOptions{InputType::Bson, InputType::Object};
+    std::vector<InclusionExclusion> incExcOptions{InclusionExclusion::inclusion,
+                                                  InclusionExclusion::exclusion};
+    std::vector<InputType> inputTypeOptions{InputType::bson, InputType::object};
 
     const std::vector<std::string> fieldsToProject{"b"};
 
@@ -185,7 +185,7 @@ TEST_F(MkObjTest, TestAll) {
     // space.
     for (auto&& inclusionExclusion : incExcOptions) {
         for (auto&& inputType : inputTypeOptions) {
-            const auto& expectedFieldsKept = inclusionExclusion == InclusionExclusion::Inclusion
+            const auto& expectedFieldsKept = inclusionExclusion == InclusionExclusion::inclusion
                 ? fieldsKeptInclusion
                 : fieldsKeptExclusion;
 

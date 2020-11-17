@@ -346,7 +346,7 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
     }
 
     _data.resultSlot = _slotIdGenerator.generate();
-    return sbe::makeS<sbe::MakeBSONObjStage>(sbe::makeS<sbe::ProjectStage>(std::move(inputStage),
+    return sbe::makeS<sbe::MakeBsonObjStage>(sbe::makeS<sbe::ProjectStage>(std::move(inputStage),
                                                                            std::move(projections),
                                                                            root->nodeId()),
                                              *_data.resultSlot,
@@ -404,7 +404,7 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionCovered(
 
     _data.resultSlot = _slotIdGenerator.generate();
 
-    return sbe::makeS<sbe::MakeBSONObjStage>(std::move(inputStage),
+    return sbe::makeS<sbe::MakeBsonObjStage>(std::move(inputStage),
                                              *_data.resultSlot,
                                              boost::none,
                                              std::vector<std::string>{},
