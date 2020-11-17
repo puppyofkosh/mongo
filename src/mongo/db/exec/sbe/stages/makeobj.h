@@ -38,11 +38,19 @@ enum class MakeObjOutputType { object, bsonObject };
 template <MakeObjOutputType O>
 class MakeObjStageBase final : public PlanStage {
 public:
+    /**
+     * Indicates whether the fields provided to the stage should be kept or dropped.
+     */
+    enum class FieldBehavior {
+        drop,
+        keep        
+    };
+    
     MakeObjStageBase(std::unique_ptr<PlanStage> input,
                      value::SlotId objSlot,
                      boost::optional<value::SlotId> rootSlot,
-                     std::vector<std::string> restrictFields,
-                     std::vector<std::string> preserveFields,
+                     FieldBehavior fieldBehavior,
+                     std::vector<std::string> fields,
                      std::vector<std::string> projectFields,
                      value::SlotVector projectVars,
                      bool forceNewObject,
@@ -74,8 +82,8 @@ private:
 
     const value::SlotId _objSlot;
     const boost::optional<value::SlotId> _rootSlot;
+    const FieldBehavior _fieldBehavior;
     const std::vector<std::string> _restrictFields;
-    const std::vector<std::string> _preserveFields;
     const std::vector<std::string> _projectFields;
     const value::SlotVector _projectVars;
     const bool _forceNewObject;

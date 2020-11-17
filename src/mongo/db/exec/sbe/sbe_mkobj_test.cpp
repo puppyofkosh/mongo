@@ -172,30 +172,30 @@ private:
     }
 };
 
-TEST_F(MkObjTest, TestAll) {
-    std::vector<InclusionExclusion> incExcOptions{InclusionExclusion::inclusion,
-                                                  InclusionExclusion::exclusion};
-    std::vector<InputType> inputTypeOptions{InputType::bson, InputType::object};
+// TEST_F(MkObjTest, TestAll) {
+//     std::vector<InclusionExclusion> incExcOptions{InclusionExclusion::inclusion,
+//                                                   InclusionExclusion::exclusion};
+//     std::vector<InputType> inputTypeOptions{InputType::bson, InputType::object};
 
-    const std::vector<std::string> fieldsToProject{"b"};
+//     const std::vector<std::string> fieldsToProject{"b"};
 
-    const std::vector<std::string> fieldsKeptInclusion{"b"};
-    const std::vector<std::string> fieldsKeptExclusion{"a", "c"};
+//     const std::vector<std::string> fieldsKeptInclusion{"b"};
+//     const std::vector<std::string> fieldsKeptExclusion{"a", "c"};
 
-    // There are three dimensions to be tested: Input type (Object or BSON), Output type
-    // (Object or BSON), and projection behavior (inclusion or exclusion). We test the entire
-    // space.
-    for (auto&& inclusionExclusion : incExcOptions) {
-        for (auto&& inputType : inputTypeOptions) {
-            const auto& expectedFieldsKept = inclusionExclusion == InclusionExclusion::inclusion
-                ? fieldsKeptInclusion
-                : fieldsKeptExclusion;
+//     // There are three dimensions to be tested: Input type (Object or BSON), Output type
+//     // (Object or BSON), and projection behavior (inclusion or exclusion). We test the entire
+//     // space.
+//     for (auto&& inclusionExclusion : incExcOptions) {
+//         for (auto&& inputType : inputTypeOptions) {
+//             const auto& expectedFieldsKept = inclusionExclusion == InclusionExclusion::inclusion
+//                 ? fieldsKeptInclusion
+//                 : fieldsKeptExclusion;
 
-            runTestWithOptions<MakeBsonObjStage>(
-                inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);
-            runTestWithOptions<MakeObjStage>(
-                inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);
-        }
-    }
-}
+//             runTestWithOptions<MakeBsonObjStage>(
+//                 inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);
+//             runTestWithOptions<MakeObjStage>(
+//                 inclusionExclusion, inputType, fieldsToProject, expectedFieldsKept);
+//         }
+//     }
+// }
 }  // namespace mongo::sbe

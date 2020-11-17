@@ -842,8 +842,8 @@ void Parser::walkMkObj(AstQuery& ast) {
     makeS<StageType>(std::move(ast.nodes[inputPos]->stage),                          \
                      lookupSlotStrict(newRootName),                                  \
                      lookupSlot(oldRootName),                                        \
+                     StageType::FieldBehavior::drop,  /* TODO*/         \
                      std::move(restrictFields),                                      \
-        std::vector<std::string>{}, /* TODO */                                       \
                      std::move(ast.nodes[projectListPos]->renames),                  \
                      lookupSlots(std::move(ast.nodes[projectListPos]->identifiers)), \
                      ast.nodes[forceNewObjPos]->token == "true",                     \
@@ -1162,6 +1162,8 @@ bool returnOldObject(AstQuery& ast) {
 std::unique_ptr<PlanStage> Parser::walkPath(AstQuery& ast,
                                             value::SlotId inputSlot,
                                             value::SlotId outputSlot) {
+    // TODO: Much of this logic must be redone.
+    
     using namespace peg::udl;
 
     // Do we have to unconditionally create a new object?
@@ -1265,8 +1267,8 @@ std::unique_ptr<PlanStage> Parser::walkPath(AstQuery& ast,
     stage = makeS<MakeObjStage>(std::move(stage),
                                 outputSlot,
                                 inputSlot,
+                                sbe::MakeObjStage::FieldBehavior::drop,
                                 std::move(fieldRestrictNames),
-                                std::vector<std::string>{}, // preserveFields
                                 std::move(fieldNames),
                                 std::move(fieldVars),
                                 newObj,

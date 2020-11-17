@@ -351,8 +351,9 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionSimple(
                                                                            root->nodeId()),
                                              *_data.resultSlot,
                                              boost::none,
+                                             // TODO
+                                             sbe::MakeBsonObjStage::FieldBehavior::drop,
                                              std::vector<std::string>{}, // restrictFields
-                                             std::vector<std::string>{}, // preserveFields
                                              pn->proj.getRequiredFields(),
                                              fieldSlots,
                                              true,
@@ -408,8 +409,9 @@ std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::buildProjectionCovered(
     return sbe::makeS<sbe::MakeBsonObjStage>(std::move(inputStage),
                                              *_data.resultSlot,
                                              boost::none,
+                                             // TODO
+                                             sbe::MakeBsonObjStage::FieldBehavior::drop,
                                              std::vector<std::string>{}, // restrictFields
-                                             std::vector<std::string>{}, // preserveFields
                                              std::move(keyFieldNames),
                                              std::move(*_indexKeySlots),
                                              true,
