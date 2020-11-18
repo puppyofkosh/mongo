@@ -60,38 +60,45 @@ UndefinedLabeler BSONUndefined;
 MinKeyLabeler MINKEY;
 MaxKeyLabeler MAXKEY;
 
-BSONObjBuilderValueStream::BSONObjBuilderValueStream(BSONObjBuilder* builder) {
+template<class B>
+BSONObjBuilderValueStreamBase<B>::BSONObjBuilderValueStreamBase(BSONObjBuilderBase<B>* builder) {
     _builder = builder;
 }
 
-void BSONObjBuilderValueStream::reset() {
+template<class B>
+void BSONObjBuilderValueStreamBase<B>::reset() {
     _fieldName = StringData();
     _subobj.reset();
 }
 
-BSONObjBuilder& BSONObjBuilderValueStream::operator<<(const BSONElement& e) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderValueStreamBase<B>::operator<<(const BSONElement& e) {
     _builder->appendAs(e, _fieldName);
     _fieldName = StringData();
     return *_builder;
 }
 
-BufBuilder& BSONObjBuilderValueStream::subobjStart() {
+template<class B>
+B& BSONObjBuilderValueStreamBase<B>::subobjStart() {
     StringData tmp = _fieldName;
     _fieldName = StringData();
     return _builder->subobjStart(tmp);
 }
 
-BufBuilder& BSONObjBuilderValueStream::subarrayStart() {
+template<class B>
+B& BSONObjBuilderValueStreamBase<B>::subarrayStart() {
     StringData tmp = _fieldName;
     _fieldName = StringData();
     return _builder->subarrayStart(tmp);
 }
 
-Labeler BSONObjBuilderValueStream::operator<<(const Labeler::Label& l) {
-    return Labeler(l, this);
+template<class B>
+Labeler BSONObjBuilderValueStreamBase<B>::operator<<(const Labeler::Label& l) {
+    return LabelerBase<B>(l, this);
 }
 
-void BSONObjBuilderValueStream::endField(StringData nextFieldName) {
+    template<class B>
+void BSONObjBuilderValueStreamBase<B>::endField(StringData nextFieldName) {
     if (haveSubobj()) {
         verify(_fieldName.rawData());
         _builder->append(_fieldName, subobj()->done());
@@ -100,15 +107,22 @@ void BSONObjBuilderValueStream::endField(StringData nextFieldName) {
     _fieldName = nextFieldName;
 }
 
-BSONObjBuilder* BSONObjBuilderValueStream::subobj() {
+    template<class B>
+    BSONObjBuilderBase<B>* BSONObjBuilderValueStreamBase<B>::subobj() {
     if (!haveSubobj())
         _subobj.reset(new BSONObjBuilder());
     return _subobj.get();
 }
 
-BSONObjBuilder& Labeler::operator<<(const BSONElement& e) {
+    template<class B>
+BSONObjBuilderBase<B>& LabelerBase<B>::operator<<(const BSONElement& e) {
     s_->subobj()->appendAs(e, l_.l_);
     return *s_->_builder;
 }
 
+// Explicit instantiations
+template class LabelerBase<BufBuilder>;
+template class BSONObjBuilderValueStreamBase<BufBuilder>;
+// TODO: May need to add more
+    
 }  // namespace mongo
