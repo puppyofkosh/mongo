@@ -34,12 +34,6 @@
 
 namespace mongo {
 
-template<class B>
-class BSONObjBuilderBase;
-
-template<class B>
-class BSONObjBuilderValueStreamBase;
-    
 class BSONElementCmpWithoutField {
 public:
     /**
@@ -119,32 +113,27 @@ struct MaxKeyLabeler {};
 extern MaxKeyLabeler MAXKEY;
 
 // Utility class to implement GT, GTE, etc as described above.
-template<class B>
-class LabelerBase {
+class Labeler {
 public:
     struct Label {
         explicit Label(const char* l) : l_(l) {}
         const char* l_;
     };
-    LabelerBase(const Label& l, BSONObjBuilderValueStreamBase<B>* s) : l_(l), s_(s) {}
+    Labeler(const Label& l, BSONObjBuilderValueStream* s) : l_(l), s_(s) {}
     template <class T>
-    BSONObjBuilderBase<B>& operator<<(T value);
+    BSONObjBuilder& operator<<(T value);
 
     /* the value of the element e is appended i.e. for
          "age" << GT << someElement
        one gets
          { age : { $gt : someElement's value } }
     */
-    BSONObjBuilderBase<B>& operator<<(const BSONElement& e);
+    BSONObjBuilder& operator<<(const BSONElement& e);
 
 private:
     const Label& l_;
-    BSONObjBuilderValueStreamBase<B>* s_;
+    BSONObjBuilderValueStream* s_;
 };
-
-    class Labeler : public LabelerBase<BufBuilder> {
-        using LabelerBase<BufBuilder>::LabelerBase;
-    };
 
 // Utility class to allow adding a std::string to BSON as a Symbol
 struct BSONSymbol {
@@ -203,28 +192,26 @@ extern Labeler::Label BSIZE;
 // definitions in bsonobjbuilder.h b/c of incomplete types
 
 // Utility class to implement BSON( key << val ) as described above.
-template<class B>
-class BSONObjBuilderValueStreamBase {
-    BSONObjBuilderValueStreamBase(const BSONObjBuilderValueStreamBase<B>&) = delete;
-    BSONObjBuilderValueStreamBase& operator=(const BSONObjBuilderValueStreamBase<B>&) = delete;
+class BSONObjBuilderValueStream {
+    BSONObjBuilderValueStream(const BSONObjBuilderValueStream&) = delete;
+    BSONObjBuilderValueStream& operator=(const BSONObjBuilderValueStream&) = delete;
 
 public:
-    friend class LabelerBase<B>;
+    friend class Labeler;
+    BSONObjBuilderValueStream(BSONObjBuilder* builder);
 
-    BSONObjBuilderValueStreamBase(BSONObjBuilderBase<B>* builder);
-
-    BSONObjBuilderBase<B>& operator<<(const BSONElement& e);
+    BSONObjBuilder& operator<<(const BSONElement& e);
 
     template <class T>
-    BSONObjBuilderBase<B>& operator<<(T value);
+    BSONObjBuilder& operator<<(T value);
 
-    BSONObjBuilderBase<B>& operator<<(const DateNowLabeler& id);
+    BSONObjBuilder& operator<<(const DateNowLabeler& id);
 
-    BSONObjBuilderBase<B>& operator<<(const NullLabeler& id);
-    BSONObjBuilderBase<B>& operator<<(const UndefinedLabeler& id);
+    BSONObjBuilder& operator<<(const NullLabeler& id);
+    BSONObjBuilder& operator<<(const UndefinedLabeler& id);
 
-    BSONObjBuilderBase<B>& operator<<(const MinKeyLabeler& id);
-    BSONObjBuilderBase<B>& operator<<(const MaxKeyLabeler& id);
+    BSONObjBuilder& operator<<(const MinKeyLabeler& id);
+    BSONObjBuilder& operator<<(const MaxKeyLabeler& id);
 
     Labeler operator<<(const Labeler::Label& l);
 
@@ -234,13 +221,13 @@ public:
     }
 
     // The following methods provide API compatibility with BSONArrayBuilder
-    B& subobjStart();
-    B& subarrayStart();
+    BufBuilder& subobjStart();
+    BufBuilder& subarrayStart();
 
     // This method should only be called from inside of implementations of
     // BSONObjBuilder& operator<<(BSONObjBuilderValueStream&, SOME_TYPE)
     // to provide the return value.
-    BSONObjBuilderBase<B>& builder() {
+    BSONObjBuilder& builder() {
         return *_builder;
     }
 
@@ -251,17 +238,14 @@ public:
 
 private:
     StringData _fieldName;
-    BSONObjBuilderBase<B>* _builder;
+    BSONObjBuilder* _builder;
 
     bool haveSubobj() const {
         return _subobj.get() != nullptr;
     }
-    BSONObjBuilderBase<B>* subobj();
-    std::unique_ptr<BSONObjBuilderBase<B>> _subobj;
+    BSONObjBuilder* subobj();
+    std::unique_ptr<BSONObjBuilder> _subobj;
 };
-
-    class BSONObjBuilderValueStream : public BSONObjBuilderValueStreamBase<BufBuilder> {
-    };
 
 /**
    used in conjuction with BSONObjBuilder, allows for proper buffer size to prevent crazy memory

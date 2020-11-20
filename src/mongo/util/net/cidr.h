@@ -130,7 +130,6 @@ StringBuilder& operator<<(StringBuilder& s, const CIDR& cidr);
  *     BSON("cidr" << cidr) -> { cidr: "..." }
  */
 template <>
-template<class B>
-BSONObjBuilderBase<B>& BSONObjBuilderValueStreamBase<B>::template operator<< <CIDR>(CIDR value);
+BSONObjBuilder& BSONObjBuilderValueStream::operator<<<CIDR>(CIDR value);
 
 }  // namespace mongo

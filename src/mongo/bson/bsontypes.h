@@ -46,7 +46,6 @@ class BSONArrayBuilder;
 class BSONElement;
 class BSONElementCmpWithoutField;
 class BSONObj;
-
 class BSONObjBuilder;
 class BSONObjBuilderValueStream;
 class BSONObjIterator;
