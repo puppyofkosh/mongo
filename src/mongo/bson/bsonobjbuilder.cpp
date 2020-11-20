@@ -40,7 +40,8 @@ namespace mongo {
 
 using std::string;
 
-BSONObjBuilder& BSONObjBuilder::appendMinForType(StringData fieldName, int t) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::appendMinForType(StringData fieldName, int t) {
     switch (t) {
         // Shared canonical types
         case NumberInt:
@@ -109,7 +110,8 @@ BSONObjBuilder& BSONObjBuilder::appendMinForType(StringData fieldName, int t) {
     uassert(10061, "type not supported for appendMinElementForType", false);
 }
 
-BSONObjBuilder& BSONObjBuilder::appendMaxForType(StringData fieldName, int t) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::appendMaxForType(StringData fieldName, int t) {
     switch (t) {
         // Shared canonical types
         case NumberInt:
@@ -177,7 +179,8 @@ BSONObjBuilder& BSONObjBuilder::appendMaxForType(StringData fieldName, int t) {
     uassert(14853, "type not supported for appendMaxElementForType", false);
 }
 
-BSONObjBuilder& BSONObjBuilder::appendDate(StringData fieldName, Date_t dt) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::appendDate(StringData fieldName, Date_t dt) {
     _b.appendNum((char)Date);
     _b.appendStr(fieldName);
     _b.appendNum(dt.toMillisSinceEpoch());
@@ -185,7 +188,8 @@ BSONObjBuilder& BSONObjBuilder::appendDate(StringData fieldName, Date_t dt) {
 }
 
 /* add all the fields from the object specified to this object */
-BSONObjBuilder& BSONObjBuilder::appendElements(const BSONObj& x) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::appendElements(const BSONObj& x) {
     if (!x.isEmpty())
         _b.appendBuf(x.objdata() + 4,   // skip over leading length
                      x.objsize() - 5);  // ignore leading length and trailing \0
@@ -193,7 +197,8 @@ BSONObjBuilder& BSONObjBuilder::appendElements(const BSONObj& x) {
 }
 
 /* add all the fields from the object specified to this object if they don't exist */
-BSONObjBuilder& BSONObjBuilder::appendElementsUnique(const BSONObj& x) {
+template<class B>
+BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::appendElementsUnique(const BSONObj& x) {
     std::set<std::string> have;
     {
         BSONObjIterator i = iterator();
@@ -211,13 +216,15 @@ BSONObjBuilder& BSONObjBuilder::appendElementsUnique(const BSONObj& x) {
     return *this;
 }
 
-BSONObjIterator BSONObjBuilder::iterator() const {
+template<class B>
+BSONObjIterator BSONObjBuilderBase<B>::iterator() const {
     const char* s = _b.buf() + _offset;
     const char* e = _b.buf() + _b.len();
     return BSONObjIterator(s, e);
 }
 
-bool BSONObjBuilder::hasField(StringData name) const {
+template<class B>
+bool BSONObjBuilderBase<B>::hasField(StringData name) const {
     BSONObjIterator i = iterator();
     while (i.more())
         if (name == i.next().fieldName())
@@ -225,7 +232,8 @@ bool BSONObjBuilder::hasField(StringData name) const {
     return false;
 }
 
-BSONObjBuilder::~BSONObjBuilder() {
+template<class B>
+BSONObjBuilderBase<B>::~BSONObjBuilderBase() {
     // If 'done' has not already been called, and we have a reference to an owning
     // BufBuilder but do not own it ourselves, then we must call _done to write in the
     // length. Otherwise, we own this memory and its lifetime ends with us, therefore
@@ -235,6 +243,9 @@ BSONObjBuilder::~BSONObjBuilder() {
     }
 }
 
+// TODO:
+// template class BSONObjBuilderBase<UniqueBufBuilder>
+    
 template class StringBuilderImpl<BufBuilder>;
 template class StringBuilderImpl<StackBufBuilderBase<StackSizeDefault>>;
 
