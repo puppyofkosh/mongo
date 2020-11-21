@@ -115,32 +115,6 @@ public:
         _b.reserveBytes(1);
     }
 
-    /**
-     * Creates a new BSONObjBuilder prefixed with the fields in 'prefix'.
-     *
-     * If prefix is an rvalue referring to the only view of the underlying BSON buffer, it will be
-     * able to avoid copying and will just reuse the buffer. Therefore, you should try to std::move
-     * into this constructor where possible.
-     */
-    BSONObjBuilderBase(BSONObj prefix) : _b(_buf), _buf(0) {
-        // If prefix wasn't owned or we don't have exclusive access to it, we must copy.
-        if (!prefix.isOwned() || prefix.sharedBuffer().isShared()) {
-            _b.grow(prefix.objsize());  // Make sure we won't need to realloc().
-            _b.setlen(sizeof(int));     // Skip over size bytes (see first constructor).
-            _b.reserveBytes(1);         // Reserve room for our EOO byte.
-            appendElements(prefix);
-            return;
-        }
-
-        const auto size = prefix.objsize();
-        const char* const firstByte = prefix.objdata();
-        auto buf = prefix.releaseSharedBuffer().constCast();
-        _offset = firstByte - buf.get();
-        _b.useSharedBuffer(std::move(buf));
-        _b.setlen(_offset + size - 1);  // Position right before prefix's EOO byte.
-        _b.reserveBytes(1);             // Reserve room for our EOO byte.
-    }
-
     // Move constructible, but not assignable due to reference member.
     BSONObjBuilderBase(BSONObjBuilderBase<B>&& other)
         : _b(&other._b == &other._buf ? _buf : other._b),
@@ -696,6 +670,11 @@ public:
     }
 
 protected:
+    // Initializes the builder without allocating any space. Only used by subclasses.
+    struct InitEmptyTag {};
+    BSONObjBuilderBase(InitEmptyTag) :_b(_buf), _buf(0) {
+    }
+    
     char* _done() {
         if (_doneCalled)
             return _b.buf() + _offset;
@@ -745,10 +724,32 @@ public:
         _s(this)
     {}
 
+        /**
+     * Creates a new BSONObjBuilder prefixed with the fields in 'prefix'.
+     *
+     * If prefix is an rvalue referring to the only view of the underlying BSON buffer, it will be
+     * able to avoid copying and will just reuse the buffer. Therefore, you should try to std::move
+     * into this constructor where possible.
+     */
     BSONObjBuilder(BSONObj prefix) :
-        BSONObjBuilderBase<BufBuilder>(std::move(prefix)),
-        _s(this)
-    {}
+        BSONObjBuilderBase<BufBuilder>(BSONObjBuilderBase<BufBuilder>::InitEmptyTag{}), _s(this) {
+        // If prefix wasn't owned or we don't have exclusive access to it, we must copy.
+        if (!prefix.isOwned() || prefix.sharedBuffer().isShared()) {
+            _b.grow(prefix.objsize());  // Make sure we won't need to realloc().
+            _b.setlen(sizeof(int));     // Skip over size bytes (see first constructor).
+            _b.reserveBytes(1);         // Reserve room for our EOO byte.
+            appendElements(prefix);
+            return;
+        }
+
+        const auto size = prefix.objsize();
+        const char* const firstByte = prefix.objdata();
+        auto buf = prefix.releaseSharedBuffer().constCast();
+        _offset = firstByte - buf.get();
+        _b.useSharedBuffer(std::move(buf));
+        _b.setlen(_offset + size - 1);  // Position right before prefix's EOO byte.
+        _b.reserveBytes(1);             // Reserve room for our EOO byte.
+    }
     
     BSONObjBuilder(BSONObjBuilder&& other) :
         BSONObjBuilderBase<BufBuilder>(std::move(other)),
@@ -799,6 +800,9 @@ private:
             return _b.buf() + _offset;
         }
 
+        // TODO(ian): The below comment was copy-pasted but does not seem helpful at all. Maybe I
+        // should just delete it.
+
         // TODO remove this or find some way to prevent it from failing. Since this is intended
         // for use with BSON() literal queries, it is less likely to result in oversized BSON.
         _s.endField();
@@ -807,6 +811,14 @@ private:
     }
     
     BSONObjBuilderValueStream _s;
+};
+
+/**
+ * BSONObjBuilder which 
+ */
+class UniqueBSONObjBuilder : public BSONObjBuilderBase<UniqueBufBuilder> {
+public:
+    using BSONObjBuilderBase<UniqueBufBuilder>::BSONObjBuilderBase;
 };
 
 class BSONArrayBuilder {
@@ -1069,7 +1081,7 @@ BSONObjBuilder& Labeler::operator<<(T value) {
 
 template<class B>
 inline BSONObjBuilderBase<B>& BSONObjBuilderBase<B>::append(StringData fieldName, Timestamp optime) {
-    optime.append(_b, fieldName);
+    optime.append<B>(_b, fieldName);
     return *this;
 }
 

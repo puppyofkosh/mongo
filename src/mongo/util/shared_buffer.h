@@ -41,12 +41,14 @@
 
 namespace mongo {
 
+class UniqueBuffer;    
 /**
  * A mutable, ref-counted buffer.
  */
 class SharedBuffer {
 public:
     SharedBuffer() = default;
+    SharedBuffer(UniqueBuffer&& uniqueBuf);
 
     void swap(SharedBuffer& other) {
         _holder.swap(other._holder);
@@ -119,6 +121,8 @@ public:
     }
 
 private:
+    friend class UniqueBuffer;
+    
     class Holder {
     public:
         explicit Holder(unsigned initial, size_t capacity)
@@ -232,4 +236,81 @@ private:
 inline void swap(ConstSharedBuffer& one, ConstSharedBuffer& two) {
     one.swap(two);
 }
+
+/**
+ * A uniquely owned buffer. Has the same memory layout as SharedBuffer so that it
+ * can be easily converted into a SharedBuffer.
+ *
+ * Layout:
+ * | <size (4 bytes)> <unused (4 bytes)> | <data> |
+ *
+ * When converting to SharedBuffer, the entire prefix region is turned into a Holder.
+ */
+class UniqueBuffer {
+public:
+    static UniqueBuffer allocate(uint32_t sz) {
+        return UniqueBuffer(mongoMalloc(sizeof(SharedBuffer::Holder) + sz), sz);
+    }
+
+    UniqueBuffer() = default;
+    UniqueBuffer(const UniqueBuffer&) = delete;
+    UniqueBuffer(UniqueBuffer&& other)
+        :_data(other._data)
+    {
+        other._data = nullptr;
+    }
+    ~UniqueBuffer() {
+        freeBuffer();
+    }
+
+    UniqueBuffer& operator=(const UniqueBuffer&) = delete;
+    UniqueBuffer& operator=(UniqueBuffer&& other) {
+        freeBuffer();
+        _data = other._data;
+        other._data = nullptr;
+        return *this;
+    }
+
+    void swap(UniqueBuffer& other) {
+        std::swap(_data, other._data);
+    }
+
+    void realloc(uint32_t size) {
+        size_t realSize = size + sizeof(SharedBuffer::Holder);
+        _data = reinterpret_cast<char*>(mongoRealloc(_data, realSize));
+    }
+
+    char* get() const {
+        return _data + sizeof(SharedBuffer::Holder);
+    }
+
+    explicit operator bool() const {
+        return _data != nullptr;
+    }
+
+    size_t capacity() const {
+        return _data ?  *reinterpret_cast<const uint32_t*>(_data) : 0;
+    }
+
+private:
+    friend class SharedBuffer;
+    
+    UniqueBuffer(void* buffer, uint32_t sz)
+        :_data(static_cast<char*>(buffer)) {
+        *reinterpret_cast<uint32_t*>(_data) = sz;
+    }
+
+    void freeBuffer() {
+        if (_data) {
+            free(_data);
+        }
+    }
+    
+    char* _data = nullptr;
+};
+
+    inline SharedBuffer::SharedBuffer(UniqueBuffer&& other) {
+        *this = takeOwnership(other._data, other.capacity());
+        other._data = nullptr;
+    }
 }  // namespace mongo

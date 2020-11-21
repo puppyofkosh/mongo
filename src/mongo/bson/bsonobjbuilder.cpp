@@ -234,6 +234,7 @@ bool BSONObjBuilderBase<B>::hasField(StringData name) const {
 
 // TODO:
 template class BSONObjBuilderBase<BufBuilder>;
+template class BSONObjBuilderBase<UniqueBufBuilder>;
     
 template class StringBuilderImpl<BufBuilder>;
 template class StringBuilderImpl<StackBufBuilderBase<StackSizeDefault>>;
