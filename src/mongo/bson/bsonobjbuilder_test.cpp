@@ -491,7 +491,7 @@ TEST(BSONObjBuilderTest, SizeChecks) {
     }
 }
 
-TEST(BSONObjBuilderTest, UniqueBuilder) {
+TEST(BSONObjBuilderTest, UniqueBuilderReleaseToObj) {
     UniqueBSONObjBuilder bob;
     {
         UniqueBSONObjBuilder inner(bob.subobjStart("nested"));
@@ -506,5 +506,30 @@ TEST(BSONObjBuilderTest, UniqueBuilder) {
 
     ASSERT_BSONOBJ_EQ(bob.obj(), BSON("nested" << BSON("a" << 1) << "b" << 2));
 }
+
+    TEST(BSONObjBuilderTest, UniqueBuilderReleaseToBuffer) {
+        UniqueBSONObjBuilder bob;
+        {
+            UniqueBSONObjBuilder inner(bob.subobjStart("nested"));
+            inner.append("a", 1);
+
+            UniqueBSONObjBuilder inner2(std::move(inner));
+            ASSERT(!inner2.owned());
+            ASSERT_EQ(&inner2.bb(), &bob.bb());
+        }
+
+        bob.append("b", 2);
+
+        bob.doneFast();
+        char* rawData = bob.bb().release().release();
+        ASSERT_BSONOBJ_EQ(BSONObj(rawData), BSON("nested" << BSON("a" << 1) << "b" << 2));
+
+        {
+            // The memory will be freed when this goes out of scope.
+            auto tmp = UniqueBuffer::reclaim(rawData);
+        }
+    }
+
+    // TODO: More tests
 }  // namespace
 }  // namespace mongo

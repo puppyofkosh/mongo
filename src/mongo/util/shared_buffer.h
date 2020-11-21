@@ -119,7 +119,6 @@ public:
     size_t capacity() const {
         return _holder ? _holder->_capacity : 0;
     }
-
 private:
     friend class UniqueBuffer;
     
@@ -252,6 +251,14 @@ public:
         return UniqueBuffer(mongoMalloc(sizeof(SharedBuffer::Holder) + sz), sz);
     }
 
+    /**
+     * Given memory which was released from a UniqueBuffer using the release() method,
+     * returns a UniqueBuffer owning that memory.
+     */
+    static UniqueBuffer reclaim(char* data) {
+        return UniqueBuffer(data - sizeof(SharedBuffer::Holder));
+    }
+
     UniqueBuffer() = default;
     UniqueBuffer(const UniqueBuffer&) = delete;
     UniqueBuffer(UniqueBuffer&& other)
@@ -292,8 +299,21 @@ public:
         return _data ?  *reinterpret_cast<const uint32_t*>(_data) : 0;
     }
 
+    /**
+     * Releases the buffer to the caller. The caller may not free the buffer themselves,
+     * and must eventually turn it back into a UniqueBuffer using the reclaim() method.
+     */
+    char* release() {
+        auto ret = _data;
+        _data = nullptr;
+        return ret + sizeof(SharedBuffer::Holder);
+    }
 private:
     friend class SharedBuffer;
+
+    // Assumes the size has already been initialized.
+    UniqueBuffer(void* buffer) :_data(static_cast<char*>(buffer)) {
+    }
     
     UniqueBuffer(void* buffer, uint32_t sz)
         :_data(static_cast<char*>(buffer)) {
