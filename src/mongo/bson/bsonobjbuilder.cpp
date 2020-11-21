@@ -232,19 +232,8 @@ bool BSONObjBuilderBase<B>::hasField(StringData name) const {
     return false;
 }
 
-template<class B>
-BSONObjBuilderBase<B>::~BSONObjBuilderBase() {
-    // If 'done' has not already been called, and we have a reference to an owning
-    // BufBuilder but do not own it ourselves, then we must call _done to write in the
-    // length. Otherwise, we own this memory and its lifetime ends with us, therefore
-    // we can elide the write.
-    if (!_doneCalled && _b.buf() && _buf.getSize() == 0) {
-        _done();
-    }
-}
-
 // TODO:
-// template class BSONObjBuilderBase<UniqueBufBuilder>
+template class BSONObjBuilderBase<BufBuilder>;
     
 template class StringBuilderImpl<BufBuilder>;
 template class StringBuilderImpl<StackBufBuilderBase<StackSizeDefault>>;

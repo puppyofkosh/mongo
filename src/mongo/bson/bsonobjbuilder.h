@@ -151,7 +151,15 @@ public:
         other.abandon();
     }
 
-    ~BSONObjBuilderBase();
+    ~BSONObjBuilderBase() {
+        // If 'done' has not already been called, and we have a reference to an owning
+        // BufBuilder but do not own it ourselves, then we must call _done to write in the
+        // length. Otherwise, we own this memory and its lifetime ends with us, therefore
+        // we can elide the write.
+        if (!_doneCalled && _b.buf() && _buf.getSize() == 0) {
+            _done();
+        }
+    }
 
     /**
      * The start offset of the object being built by this builder within its buffer.
@@ -665,22 +673,6 @@ public:
         _doneCalled = true;
     }
 
-    /** Stream oriented way to add field names and values. */
-    BSONObjBuilderBase<B>& operator<<(GENOIDLabeler) {
-        return genOID();
-    }
-
-    template <typename T>
-    BSONObjBuilderBase<B>& operator<<(const BSONFieldValue<T>& v) {
-        append(v.name(), v.value());
-        return *this;
-    }
-
-    BSONObjBuilderBase<B>& operator<<(const BSONElement& e) {
-        append(e);
-        return *this;
-    }
-
     bool isArray() const {
         return false;
     }
@@ -754,7 +746,7 @@ public:
     {}
 
     BSONObjBuilder(BSONObj prefix) :
-        BSONObjBuilderBase<BufBuilder>(prefix),
+        BSONObjBuilderBase<BufBuilder>(std::move(prefix)),
         _s(this)
     {}
     
@@ -768,7 +760,22 @@ public:
         BSONObjBuilderBase<BufBuilder>::resetToEmpty();
     }
 
-    using BSONObjBuilderBase<BufBuilder>::operator<<;
+    /** Stream oriented way to add field names and values. */
+    BSONObjBuilder& operator<<(GENOIDLabeler) {
+        genOID();
+        return *this;
+    }
+
+    template <typename T>
+    BSONObjBuilder& operator<<(const BSONFieldValue<T>& v) {
+        append(v.name(), v.value());
+        return *this;
+    }
+
+    BSONObjBuilder& operator<<(const BSONElement& e) {
+        append(e);
+        return *this;
+    }
 
     /** Stream oriented way to add field names and values. */
     BSONObjBuilderValueStream& operator<<(StringData name) {
