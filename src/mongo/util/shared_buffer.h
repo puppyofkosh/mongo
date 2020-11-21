@@ -48,7 +48,7 @@ class UniqueBuffer;
 class SharedBuffer {
 public:
     SharedBuffer() = default;
-    SharedBuffer(UniqueBuffer&& uniqueBuf);
+    explicit SharedBuffer(UniqueBuffer&& uniqueBuf);
 
     void swap(SharedBuffer& other) {
         _holder.swap(other._holder);

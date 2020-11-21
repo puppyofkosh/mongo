@@ -587,19 +587,6 @@ public:
         _b.setlen(_offset + sizeof(int));
     }
 
-    /**
-     * destructive
-     * The returned BSONObj will free the buffer when it is finished.
-     * @return owned BSONObj
-     */
-    template <typename BSONTraits = BSONObj::DefaultSizeTrait>
-    BSONObj obj() {
-        massert(10335, "builder does not own memory", owned());
-        auto out = done<BSONTraits>();
-        out.shareOwnershipWith(_b.release());
-        return out;
-    }
-
     /** Fetch the object we have built.
         BSONObjBuilderBase still frees the object when the builder goes out of
         scope -- very important to keep in mind.  Use obj() if you
@@ -756,6 +743,19 @@ public:
         _s(this)
     {}
 
+    /**
+     * destructive
+     * The returned BSONObj will free the buffer when it is finished.
+     * @return owned BSONObj
+     */
+    template <typename BSONTraits = BSONObj::DefaultSizeTrait>
+    BSONObj obj() {
+        massert(10335, "builder does not own memory", owned());
+        auto out = done<BSONTraits>();
+        out.shareOwnershipWith(_b.release());
+        return out;
+    }
+
     void resetToEmpty() {
         _s.reset();
         BSONObjBuilderBase<BufBuilder>::resetToEmpty();
@@ -819,6 +819,18 @@ private:
 class UniqueBSONObjBuilder : public BSONObjBuilderBase<UniqueBufBuilder> {
 public:
     using BSONObjBuilderBase<UniqueBufBuilder>::BSONObjBuilderBase;
+
+    /**
+     * destructive
+     * The returned BSONObj will free the buffer when it is finished.
+     */
+    template <typename BSONTraits = BSONObj::DefaultSizeTrait>
+    BSONObj obj() {
+        massert(10335, "builder does not own memory", owned());
+        auto out = done<BSONTraits>();
+        out.shareOwnershipWith(SharedBuffer(_b.release()));
+        return out;
+    }
 };
 
 class BSONArrayBuilder {

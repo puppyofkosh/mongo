@@ -491,6 +491,20 @@ TEST(BSONObjBuilderTest, SizeChecks) {
     }
 }
 
+TEST(BSONObjBuilderTest, UniqueBuilder) {
+    UniqueBSONObjBuilder bob;
+    {
+        UniqueBSONObjBuilder inner(bob.subobjStart("nested"));
+        inner.append("a", 1);
 
+        UniqueBSONObjBuilder inner2(std::move(inner));
+        ASSERT(!inner2.owned());
+        ASSERT_EQ(&inner2.bb(), &bob.bb());
+    }
+
+    bob.append("b", 2);
+
+    ASSERT_BSONOBJ_EQ(bob.obj(), BSON("nested" << BSON("a" << 1) << "b" << 2));
+}
 }  // namespace
 }  // namespace mongo
