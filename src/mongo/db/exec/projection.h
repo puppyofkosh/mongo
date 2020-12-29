@@ -86,11 +86,20 @@ private:
 class ProjectionStageDefault final : public ProjectionStage {
 public:
     /**
-     * ProjectionNodeDefault should use this for construction.
+     * Constructor overload which creates the projection executor.
      */
     ProjectionStageDefault(boost::intrusive_ptr<ExpressionContext> expCtx,
                            const BSONObj& projObj,
                            const projection_ast::Projection* projection,
+                           WorkingSet* ws,
+                           std::unique_ptr<PlanStage> child);
+    /**
+     * Constructor overload which uses an already-built executor.
+     */
+    ProjectionStageDefault(boost::intrusive_ptr<ExpressionContext> expCtx,
+                           const BSONObj& projObj,
+                           const projection_ast::Projection* projection,
+                           std::unique_ptr<projection_executor::ProjectionExecutor>,
                            WorkingSet* ws,
                            std::unique_ptr<PlanStage> child);
 

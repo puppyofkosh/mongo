@@ -95,11 +95,11 @@ bool shouldRestartUpdateIfNoLongerMatches(const UpdateStageParams& params) {
 
 CollectionUpdateArgs::StoreDocOption getStoreDocMode(const UpdateRequest& updateRequest) {
     if (updateRequest.shouldReturnNewDocs()) {
-        return CollectionUpdateArgs::StoreDocOption::PostImage;
+        return CollectionUpdateArgs::StoreDocOption::ProjectedPostImage;
     }
 
     if (updateRequest.shouldReturnOldDocs()) {
-        return CollectionUpdateArgs::StoreDocOption::PreImage;
+        return CollectionUpdateArgs::StoreDocOption::ProjectedPreImage;
     }
 
     invariant(!updateRequest.shouldReturnAnyDocs());
@@ -260,7 +260,7 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
                     !request->isMulti() || args.criteria.hasField("_id"_sd));
             args.fromMigrate = request->isFromMigration();
             args.storeDocOption = getStoreDocMode(*request);
-            if (args.storeDocOption == CollectionUpdateArgs::StoreDocOption::PreImage) {
+            if (args.storeDocOption == CollectionUpdateArgs::StoreDocOption::ProjectedPreImage) {
                 args.preImageDoc = oldObj.value().getOwned();
             }
         }
@@ -403,8 +403,8 @@ PlanStage::StageState UpdateStage::doWork(WorkingSetID* out) {
         invariant(member->hasRecordId());
         recordId = member->recordId;
 
-        // Updates can't have projections. This means that covering analysis will always add
-        // a fetch. We should always get fetched data, and never just key data.
+        // Covering analysis will always add a fetch for updates. We should always get fetched
+        // data, and never just key data.
         invariant(member->hasObj());
 
         // We fill this with the new RecordIds of moved doc so we don't double-update.

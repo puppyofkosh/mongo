@@ -72,12 +72,21 @@ class RecordCursor;
  * Holds information update an update operation.
  */
 struct CollectionUpdateArgs {
-    enum class StoreDocOption { None, PreImage, PostImage };
+    enum class StoreDocOption { None, ProjectedPreImage, ProjectedPostImage };
 
     StmtId stmtId = kUninitializedStmtId;
 
     // The document before modifiers were applied.
     boost::optional<BSONObj> preImageDoc;
+
+    // This represents the document returned to the user when a findAndModify. This may
+    // be a "projected" version of the pre image or post image, with fields added, removed,
+    // or otherwise altered.
+
+    // TODO: It is possible that the projected document is bigger than the actual document.
+    // I think we'll have to live with this, though.
+    // TODO: Can probably remove the "PreImage" and "PostImage" enums.
+    boost::optional<BSONObj> projectedDoc;
 
     // Fully updated document with damages (update modifiers) applied.
     BSONObj updatedDoc;

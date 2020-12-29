@@ -170,8 +170,10 @@ OpTimeBundle replLogUpdate(OperationContext* opCtx,
     // We never want to store pre- or post- images when we're migrating oplog entries from another
     // replica set.
     const auto& migrationRecipientInfo = repl::tenantMigrationRecipientInfo(opCtx);
+
+    // TODO: The retryable write path needs a slightly different path now.
     const auto storePreImageForRetryableWrite =
-        (args.updateArgs.storeDocOption == CollectionUpdateArgs::StoreDocOption::PreImage &&
+        (args.updateArgs.storeDocOption == CollectionUpdateArgs::StoreDocOption::ProjectedPreImage &&
          opCtx->getTxnNumber());
     if ((storePreImageForRetryableWrite || args.updateArgs.preImageRecordingEnabledForCollection) &&
         !migrationRecipientInfo) {
@@ -186,7 +188,7 @@ OpTimeBundle replLogUpdate(OperationContext* opCtx,
     }
 
     // This case handles storing the post image for retryable findAndModify's.
-    if (args.updateArgs.storeDocOption == CollectionUpdateArgs::StoreDocOption::PostImage &&
+    if (args.updateArgs.storeDocOption == CollectionUpdateArgs::StoreDocOption::ProjectedPostImage &&
         opCtx->getTxnNumber() && !migrationRecipientInfo) {
         MutableOplogEntry noopEntry = oplogEntry;
         noopEntry.setOpType(repl::OpTypeEnum::kNoop);

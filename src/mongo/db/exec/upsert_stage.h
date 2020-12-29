@@ -46,6 +46,7 @@ namespace mongo {
  *
  * Callers of doWork() must be holding a write lock.
  */
+    // TODO: Update this
 class UpsertStage final : public UpdateStage {
     UpsertStage(const UpsertStage&) = delete;
     UpsertStage& operator=(const UpsertStage&) = delete;

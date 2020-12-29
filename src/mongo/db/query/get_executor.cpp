@@ -49,6 +49,7 @@
 #include "mongo/db/exec/multi_plan.h"
 #include "mongo/db/exec/projection.h"
 #include "mongo/db/exec/projection_executor_utils.h"
+#include "mongo/db/exec/projection_executor_builder.h"
 #include "mongo/db/exec/record_store_fast_count.h"
 #include "mongo/db/exec/return_key.h"
 #include "mongo/db/exec/sbe/stages/co_scan.h"
@@ -1477,7 +1478,8 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpda
     // This is the regular path for when we have a CanonicalQuery.
     std::unique_ptr<CanonicalQuery> cq(parsedUpdate->releaseParsedQuery());
 
-    std::unique_ptr<projection_ast::Projection> projection;
+    std::unique_ptr<projection_executor::ProjectionExecutor> projectionExec;
+    std::unique_ptr<projection_ast::Projection> projectionAst;
     if (!request->getProj().isEmpty()) {
         invariant(request->shouldReturnAnyDocs());
 
@@ -1489,7 +1491,12 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpda
         if (!projectionWithStatus.isOK()) {
             return projectionWithStatus.getStatus();
         }
-        projection = std::move(projectionWithStatus.getValue());
+        projectionAst = std::move(projectionWithStatus.getValue());
+        projectionExec = projection_executor::buildProjectionExecutor(
+            expCtx, projectionAst.get(), {},
+            projection_executor::kDefaultBuilderParams);
+
+        updateStageParams.projectionExec = projectionExec.get();
     }
 
     // The underlying query plan must preserve the record id, since it will be needed in order to
@@ -1515,9 +1522,14 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpda
                 : std::make_unique<UpdateStage>(
                       cq->getExpCtxRaw(), updateStageParams, ws.get(), collection, root.release()));
 
-    if (projection) {
+    if (projectionExec) {
         root = std::make_unique<ProjectionStageDefault>(
-            cq->getExpCtx(), request->getProj(), projection.get(), ws.get(), std::move(root));
+            cq->getExpCtx(),
+            request->getProj(),
+            projectionAst.get(),
+            std::move(projectionExec),
+            ws.get(),
+            std::move(root));
     }
 
     // We must have a tree of stages in order to have a valid plan executor, but the query

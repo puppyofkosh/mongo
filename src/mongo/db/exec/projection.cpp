@@ -157,16 +157,31 @@ std::unique_ptr<PlanStageStats> ProjectionStage::getStats() {
     return ret;
 }
 
+ProjectionStageDefault::ProjectionStageDefault(
+    boost::intrusive_ptr<ExpressionContext> expCtx,
+    const BSONObj& projObj,
+    const projection_ast::Projection* projection,
+    std::unique_ptr<projection_executor::ProjectionExecutor> exec,
+    WorkingSet* ws,
+    std::unique_ptr<PlanStage> child)
+    : ProjectionStage{expCtx.get(), projObj, ws, std::move(child), "PROJECTION_DEFAULT"},
+      _requestedMetadata{projection->metadataDeps()},
+      _projectType{projection->type()},
+      _executor(std::move(exec)) {}
+    
 ProjectionStageDefault::ProjectionStageDefault(boost::intrusive_ptr<ExpressionContext> expCtx,
                                                const BSONObj& projObj,
                                                const projection_ast::Projection* projection,
                                                WorkingSet* ws,
                                                std::unique_ptr<PlanStage> child)
-    : ProjectionStage{expCtx.get(), projObj, ws, std::move(child), "PROJECTION_DEFAULT"},
-      _requestedMetadata{projection->metadataDeps()},
-      _projectType{projection->type()},
-      _executor{projection_executor::buildProjectionExecutor(
-          expCtx, projection, {}, projection_executor::kDefaultBuilderParams)} {}
+    : ProjectionStageDefault{
+            expCtx.get(),
+            projObj,
+            projection,
+            projection_executor::buildProjectionExecutor(
+                expCtx, projection, {}, projection_executor::kDefaultBuilderParams),
+            ws,
+            std::move(child)} {}
 
 void ProjectionStageDefault::transform(WorkingSetMember* member) const {
     Document input;

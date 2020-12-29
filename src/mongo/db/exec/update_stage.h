@@ -44,10 +44,13 @@ namespace mongo {
 class OperationContext;
 class OpDebug;
 struct PlanSummaryStats;
+namespace projection_executor {
+    class ProjectionExecutor;
+}
 
 struct UpdateStageParams {
     UpdateStageParams(const UpdateRequest* r, UpdateDriver* d, OpDebug* o)
-        : request(r), driver(d), opDebug(o), canonicalQuery(nullptr) {}
+        : request(r), driver(d), opDebug(o), canonicalQuery(nullptr), projectionExec(nullptr) {}
 
     // Contains update parameters like whether it's a multi update or an upsert. Not owned.
     // Must outlive the UpdateStage.
@@ -62,6 +65,11 @@ struct UpdateStageParams {
 
     // Not owned here.
     CanonicalQuery* canonicalQuery;
+
+    // Projection to apply to either pre-image or post-image before writing it. This is necessary
+    // for the findAndModify command when used with retryable writes. Not owned here.
+    // TODO: maybe better comment
+    projection_executor::ProjectionExecutor* projectionExec;
 
 private:
     // Default constructor not allowed.
