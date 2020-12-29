@@ -216,6 +216,7 @@ public:
     using MutableOplogEntry::kOpTypeFieldName;
     using MutableOplogEntry::kPostImageOpTimeFieldName;
     using MutableOplogEntry::kPreImageOpTimeFieldName;
+    using MutableOplogEntry::kQueryResultOpTimeFieldName;
     using MutableOplogEntry::kPrevWriteOpTimeInTransactionFieldName;
     using MutableOplogEntry::kSessionIdFieldName;
     using MutableOplogEntry::kStatementIdFieldName;
@@ -241,6 +242,7 @@ public:
     using MutableOplogEntry::getOpType;
     using MutableOplogEntry::getPostImageOpTime;
     using MutableOplogEntry::getPreImageOpTime;
+    using MutableOplogEntry::getQueryResultOpTime;
     using MutableOplogEntry::getPrevWriteOpTimeInTransaction;
     using MutableOplogEntry::getSessionId;
     using MutableOplogEntry::getStatementId;
@@ -454,6 +456,7 @@ public:
     static constexpr auto kOpTypeFieldName = DurableOplogEntry::kOpTypeFieldName;
     static constexpr auto kPostImageOpTimeFieldName = DurableOplogEntry::kPostImageOpTimeFieldName;
     static constexpr auto kPreImageOpTimeFieldName = DurableOplogEntry::kPreImageOpTimeFieldName;
+    static constexpr auto kQueryResultOpTimeFieldName = DurableOplogEntry::kQueryResultOpTimeFieldName;
     static constexpr auto kPrevWriteOpTimeInTransactionFieldName =
         DurableOplogEntry::kPrevWriteOpTimeInTransactionFieldName;
     static constexpr auto kSessionIdFieldName = DurableOplogEntry::kSessionIdFieldName;
@@ -523,6 +526,7 @@ public:
     const boost::optional<mongo::UUID>& getFromTenantMigration() const&;
     const boost::optional<mongo::repl::OpTime>& getPrevWriteOpTimeInTransaction() const&;
     const boost::optional<mongo::repl::OpTime>& getPostImageOpTime() const&;
+    const boost::optional<mongo::repl::OpTime>& getQueryResultOpTime() const&;
     OpTime getOpTime() const;
     bool isCommand() const;
     bool isPartialTransaction() const;

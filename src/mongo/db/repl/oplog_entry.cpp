@@ -635,6 +635,10 @@ const boost::optional<mongo::repl::OpTime>& OplogEntry::getPostImageOpTime() con
     return _entry.getPostImageOpTime();
 }
 
+const boost::optional<mongo::repl::OpTime>& OplogEntry::getQueryResultOpTime() const& {
+    return _entry.getQueryResultOpTime();
+}
+    
 OpTime OplogEntry::getOpTime() const {
     return _entry.getOpTime();
 }

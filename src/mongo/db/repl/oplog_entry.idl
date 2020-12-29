@@ -147,3 +147,8 @@ structs:
                 optional: true
                 description: "The optime of another oplog entry that contains the document
                               after an update was applied."
+            queryResultOpTime:
+                type: optime
+                optional: true
+                description: "The optime of another oplog entry that contains the document
+                              returned from a query which performed a write, like a findAndModify."

@@ -95,7 +95,8 @@ void validateFindAndModifyRetryability(const write_ops::FindAndModifyCommand& re
                                      "update document is stored, oplogTs: "
                                   << ts.toString()
                                   << ", oplog: " << redact(oplogEntry.toBSONForLogging()),
-                    oplogWithCorrectLinks.getPreImageOpTime());
+                    (!request.getFields() && oplogWithCorrectLinks.getPreImageOpTime()) ||
+                    (request.getFields() && oplogWithCorrectLinks.getQueryResultOpTime()));
         }
     }
 }
@@ -105,9 +106,17 @@ void validateFindAndModifyRetryability(const write_ops::FindAndModifyCommand& re
  * oplog.
  */
 BSONObj extractPreOrPostImage(OperationContext* opCtx, const repl::OplogEntry& oplog) {
-    invariant(oplog.getPreImageOpTime() || oplog.getPostImageOpTime());
-    auto opTime = oplog.getPreImageOpTime() ? oplog.getPreImageOpTime().value()
-                                            : oplog.getPostImageOpTime().value();
+    invariant(oplog.getPreImageOpTime() || oplog.getPostImageOpTime() ||
+              oplog.getQueryResultOpTime());
+    repl::OpTime opTime;
+    if (oplog.getQueryResultOpTime()) {
+        // TODO: Need to distinguish pre/post image
+        opTime = oplog.getQueryResultOpTime().value();
+    } else if (oplog.getPreImageOpTime()) {
+        opTime = oplog.getPreImageOpTime().value();
+    } else {
+        opTime = oplog.getPostImageOpTime().value();
+    }
 
     DBDirectClient client(opCtx);
     auto oplogDoc =

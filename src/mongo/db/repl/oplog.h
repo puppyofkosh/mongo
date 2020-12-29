@@ -79,6 +79,9 @@ struct OplogLink {
     OpTime prevOpTime;
     OpTime preImageOpTime;
     OpTime postImageOpTime;
+
+    // TODO: need to distinguish pre/post image
+    OpTime queryResultOpTime;
 };
 
 /**

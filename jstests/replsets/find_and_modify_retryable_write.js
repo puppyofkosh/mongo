@@ -19,10 +19,13 @@ replTest.initiate();
 // Run the command on the primary and wait for replication.
 const primary = replTest.getPrimary();
 const testDB = primary.getDB("test");
-const collName = "famRetryableWrite";
+    const collName = "famRetryableWrite";
+    const fullNs = "test." + collName;
 const oplog = primary.getDB("local").oplog.rs;
     
-// TODO: Do we need to test ID hack path specially?
+    // TODO: Do we need to test ID hack path specially?
+    // TODO: Test this with recordPreImage on.
+    
 assert.commandWorked(testDB[collName].insert({_id: 1, a:1, b:2, c:3}));
 
 // Test FAM command
@@ -41,14 +44,27 @@ let famCmd = {
     txnNumber: NumberLong(10),
 };
 
+{
+    let result = assert.commandWorked(testDB.runCommand(famCmd));
+    printjson(oplog.find({ns: fullNs}).toArray());
+}
+let updateEntries = oplog.find({ns: fullNs, op: "u"}).itcount();
 
-    {
-        // Run the command on the primary and wait for replication.
-        let result = assert.commandWorked(testDB.runCommand(famCmd));
+{
+    // Run the command again, ensure that another oplog entry isn't written.
+    let result = assert.commandWorked(testDB.runCommand(famCmd));
+    printjson(oplog.find({ns: fullNs}).toArray());
 
-        printjson(oplog.find({ns: "test." + collName}).toArray());
-    }
-    
+    assert.eq(updateEntries, oplog.find({ns: fullNs, op: "u"}).itcount());
+}
+
+// Check that the noop oplog entry only contains the fields _id and a.
+let noopEntry = oplog.find({ns: fullNs, op: "n"}).sort({ts: -1}).toArray()[0];
+assert.eq(noopEntry.o, {_id:1, a: 1});
+
+// Check that the update entry stores the link in the 'queryResultOpTime' field.
+let updateEntry = oplog.find({ns: fullNs, op: "u"}).sort({ts: -1}).toArray()[0];
+assert.eq(updateEntry.queryResultOpTime.ts, noopEntry.ts);
 
 replTest.stopSet();
 })();

@@ -532,6 +532,10 @@ void appendOplogEntryChainInfo(OperationContext* opCtx,
     if (!oplogLink->postImageOpTime.isNull()) {
         oplogEntry->setPostImageOpTime(oplogLink->postImageOpTime);
     }
+
+    if(!oplogLink->queryResultOpTime.isNull()) {
+        oplogEntry->setQueryResultOpTime(oplogLink->queryResultOpTime);
+    }
 }
 
 namespace {

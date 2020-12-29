@@ -41,6 +41,7 @@
 #include "mongo/bson/mutable/algorithm.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/exec/scoped_timer.h"
+#include "mongo/db/exec/projection_executor.h"
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/db/exec/write_stage_common.h"
 #include "mongo/db/op_observer.h"
@@ -261,7 +262,20 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
             args.fromMigrate = request->isFromMigration();
             args.storeDocOption = getStoreDocMode(*request);
             if (args.storeDocOption == CollectionUpdateArgs::StoreDocOption::ProjectedPreImage) {
-                args.preImageDoc = oldObj.value().getOwned();
+                if (_params.projectionExec) {
+                    // Note: We could check if the projected document is the same as the pre image.
+                    // If it were, we could store the projected document under 'preImageDoc' and
+                    // avoid having to (possibly) write both 'projectedDoc' and 'preImageDoc' to
+                    // the oplog.
+                    args.projectedDoc = _params.projectionExec->applyTransformation(
+                        Document{oldObj.value()}).toBson().getOwned();
+                } else {
+                    // We store the document in the 'preImage' field to indicate that no projection
+                    // was necessary.
+                    args.preImageDoc = oldObj.value().getOwned();
+
+                }
+
             }
         }
 

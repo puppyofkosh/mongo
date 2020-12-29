@@ -171,20 +171,42 @@ OpTimeBundle replLogUpdate(OperationContext* opCtx,
     // replica set.
     const auto& migrationRecipientInfo = repl::tenantMigrationRecipientInfo(opCtx);
 
+// TODO: Must change the read path
     // TODO: The retryable write path needs a slightly different path now.
-    const auto storePreImageForRetryableWrite =
+    // TODO: What if retryable write is happening and preImageRecording is enabled? Write two entries?
+    const bool retryableWritePreImage =
         (args.updateArgs.storeDocOption == CollectionUpdateArgs::StoreDocOption::ProjectedPreImage &&
          opCtx->getTxnNumber());
-    if ((storePreImageForRetryableWrite || args.updateArgs.preImageRecordingEnabledForCollection) &&
-        !migrationRecipientInfo) {
+    // True if we performed a retryable write and will return the "exact" pre-image. That is, the
+    // pre image with no projection applied.
+    const bool retryableWriteLogExactPreImage = retryableWritePreImage && !args.updateArgs.projectedDoc;
+    
+    const bool mustLogPreImage =
+        (retryableWriteLogExactPreImage ||
+         args.updateArgs.preImageRecordingEnabledForCollection) &&
+        !migrationRecipientInfo;
+
+    if (mustLogPreImage) {
         MutableOplogEntry noopEntry = oplogEntry;
         invariant(args.updateArgs.preImageDoc);
         noopEntry.setOpType(repl::OpTypeEnum::kNoop);
+        
         noopEntry.setObject(*args.updateArgs.preImageDoc);
         oplogLink.preImageOpTime = logOperation(opCtx, &noopEntry);
-        if (storePreImageForRetryableWrite) {
+
+        if (retryableWriteLogExactPreImage) {
+            // If all we need is the pre image (as opposed to the projected pre image) to
+            // handle retries, then we're done.
             opTimes.prePostImageOpTime = oplogLink.preImageOpTime;
         }
+    }
+
+    if (retryableWritePreImage && args.updateArgs.projectedDoc) {
+        // We must log the projected document.
+        MutableOplogEntry noopEntry = oplogEntry;
+        noopEntry.setOpType(repl::OpTypeEnum::kNoop);
+        noopEntry.setObject(*args.updateArgs.projectedDoc);
+        oplogLink.queryResultOpTime = logOperation(opCtx, &noopEntry);
     }
 
     // This case handles storing the post image for retryable findAndModify's.
