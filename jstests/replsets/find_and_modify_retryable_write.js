@@ -22,11 +22,18 @@ const testDB = primary.getDB("test");
     const collName = "famRetryableWrite";
     const fullNs = "test." + collName;
 const oplog = primary.getDB("local").oplog.rs;
+
+function findLastOplogEntry(oplog, opType) {
+    return oplog.find({ns: fullNs, op: opType}).sort({$natural: -1}).toArray()[0];
+}
+
+    function countUpdateEntries() {
+        return oplog.find({ns: fullNs, op: "u"}).itcount();
+    }
+
+// TODO: Test this with recordPreImage on.
     
-    // TODO: Do we need to test ID hack path specially?
-    // TODO: Test this with recordPreImage on.
-    
-assert.commandWorked(testDB[collName].insert({_id: 1, a:1, b:2, c:3}));
+    assert.commandWorked(testDB[collName].insert({_id: 1, a:1, otherField: "abc"}));
 
 // Test FAM command
 
@@ -44,27 +51,60 @@ let famCmd = {
     txnNumber: NumberLong(10),
 };
 
-{
-    let result = assert.commandWorked(testDB.runCommand(famCmd));
-    printjson(oplog.find({ns: fullNs}).toArray());
-}
-let updateEntries = oplog.find({ns: fullNs, op: "u"}).itcount();
+    // Make sure we can retry the command and that we are not storing the entire pre image in the
+    // oplog.
+    {
+        let result = assert.commandWorked(testDB.runCommand(famCmd));
+        assert.eq(result.value, {_id: 1, a: 1});
+        let updateEntries = countUpdateEntries();
+        // Run the command again, ensure that another oplog entry isn't written.
+        let reapplyResult = assert.commandWorked(testDB.runCommand(famCmd));
+        assert.eq(updateEntries, countUpdateEntries());
+        assert.eq(reapplyResult.value, result.value);
 
-{
-    // Run the command again, ensure that another oplog entry isn't written.
-    let result = assert.commandWorked(testDB.runCommand(famCmd));
-    printjson(oplog.find({ns: fullNs}).toArray());
+        // Check that the noop oplog entry only contains the fields _id and a.
+        let noopEntry = findLastOplogEntry(oplog, "n")
+        assert.eq(noopEntry.o, {_id:1, a: 1});
 
-    assert.eq(updateEntries, oplog.find({ns: fullNs, op: "u"}).itcount());
-}
+        // Check that the update entry stores the link in the 'queryResultOpTime' field.
+        let updateEntry = findLastOplogEntry(oplog, "u");
+        assert.eq(updateEntry.queryResultOpTime.ts, noopEntry.ts);
+    }
 
-// Check that the noop oplog entry only contains the fields _id and a.
-let noopEntry = oplog.find({ns: fullNs, op: "n"}).sort({ts: -1}).toArray()[0];
-assert.eq(noopEntry.o, {_id:1, a: 1});
+    // Make sure the command logs correctly when 'recordPreImages' is on.
+    {
+        // Now run another FAM command under a different txn, and this time, with the
+        // server configured to record pre images.
+        assert.commandWorked(testDB.runCommand({collMod: collName, recordPreImages: true}));
 
-// Check that the update entry stores the link in the 'queryResultOpTime' field.
-let updateEntry = oplog.find({ns: fullNs, op: "u"}).sort({ts: -1}).toArray()[0];
-assert.eq(updateEntry.queryResultOpTime.ts, noopEntry.ts);
+        famCmd.txnNumber = NumberLong(famCmd.txnNumber + 1);
+        let result = assert.commandWorked(testDB.runCommand(famCmd));
+        assert.eq(result.value, {_id: 1, a: 2});
+
+        // Now check the oplog entry. There should be two links: one to the pre image and
+        // another to the query's result.
+        let updateEntry = findLastOplogEntry(oplog, "u");
+        assert(updateEntry.queryResultOpTime);
+        assert(updateEntry.preImageOpTime);
+
+        const updateEntries = countUpdateEntries();
+
+        let queryResultNoopEntry = oplog.find({ts: updateEntry.queryResultOpTime.ts}).toArray()[0];
+        assert.eq(queryResultNoopEntry.o, result.value);
+        assert.eq(queryResultNoopEntry.op, "n");
+
+        let preImageEntry = oplog.find({ts: updateEntry.preImageOpTime.ts}).toArray()[0];
+        assert.eq(preImageEntry.o, {_id:1, a:2, otherField: "abc"});
+        assert.eq(preImageEntry.op, "n");
+
+        // Retrying the command should not cause another entry to be written.
+        assert.commandWorked(testDB.runCommand(famCmd));
+        assert.eq(updateEntries, countUpdateEntries());
+        
+
+        // Disable the pre image recording.
+        assert.commandWorked(testDB.runCommand({collMod: collName, recordPreImages: false}));
+    }
 
 replTest.stopSet();
 })();
