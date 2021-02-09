@@ -415,24 +415,51 @@ public:
             prepareFieldEvals(_context, node);
 
         // Finally, inject an mkobj stage to generate a document for the current nested level. For
-        // inclusion projection also add constant filter stage on top to filter out input values for
-        // nested traversal if they're not documents.
+        // inclusion projection also add a filter stage on top to filter out input values for
+        // nested traversal if they don't result in documents.
         auto childLevelInputSlot = _context->topLevel().inputSlot;
         auto childLevelResultSlot = _context->slotIdGenerator->generate();
         if (_context->projectType == projection_ast::ProjectType::kInclusion) {
-            childLevelStage = sbe::makeS<sbe::FilterStage<true>>(
-                sbe::makeS<sbe::MakeBsonObjStage>(std::move(childLevelStage),
-                                                  childLevelResultSlot,
-                                                  childLevelInputSlot,
-                                                  sbe::MakeBsonObjStage::FieldBehavior::keep,
-                                                  keepFields,
-                                                  std::move(projectFields),
-                                                  std::move(projectSlots),
-                                                  true,
-                                                  false,
-                                                  _context->planNodeId),
-                makeFunction("isObject"sv, sbe::makeE<sbe::EVariable>(childLevelInputSlot)),
-                _context->planNodeId);
+            // Determine whether there are any projections before std::move()ing that information
+            // away.
+
+            // I think we need a hasComputedFields function? Check the old implementation.
+            bool hasComputedFields = false;
+            for (auto&& child : node->children()) {
+                if (typeid(*child) == typeid(projection_ast::ExpressionASTNode)) {
+                    hasComputedFields = true;
+                }
+            }
+
+            auto mkBsonStage = sbe::makeS<sbe::MakeBsonObjStage>(std::move(childLevelStage),
+                                                                 childLevelResultSlot,
+                                                                 childLevelInputSlot,
+                                                                 sbe::MakeBsonObjStage::FieldBehavior::keep,
+                                                                 keepFields,
+                                                                 std::move(projectFields),
+                                                                 std::move(projectSlots),
+                                                                 true,
+                                                                 false,
+                                                                 _context->planNodeId);
+
+            if (hasComputedFields) {
+                // Projections of computed fields should always be applied to elements of an array,
+                // even if the elements aren't objects. For example:
+                // projection: {a: {b: "x"}}
+                // document: {a: [1,2,3]}
+                // result: {a: [{b: "x"}, {b: "x"}, {b: "x"}, {b: "x"}]}
+                
+                childLevelStage = sbe::makeS<sbe::FilterStage<false>>(
+                    std::move(mkBsonStage),
+                    makeFunction("isObject"sv, sbe::makeE<sbe::EVariable>(childLevelResultSlot)),
+                    _context->planNodeId);                
+            } else {
+                childLevelStage = sbe::makeS<sbe::FilterStage<true>>(
+                    std::move(mkBsonStage),
+                    makeFunction("isObject"sv, sbe::makeE<sbe::EVariable>(childLevelInputSlot)),
+                    _context->planNodeId);                
+            }
+
         } else {
             childLevelStage =
                 sbe::makeS<sbe::MakeBsonObjStage>(std::move(childLevelStage),

@@ -254,6 +254,8 @@ function dropWithoutImplicitRecreate(coll) {
 
     assert.commandWorked(target.createIndex({a: 1, "b.c.d": -1}, {unique: true}));
     assertMergeFailsWithoutUniqueIndex({source: source, onFields: "a", target: target});
+    printjson(source.aggregate([{$project: {_id: 1, a: 1, b: {c: {d: "x"}}}}]).toArray());
+    
     assert.doesNotThrow(() => source.aggregate([
         {$project: {_id: 1, a: 1, b: {c: {d: "x"}}}},
         {
