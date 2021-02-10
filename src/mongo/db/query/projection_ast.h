@@ -40,6 +40,11 @@ namespace mongo {
 namespace projection_ast {
 // TODO: Remove
     class ExpressionASTNode;
+
+    struct ASTNodeProperties {
+        // Whether this node or a node below this one is a computed expression.
+        bool subtreeContainsComputedField = false;
+    };
     
 /*
  * A tree representation of a projection. The main purpose of this class is to offer a typed,
@@ -90,21 +95,15 @@ public:
         return !_parent;
     }
 
-    // TEMP
-    virtual bool isExpression() const {
-        return false;
+    void computeProperties() {
+        for (auto&& child : _children) {
+            child->computeProperties();
+        }
+        doComputeProperties();
     }
-    bool hasComputedFieldsTemp() const {
-        if (isExpression()) {
-            return true;
-        }
 
-        for (auto& c: _children) {
-            if (c->hasComputedFieldsTemp()) {
-                return true;
-            }
-        }
-        return false;
+    const boost::optional<ASTNodeProperties>& properties() const {
+        return _properties;
     }
 
 protected:
@@ -113,9 +112,14 @@ protected:
         _children.push_back(std::move(node));
     }
 
+    virtual void doComputeProperties() {
+        _properties.emplace();
+    }
+
     // nullptr if this is the root.
     ASTNode* _parent = nullptr;
     ASTNodeVector _children;
+    boost::optional<ASTNodeProperties> _properties;
 };
 
 inline auto begin(ASTNode& node) {
@@ -217,6 +221,18 @@ public:
     }
 
 private:
+    void doComputeProperties() override {
+        _properties.emplace();
+
+        for (auto&& child : children()) {
+            invariant(child->properties());
+            if (child->properties()->subtreeContainsComputedField) {
+                _properties->subtreeContainsComputedField = true;
+                break;
+            }
+        }
+    }
+    
     // Names associated with the child nodes. Must be same size as _children.
     std::vector<std::string> _fieldNames;
 };
@@ -325,11 +341,11 @@ public:
         return _expr;
     }
 
-    bool isExpression() const {
-        return true;
-    }
-
 private:
+    void doComputeProperties() override {
+        _properties.emplace(ASTNodeProperties{true});
+    }
+    
     boost::intrusive_ptr<Expression> _expr;
 };
 

@@ -420,12 +420,6 @@ public:
         auto childLevelInputSlot = _context->topLevel().inputSlot;
         auto childLevelResultSlot = _context->slotIdGenerator->generate();
         if (_context->projectType == projection_ast::ProjectType::kInclusion) {
-            // Determine whether there are any projections before std::move()ing that information
-            // away.
-
-            // I think we need a hasComputedFields function? Check the old implementation.
-            bool hasComputedFields = node->hasComputedFieldsTemp();
-
             auto mkBsonStage = sbe::makeS<sbe::MakeBsonObjStage>(std::move(childLevelStage),
                                                                  childLevelResultSlot,
                                                                  childLevelInputSlot,
@@ -437,7 +431,7 @@ public:
                                                                  false,
                                                                  _context->planNodeId);
 
-            if (hasComputedFields) {
+            if (node->properties()->subtreeContainsComputedField) {
                 // Projections of computed fields should always be applied to elements of an array,
                 // even if the elements aren't objects. For example:
                 // projection: {a: {b: "x"}}
@@ -449,6 +443,12 @@ public:
                     makeFunction("isObject"sv, sbe::makeE<sbe::EVariable>(childLevelResultSlot)),
                     _context->planNodeId);                
             } else {
+                // There are no computed fields, only inclusions. So anything that's not a document
+                // will get projected out. Example:
+                // projection: {a: {b: 1}}
+                // document: {a: [1, {b: 2}, 3]}
+                // result: {a: [{b: 2}]}
+
                 childLevelStage = sbe::makeS<sbe::FilterStage<true>>(
                     std::move(mkBsonStage),
                     makeFunction("isObject"sv, sbe::makeE<sbe::EVariable>(childLevelInputSlot)),

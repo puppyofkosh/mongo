@@ -633,6 +633,9 @@ Projection parse(boost::intrusive_ptr<ExpressionContext> expCtx,
         invariant(root.removeChild("_id"));
     }
 
+    std::cout << "ian: computing properties\n";
+    root.computeProperties();
+    invariant(root.properties());
     return Projection{std::move(root), *ctx.type};
 }
 
