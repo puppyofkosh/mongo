@@ -424,12 +424,7 @@ public:
             // away.
 
             // I think we need a hasComputedFields function? Check the old implementation.
-            bool hasComputedFields = false;
-            for (auto&& child : node->children()) {
-                if (typeid(*child) == typeid(projection_ast::ExpressionASTNode)) {
-                    hasComputedFields = true;
-                }
-            }
+            bool hasComputedFields = node->hasComputedFieldsTemp();
 
             auto mkBsonStage = sbe::makeS<sbe::MakeBsonObjStage>(std::move(childLevelStage),
                                                                  childLevelResultSlot,

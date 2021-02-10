@@ -38,6 +38,9 @@
 
 namespace mongo {
 namespace projection_ast {
+// TODO: Remove
+    class ExpressionASTNode;
+    
 /*
  * A tree representation of a projection. The main purpose of this class is to offer a typed,
  * walkable representation of a projection. It's mostly meant to be used while doing validation and
@@ -85,6 +88,23 @@ public:
 
     bool isRoot() const {
         return !_parent;
+    }
+
+    // TEMP
+    virtual bool isExpression() const {
+        return false;
+    }
+    bool hasComputedFieldsTemp() const {
+        if (isExpression()) {
+            return true;
+        }
+
+        for (auto& c: _children) {
+            if (c->hasComputedFieldsTemp()) {
+                return true;
+            }
+        }
+        return false;
     }
 
 protected:
@@ -303,6 +323,10 @@ public:
 
     boost::intrusive_ptr<Expression> expression() const {
         return _expr;
+    }
+
+    bool isExpression() const {
+        return true;
     }
 
 private:
