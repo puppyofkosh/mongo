@@ -72,6 +72,8 @@ public:
         : _baseSortPattern(std::move(pattern)), _ignoredFields(std::move(ignoreFields)) {}
     ProvidedSortSet() = default;
 
+    static ProvidedSortSet kEmpty;
+
     /**
      * Returns true if the 'input' sort order is provided.
      *
@@ -1291,6 +1293,42 @@ struct TextMatchNode : public QuerySolutionNodeWithSortSet {
 
     // True, if we need to compute text scores.
     bool wantTextScore;
+};
+
+struct HashAggNode : public QuerySolutionNode {
+    HashAggNode() {}
+    HashAggNode(std::unique_ptr<QuerySolutionNode> child) : QuerySolutionNode(std::move(child)) {}
+    virtual ~HashAggNode() {}
+
+    virtual StageType getType() const {
+        return STAGE_HASH_AGG;
+    }
+
+    virtual void appendToString(str::stream* ss, int indent) const;
+
+    bool fetched() const {
+        for (size_t i = 0; i < children.size(); ++i) {
+            if (!children[i]->fetched()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    FieldAvailability getFieldAvailability(const std::string& field) const {
+        auto result = FieldAvailability::kFullyProvided;
+        for (size_t i = 0; i < children.size(); ++i) {
+            result = std::min(result, children[i]->getFieldAvailability(field));
+        }
+        return result;
+    }
+    bool sortedByDiskLoc() const {
+        return false;
+    }
+    const ProvidedSortSet& providedSorts() const {
+        return ProvidedSortSet::kEmpty;
+    }
+
+    QuerySolutionNode* clone() const;
 };
 
 }  // namespace mongo

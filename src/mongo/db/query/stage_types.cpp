@@ -75,6 +75,7 @@ StringData stageTypeToString(StageType stageType) {
         {STAGE_UNKNOWN, "UNKNOWN"_sd},
         {STAGE_UNPACK_TIMESERIES_BUCKET, "UNPACK_TIMESERIES_BUCKET"_sd},
         {STAGE_UPDATE, "UPDATE"_sd},
+        {STAGE_HASH_AGG, "HASH_AGG"_sd},
     };
     if (auto it = kStageTypesMap.find(stageType); it != kStageTypesMap.end()) {
         return it->second;

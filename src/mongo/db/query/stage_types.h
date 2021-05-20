@@ -125,6 +125,8 @@ enum StageType {
     STAGE_UNPACK_TIMESERIES_BUCKET,
 
     STAGE_UPDATE,
+
+    STAGE_HASH_AGG
 };
 
 inline bool isProjectionStageType(StageType stageType) {
