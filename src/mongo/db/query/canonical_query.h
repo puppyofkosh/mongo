@@ -36,11 +36,11 @@
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/matcher/extensions_callback_noop.h"
 #include "mongo/db/query/collation/collator_interface.h"
+#include "mongo/db/query/inner_pipeline.h"
 #include "mongo/db/query/projection.h"
 #include "mongo/db/query/projection_policies.h"
 #include "mongo/db/query/query_request_helper.h"
 #include "mongo/db/query/sort_pattern.h"
-#include "mongo/db/query/inner_pipeline.h"
 
 namespace mongo {
 

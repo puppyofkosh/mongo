@@ -266,7 +266,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
     const intrusive_ptr<ExpressionContext>& expCtx,
     const CollectionPtr& collection,
     const NamespaceString& nss,
-    Pipeline* pipeline, // may be null if we don't want to push anything else down
+    Pipeline* pipeline,  // may be null if we don't want to push anything else down
     BSONObj queryObj,
     BSONObj projectionObj,
     const QueryMetadataBitSet& metadataRequested,
@@ -352,24 +352,22 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
             return distinctExecutor;
         }
     }
-    
-// TODO and false
-    if (pipeline && false) {
+
+    // TODO and false
+    if (pipeline) {
         // Push other stuff down.
         if (pipeline->peekFront() && pipeline->peekFront()->getSourceName() == "$lookup"_sd) {
             auto lookup = static_cast<DocumentSourceLookUp*>(pipeline->peekFront());
             if (lookup->hasLocalFieldForeignFieldJoin() && !lookup->hasPipeline() &&
-                !lookup->hasUnwind() &&
-                lookup->resolvedPipeline().size() == 1) {
+                !lookup->hasUnwind() && lookup->resolvedPipeline().size() == 1) {
                 std::cout << "ian: We gotta lookup eligible for pushdown\n";
                 auto stage = pipeline->popFront();
 
                 cq.getValue()->innerPipeline.stages.push_back(
-                    std::make_unique<inner_pipeline::EqLookupStage>(
-                        lookup->resolvedNs(),
-                        *lookup->getLocalField(),
-                        *lookup->getForeignField(),
-                        lookup->getAs()));
+                    std::make_unique<inner_pipeline::EqLookupStage>(lookup->resolvedNs(),
+                                                                    *lookup->getLocalField(),
+                                                                    *lookup->getForeignField(),
+                                                                    lookup->getAs()));
             }
         }
     }

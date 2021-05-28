@@ -86,6 +86,8 @@ public:
      */
     static StatusWith<std::vector<std::unique_ptr<QuerySolution>>> plan(
         const CanonicalQuery& query, const QueryPlannerParams& params);
+    static StatusWith<std::vector<std::unique_ptr<QuerySolution>>> planCqWithoutPipeline(
+        const CanonicalQuery& query, const QueryPlannerParams& params);
 
     /**
      * Generates and returns a query solution, given data retrieved from the plan cache.

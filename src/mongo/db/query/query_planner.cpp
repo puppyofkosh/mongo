@@ -489,6 +489,11 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
     const CanonicalQuery& query,
     const QueryPlannerParams& params,
     const CachedSolution& cachedSoln) {
+
+    //
+    // TODO: Cached plans will probably just "re-build" the entire right side. For now.
+    //
+
     invariant(cachedSoln.plannerData);
 
     // A query not suitable for caching should not have made its way into the cache.
@@ -586,7 +591,7 @@ StatusWith<std::unique_ptr<QuerySolution>> QueryPlanner::planFromCache(
 }
 
 // static
-StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
+StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::planCqWithoutPipeline(
     const CanonicalQuery& query, const QueryPlannerParams& params) {
     // It's a little silly to ask for a count and for owned data. This could indicate a bug earlier
     // on.
@@ -1130,8 +1135,34 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
         }
     }
 
+    //
+    // TODO: For now we can just add the join to each solution. But in the future we might actually
+    // want to Multi planning at the layer beneath the join.
+    //
+
     invariant(out.size() > 0);
     return {std::move(out)};
+}
+
+StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
+    const CanonicalQuery& query, const QueryPlannerParams& params) {
+    auto swPlans = planCqWithoutPipeline(query, params);
+    return swPlans;
+    // if (!swPlans.isOK()) {
+    //     return swPlans;
+    // }
+
+    // // Now "plan" the pipeline part. Here we need access to the foreign collection to do the
+    // // heuristic and so on.
+
+    // for (auto && plan : swPlans.getValue()) {
+    //     auto root = plan->extractRoot();
+    //     for (auto && stage : query.innerPipeline) {
+    //         auto* lookup = dynamic_cast<inner_pipeline::EqLookupStage>(stage.get());
+    //         // For now this is all we push down.
+    //         invariant(lookup);
+    //     }
+    // }
 }
 
 StatusWith<QueryPlanner::SubqueriesPlanningResult> QueryPlanner::planSubqueries(

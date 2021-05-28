@@ -357,6 +357,10 @@ public:
         return _root.get();
     }
 
+    std::unique_ptr<QuerySolutionNode> extractRoot() {
+        return std::move(_root);
+    }
+
     /**
      * Assigns the QuerySolutionNode rooted at 'root' to this QuerySolution. Also assigns a unique
      * identifying integer to each node in the tree, which can subsequently be displayed in debug
@@ -1307,19 +1311,11 @@ struct HashAggNode : public QuerySolutionNode {
     virtual void appendToString(str::stream* ss, int indent) const;
 
     bool fetched() const {
-        for (size_t i = 0; i < children.size(); ++i) {
-            if (!children[i]->fetched()) {
-                return false;
-            }
-        }
         return true;
     }
     FieldAvailability getFieldAvailability(const std::string& field) const {
-        auto result = FieldAvailability::kFullyProvided;
-        for (size_t i = 0; i < children.size(); ++i) {
-            result = std::min(result, children[i]->getFieldAvailability(field));
-        }
-        return result;
+        // TODO: ian
+        return FieldAvailability::kNotProvided;
     }
     bool sortedByDiskLoc() const {
         return false;
@@ -1328,7 +1324,84 @@ struct HashAggNode : public QuerySolutionNode {
         return ProvidedSortSet::kEmpty;
     }
 
-    QuerySolutionNode* clone() const;
+    QuerySolutionNode* clone() const {
+        return new HashAggNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()));
+    }
 };
+
+struct HashJoinNode : public QuerySolutionNode {
+    HashJoinNode() {}
+    HashJoinNode(std::unique_ptr<QuerySolutionNode> left,
+                 std::unique_ptr<QuerySolutionNode> right) {
+        children.push_back(left.release());
+        children.push_back(right.release());
+    }
+    virtual ~HashJoinNode() {}
+
+    virtual StageType getType() const {
+        return STAGE_HASH_JOIN;
+    }
+
+    virtual void appendToString(str::stream* ss, int indent) const;
+
+    bool fetched() const {
+        return children[0]->fetched() && children[1]->fetched();
+    }
+    FieldAvailability getFieldAvailability(const std::string& field) const {
+        // TODO: ian
+        return FieldAvailability::kNotProvided;
+    }
+    bool sortedByDiskLoc() const {
+        return false;
+    }
+    const ProvidedSortSet& providedSorts() const {
+        return ProvidedSortSet::kEmpty;
+    }
+
+    QuerySolutionNode* clone() const {
+        return new HashJoinNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
+                                std::unique_ptr<QuerySolutionNode>(children[1]->clone()));
+    }
+};
+
+// struct MultiPlanNode : public QuerySolutionNode {
+//     MultiPlanNode() {}
+//     MultiPlanNode(std::vector<std::unique_ptr<QuerySolutionNode>> ownedChildren) {
+//         for (auto & child : ownedChildren) {
+//             children.push_back(child.release());
+//         }
+//     }
+//     ~MultiPlanNode() {}
+
+//     virtual StageType getType() const {
+//         return STAGE_MULTI_PLAN;
+//     }
+
+//     virtual void appendToString(str::stream* ss, int indent) const;
+
+//     bool fetched() const {
+//         for (size_t i = 0; i < children.size(); ++i) {
+//             if (!children[i]->fetched()) {
+//                 return false;
+//             }
+//         }
+//         return true;
+//     }
+//     FieldAvailability getFieldAvailability(const std::string& field) const {
+//         auto result = FieldAvailability::kFullyProvided;
+//         for (size_t i = 0; i < children.size(); ++i) {
+//             result = std::min(result, children[i]->getFieldAvailability(field));
+//         }
+//         return result;
+//     }
+//     bool sortedByDiskLoc() const {
+//         return false;
+//     }
+//     const ProvidedSortSet& providedSorts() const {
+//         return ProvidedSortSet::kEmpty;
+//     }
+
+//     QuerySolutionNode* clone() const;
+// };
 
 }  // namespace mongo

@@ -14,14 +14,11 @@ struct Stage {
 };
 
 struct EqLookupStage : public Stage {
-    EqLookupStage(NamespaceString nss,
-                  FieldPath localField,
-                  FieldPath foreignField,
-                  FieldPath as)
-        :_nss(std::move(nss)),
-         _localField(std::move(localField)),
-         _foreignField(std::move(foreignField)),
-         _as(std::move(as)) {}
+    EqLookupStage(NamespaceString nss, FieldPath localField, FieldPath foreignField, FieldPath as)
+        : _nss(std::move(nss)),
+          _localField(std::move(localField)),
+          _foreignField(std::move(foreignField)),
+          _as(std::move(as)) {}
 
     StringData name() const override {
         return "$lookup"_sd;
@@ -42,5 +39,5 @@ struct GroupStage : public Stage {
 struct InnerPipeline {
     std::vector<std::unique_ptr<Stage>> stages;
 };
-}
-}
+}  // namespace inner_pipeline
+}  // namespace mongo
