@@ -170,12 +170,24 @@ public:
         _unwindSrc = unwind;
     }
 
+    bool hasUnwind() const {
+        return static_cast<bool>(_unwindSrc);
+    }
+
     bool hasLocalFieldForeignFieldJoin() const {
         return _localField != boost::none;
     }
 
     bool hasPipeline() const {
         return _userPipeline.size() > 0;
+    }
+
+    const std::vector<BSONObj> resolvedPipeline() const {
+        return _resolvedPipeline;
+    }
+
+    const NamespaceString& resolvedNs() const {
+        return _resolvedNs;
     }
 
     boost::optional<FieldPath> getForeignField() const {
@@ -188,6 +200,10 @@ public:
 
     const std::vector<LetVariable>& getLetVariables() const {
         return _letVariables;
+    }
+
+    const FieldPath& getAs() const {
+        return _as;
     }
 
     /**

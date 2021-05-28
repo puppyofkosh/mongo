@@ -62,6 +62,7 @@
 #include "mongo/db/pipeline/document_source_geo_near_cursor.h"
 #include "mongo/db/pipeline/document_source_group.h"
 #include "mongo/db/pipeline/document_source_internal_unpack_bucket.h"
+#include "mongo/db/pipeline/document_source_lookup.h"
 #include "mongo/db/pipeline/document_source_match.h"
 #include "mongo/db/pipeline/document_source_sample.h"
 #include "mongo/db/pipeline/document_source_sample_from_random_cursor.h"
@@ -71,6 +72,7 @@
 #include "mongo/db/pipeline/skip_and_limit.h"
 #include "mongo/db/query/collation/collator_interface.h"
 #include "mongo/db/query/get_executor.h"
+#include "mongo/db/query/inner_pipeline.h"
 #include "mongo/db/query/plan_executor_factory.h"
 #include "mongo/db/query/plan_summary_stats.h"
 #include "mongo/db/query/query_planner.h"
@@ -264,6 +266,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
     const intrusive_ptr<ExpressionContext>& expCtx,
     const CollectionPtr& collection,
     const NamespaceString& nss,
+    Pipeline* pipeline, // may be null if we don't want to push anything else down
     BSONObj queryObj,
     BSONObj projectionObj,
     const QueryMetadataBitSet& metadataRequested,
@@ -347,6 +350,27 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
                     "Unable to use distinct scan to optimize $group stage"};
         } else {
             return distinctExecutor;
+        }
+    }
+    
+// TODO and false
+    if (pipeline && false) {
+        // Push other stuff down.
+        if (pipeline->peekFront() && pipeline->peekFront()->getSourceName() == "$lookup"_sd) {
+            auto lookup = static_cast<DocumentSourceLookUp*>(pipeline->peekFront());
+            if (lookup->hasLocalFieldForeignFieldJoin() && !lookup->hasPipeline() &&
+                !lookup->hasUnwind() &&
+                lookup->resolvedPipeline().size() == 1) {
+                std::cout << "ian: We gotta lookup eligible for pushdown\n";
+                auto stage = pipeline->popFront();
+
+                cq.getValue()->innerPipeline.stages.push_back(
+                    std::make_unique<inner_pipeline::EqLookupStage>(
+                        lookup->resolvedNs(),
+                        *lookup->getLocalField(),
+                        *lookup->getForeignField(),
+                        lookup->getAs()));
+            }
         }
     }
 
@@ -912,6 +936,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> PipelineD::prep
         auto swExecutorGrouped = attemptToGetExecutor(expCtx,
                                                       collection,
                                                       nss,
+                                                      nullptr,
                                                       queryObj,
                                                       projObj,
                                                       deps.metadataDeps(),
@@ -952,6 +977,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> PipelineD::prep
     return attemptToGetExecutor(expCtx,
                                 collection,
                                 nss,
+                                pipeline,
                                 queryObj,
                                 projObj,
                                 deps.metadataDeps(),
