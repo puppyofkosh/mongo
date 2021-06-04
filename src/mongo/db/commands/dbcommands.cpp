@@ -289,6 +289,8 @@ public:
                     !storageEngine->supportsRecoveryTimestamp());
             }
 
+            std::cout << "ian: wc is " << opCtx->getWriteConcern().toBSON() << std::endl;
+
             Reply reply;
             uassertStatusOK(
                 dropCollection(opCtx,

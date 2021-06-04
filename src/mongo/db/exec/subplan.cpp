@@ -112,7 +112,7 @@ Status SubplanStage::choosePlanWholeQuery(PlanYieldPolicy* yieldPolicy) {
             str::stream() << "error processing query: " << _query->toString()
                           << " planner returned error");
     }
-    auto solutions = std::move(statusWithSolutions.getValue());
+    auto solutions = std::move(statusWithSolutions.getValue().multiPlanCandidates);
 
     if (1 == solutions.size()) {
         // Only one possible plan.  Run it.  Build the stages from the solution.

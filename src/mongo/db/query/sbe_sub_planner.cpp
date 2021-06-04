@@ -113,7 +113,8 @@ CandidatePlans SubPlanner::plan(
 
 CandidatePlans SubPlanner::planWholeQuery() const {
     // Use the query planning module to plan the whole query.
-    auto solutions = uassertStatusOK(QueryPlanner::plan(_cq, _queryParams));
+    auto plannerRes = uassertStatusOK(QueryPlanner::plan(_cq, _queryParams));
+    auto& solutions = plannerRes.multiPlanCandidates;
 
     // Only one possible plan. Build the stages from the solution.
     if (solutions.size() == 1) {

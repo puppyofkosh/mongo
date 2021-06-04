@@ -62,7 +62,7 @@ public:
      */
     MultiPlanStage(ExpressionContext* expCtx,
                    const CollectionPtr& collection,
-                   CanonicalQuery* cq,
+                   const CanonicalQuery* cq,
                    PlanCachingMode cachingMode = PlanCachingMode::AlwaysCache);
 
     bool isEOF() final;
@@ -168,7 +168,7 @@ private:
 
     // The query that we're trying to figure out the best solution to.
     // not owned here
-    CanonicalQuery* _query;
+    const CanonicalQuery* _query;
 
     // Candidate plans. Each candidate includes a child PlanStage tree and QuerySolution. Ownership
     // of all QuerySolutions is retained here, and will *not* be tranferred to the PlanExecutor that

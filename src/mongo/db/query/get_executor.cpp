@@ -659,7 +659,8 @@ public:
                 str::stream() << "error processing query: " << _cq->toString()
                               << " planner returned error");
         }
-        auto solutions = std::move(statusWithSolutions.getValue());
+        auto plannerRes = std::move(statusWithSolutions.getValue());
+        auto& solutions = plannerRes.multiPlanCandidates;
         // The planner should have returned an error status if there are no solutions.
         invariant(solutions.size() > 0);
 
@@ -2450,7 +2451,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDist
                 opCtx, coll, parsedDistinct->releaseQuery(), yieldPolicy, plannerOptions);
         }
     }
-    auto solutions = std::move(statusWithSolutions.getValue());
+    auto solutions = std::move(statusWithSolutions.getValue().multiPlanCandidates);
 
     // See if any of the solutions can be rewritten using a DISTINCT_SCAN. Note that, if the
     // STRICT_DISTINCT_ONLY flag is not set, we may get a DISTINCT_SCAN plan that filters out some

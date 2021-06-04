@@ -10,6 +10,7 @@ namespace mongo {
  */
 namespace inner_pipeline {
 struct Stage {
+    virtual ~Stage() {}
     virtual StringData name() const = 0;
 };
 

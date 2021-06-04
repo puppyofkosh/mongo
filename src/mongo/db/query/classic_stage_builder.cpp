@@ -51,6 +51,7 @@
 #include "mongo/db/exec/index_scan.h"
 #include "mongo/db/exec/limit.h"
 #include "mongo/db/exec/merge_sort.h"
+#include "mongo/db/exec/multi_plan.h"
 #include "mongo/db/exec/or.h"
 #include "mongo/db/exec/projection.h"
 #include "mongo/db/exec/queued_data_stage.h"
@@ -406,13 +407,28 @@ std::unique_ptr<PlanStage> ClassicStageBuilder::build(const QuerySolutionNode* r
             }
             return qds;
         }
+        case STAGE_MULTI_PLAN: {
+            const auto* mpn = static_cast<const MultiPlanNode*>(root);
+            auto ret = std::make_unique<MultiPlanStage>(expCtx, _collection, &_cq);
+            for (size_t i = 0; i < mpn->children.size(); ++i) {
+                auto childStage = build(mpn->children[i]);
+
+                auto querySolution = std::make_unique<QuerySolution>(_solution.plannerOptions);
+                
+                querySolution->setRoot(std::unique_ptr<QuerySolutionNode>(root->clone()));
+                ret->addPlan(std::move(querySolution),
+                             std::move(childStage),
+                             _ws);
+            }
+            return ret;
+        }
+
         case STAGE_CACHED_PLAN:
         case STAGE_COUNT:
         case STAGE_DELETE:
         case STAGE_IDHACK:
         case STAGE_MOCK:
         case STAGE_MULTI_ITERATOR:
-        case STAGE_MULTI_PLAN:
         case STAGE_QUEUED_DATA:
         case STAGE_RECORD_STORE_FAST_COUNT:
         case STAGE_SAMPLE_FROM_TIMESERIES_BUCKET:

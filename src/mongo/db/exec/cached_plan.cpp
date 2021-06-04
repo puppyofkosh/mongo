@@ -217,7 +217,7 @@ Status CachedPlanStage::replan(PlanYieldPolicy* yieldPolicy, bool shouldCache, s
             str::stream() << "error processing query: " << _canonicalQuery->toString()
                           << " planner returned error");
     }
-    auto solutions = std::move(statusWithSolutions.getValue());
+    auto solutions = std::move(statusWithSolutions.getValue().multiPlanCandidates);
 
     if (1 == solutions.size()) {
         // Only one possible plan. Build the stages from the solution.

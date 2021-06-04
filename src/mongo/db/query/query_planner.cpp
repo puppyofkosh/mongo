@@ -1144,10 +1144,16 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::planCqWith
     return {std::move(out)};
 }
 
-StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::plan(
+StatusWith<QueryPlannerResult> QueryPlanner::plan(
     const CanonicalQuery& query, const QueryPlannerParams& params) {
     auto swPlans = planCqWithoutPipeline(query, params);
-    return swPlans;
+    if (!swPlans.isOK()) {
+        return swPlans.getStatus();
+    }
+
+    QueryPlannerResult res;
+    res.multiPlanCandidates = std::move(swPlans.getValue());
+    return res;
     // if (!swPlans.isOK()) {
     //     return swPlans;
     // }
@@ -1234,14 +1240,14 @@ StatusWith<QueryPlanner::SubqueriesPlanningResult> QueryPlanner::planSubqueries(
             // We don't set NO_TABLE_SCAN because peeking at the cache data will keep us from
             // considering any plan that's a collscan.
             invariant(branchResult->solutions.empty());
-            auto solutions = QueryPlanner::plan(*branchResult->canonicalQuery, params);
-            if (!solutions.isOK()) {
+            auto plannerRes = QueryPlanner::plan(*branchResult->canonicalQuery, params);
+            if (!plannerRes.isOK()) {
                 str::stream ss;
                 ss << "Can't plan for subchild " << branchResult->canonicalQuery->toString() << " "
-                   << solutions.getStatus().reason();
+                   << plannerRes.getStatus().reason();
                 return Status(ErrorCodes::BadValue, ss);
             }
-            branchResult->solutions = std::move(solutions.getValue());
+            branchResult->solutions = std::move(plannerRes.getValue().multiPlanCandidates);
 
             LOGV2_DEBUG(20601,
                         5,

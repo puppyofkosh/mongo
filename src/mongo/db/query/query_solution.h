@@ -72,8 +72,6 @@ public:
         : _baseSortPattern(std::move(pattern)), _ignoredFields(std::move(ignoreFields)) {}
     ProvidedSortSet() = default;
 
-    static ProvidedSortSet kEmpty;
-
     /**
      * Returns true if the 'input' sort order is provided.
      *
@@ -108,6 +106,8 @@ private:
     // collations fields since they can contribute to the sort order.
     std::set<std::string> _ignoredFields;
 };
+
+static const ProvidedSortSet kEmptyProvidedSortSet{};
 
 /**
  * This is an abstract representation of a query plan.  It can be transcribed into a tree of
@@ -1321,7 +1321,7 @@ struct HashAggNode : public QuerySolutionNode {
         return false;
     }
     const ProvidedSortSet& providedSorts() const {
-        return ProvidedSortSet::kEmpty;
+        return kEmptyProvidedSortSet;
     }
 
     QuerySolutionNode* clone() const {
@@ -1355,7 +1355,7 @@ struct HashJoinNode : public QuerySolutionNode {
         return false;
     }
     const ProvidedSortSet& providedSorts() const {
-        return ProvidedSortSet::kEmpty;
+        return kEmptyProvidedSortSet;
     }
 
     QuerySolutionNode* clone() const {
@@ -1364,44 +1364,48 @@ struct HashJoinNode : public QuerySolutionNode {
     }
 };
 
-// struct MultiPlanNode : public QuerySolutionNode {
-//     MultiPlanNode() {}
-//     MultiPlanNode(std::vector<std::unique_ptr<QuerySolutionNode>> ownedChildren) {
-//         for (auto & child : ownedChildren) {
-//             children.push_back(child.release());
-//         }
-//     }
-//     ~MultiPlanNode() {}
+struct MultiPlanNode : public QuerySolutionNode {
+    MultiPlanNode() {}
+    MultiPlanNode(std::vector<std::unique_ptr<QuerySolutionNode>> ownedChildren) {
+        for (auto & child : ownedChildren) {
+            children.push_back(child.release());
+        }
+    }
+    ~MultiPlanNode() {}
 
-//     virtual StageType getType() const {
-//         return STAGE_MULTI_PLAN;
-//     }
+    StageType getType() const override {
+        return STAGE_MULTI_PLAN;
+    }
 
-//     virtual void appendToString(str::stream* ss, int indent) const;
+    virtual void appendToString(str::stream* ss, int indent) const {
+    }
 
-//     bool fetched() const {
-//         for (size_t i = 0; i < children.size(); ++i) {
-//             if (!children[i]->fetched()) {
-//                 return false;
-//             }
-//         }
-//         return true;
-//     }
-//     FieldAvailability getFieldAvailability(const std::string& field) const {
-//         auto result = FieldAvailability::kFullyProvided;
-//         for (size_t i = 0; i < children.size(); ++i) {
-//             result = std::min(result, children[i]->getFieldAvailability(field));
-//         }
-//         return result;
-//     }
-//     bool sortedByDiskLoc() const {
-//         return false;
-//     }
-//     const ProvidedSortSet& providedSorts() const {
-//         return ProvidedSortSet::kEmpty;
-//     }
+    bool fetched() const {
+        for (size_t i = 0; i < children.size(); ++i) {
+            if (!children[i]->fetched()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    FieldAvailability getFieldAvailability(const std::string& field) const {
+        auto result = FieldAvailability::kFullyProvided;
+        for (size_t i = 0; i < children.size(); ++i) {
+            result = std::min(result, children[i]->getFieldAvailability(field));
+        }
+        return result;
+    }
+    bool sortedByDiskLoc() const {
+        return false;
+    }
+    const ProvidedSortSet& providedSorts() const {
+    
+        // TODO: could add some kind of way to intersect all children's sorts but I don't think
+        // we'll ever use this, so whatever.
+        return kEmptyProvidedSortSet;
+    }
 
-//     QuerySolutionNode* clone() const;
-// };
+    QuerySolutionNode* clone() const;
+};
 
 }  // namespace mongo

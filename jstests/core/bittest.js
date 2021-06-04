@@ -152,7 +152,7 @@ assertQueryCorrect({
     }
 },
                    1);
-
+print("ian: now");
 coll.drop();
 
 // Test that NaNs and non-integral ints are filtered out.
