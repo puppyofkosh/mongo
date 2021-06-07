@@ -1308,7 +1308,7 @@ struct HashAggNode : public QuerySolutionNode {
         return STAGE_HASH_AGG;
     }
 
-    virtual void appendToString(str::stream* ss, int indent) const;
+    virtual void appendToString(str::stream* ss, int indent) const {}
 
     bool fetched() const {
         return true;
@@ -1367,7 +1367,7 @@ struct HashJoinNode : public QuerySolutionNode {
 struct MultiPlanNode : public QuerySolutionNode {
     MultiPlanNode() {}
     MultiPlanNode(std::vector<std::unique_ptr<QuerySolutionNode>> ownedChildren) {
-        for (auto & child : ownedChildren) {
+        for (auto& child : ownedChildren) {
             children.push_back(child.release());
         }
     }
@@ -1377,8 +1377,7 @@ struct MultiPlanNode : public QuerySolutionNode {
         return STAGE_MULTI_PLAN;
     }
 
-    virtual void appendToString(str::stream* ss, int indent) const {
-    }
+    virtual void appendToString(str::stream* ss, int indent) const {}
 
     bool fetched() const {
         for (size_t i = 0; i < children.size(); ++i) {
@@ -1399,7 +1398,7 @@ struct MultiPlanNode : public QuerySolutionNode {
         return false;
     }
     const ProvidedSortSet& providedSorts() const {
-    
+
         // TODO: could add some kind of way to intersect all children's sorts but I don't think
         // we'll ever use this, so whatever.
         return kEmptyProvidedSortSet;

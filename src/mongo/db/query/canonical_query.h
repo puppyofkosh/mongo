@@ -237,7 +237,7 @@ public:
     }
 
     // Should be private etc
-    inner_pipeline::InnerPipeline innerPipeline;
+    InnerPipeline innerPipeline;
 
 private:
     // You must go through canonicalize to create a CanonicalQuery.

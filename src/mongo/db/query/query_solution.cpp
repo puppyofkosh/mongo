@@ -1398,12 +1398,11 @@ QuerySolutionNode* TextMatchNode::clone() const {
 
 QuerySolutionNode* MultiPlanNode::clone() const {
     std::vector<std::unique_ptr<QuerySolutionNode>> clonedChildren;
-    for (auto && c : children) {
+    for (auto&& c : children) {
         clonedChildren.push_back(std::unique_ptr<QuerySolutionNode>(c->clone()));
     }
     return std::make_unique<MultiPlanNode>(std::move(clonedChildren)).release();
 }
-
 
 
 }  // namespace mongo

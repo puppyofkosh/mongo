@@ -5,10 +5,21 @@
 
 namespace mongo {
 
+class DocumentSource;
+
 /**
  * Representation of agg pipeline stages which can be pushed into the "inner" find() layer.
  */
+
+struct InnerPipelineStage {
+    virtual ~InnerPipelineStage() {}
+    virtual DocumentSource* ds() = 0;
+};
+
+using InnerPipeline = std::vector<std::unique_ptr<InnerPipelineStage>>;
+
 namespace inner_pipeline {
+
 struct Stage {
     virtual ~Stage() {}
     virtual StringData name() const = 0;
@@ -37,8 +48,8 @@ struct GroupStage : public Stage {
     }
 };
 
-struct InnerPipeline {
-    std::vector<std::unique_ptr<Stage>> stages;
-};
+// struct InnerPipeline {
+//     std::vector<std::unique_ptr<Stage>> stages;
+// };
 }  // namespace inner_pipeline
 }  // namespace mongo

@@ -73,6 +73,7 @@
 #include "mongo/db/query/collation/collator_interface.h"
 #include "mongo/db/query/get_executor.h"
 #include "mongo/db/query/inner_pipeline.h"
+#include "mongo/db/query/inner_pipeline_stage.h"
 #include "mongo/db/query/plan_executor_factory.h"
 #include "mongo/db/query/plan_summary_stats.h"
 #include "mongo/db/query/query_planner.h"
@@ -363,12 +364,12 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
                 std::cout << "ian: We gotta lookup eligible for pushdown\n";
                 auto stage = pipeline->popFront();
 
-                cq.getValue()->innerPipeline.stages.push_back(
-                    std::make_unique<inner_pipeline::EqLookupStage>(lookup->resolvedNs(),
-                                                                    *lookup->getLocalField(),
-                                                                    *lookup->getForeignField(),
-                                                                    lookup->getAs()));
+                cq.getValue()->innerPipeline.push_back(
+                    std::make_unique<InnerPipelineStageImpl>(stage));
             }
+        } else if (pipeline->peekFront() && pipeline->peekFront()->getSourceName() == "$group"_sd) {
+            auto stage = pipeline->popFront();
+            cq.getValue()->innerPipeline.push_back(std::make_unique<InnerPipelineStageImpl>(stage));
         }
     }
 

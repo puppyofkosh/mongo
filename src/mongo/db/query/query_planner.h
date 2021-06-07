@@ -40,10 +40,10 @@ class CachedSolution;
 class Collection;
 class CollectionPtr;
 
-    struct QueryPlannerResult {
-        std::vector<std::unique_ptr<QuerySolution>> multiPlanCandidates;
-        std::unique_ptr<QuerySolution> postMultiPlan;
-    };
+struct QueryPlannerResult {
+    std::vector<std::unique_ptr<QuerySolution>> multiPlanCandidates;
+    std::unique_ptr<QuerySolutionNode> postMultiPlan;
+};
 
 /**
  * QueryPlanner's job is to provide an entry point to the query planning and optimization
@@ -89,8 +89,8 @@ public:
      * Returns the list of possible query solutions for the provided 'query'. Uses the indices and
      * other data in 'params' to determine the set of available plans.
      */
-    static StatusWith<QueryPlannerResult> plan(
-        const CanonicalQuery& query, const QueryPlannerParams& params);
+    static StatusWith<QueryPlannerResult> plan(const CanonicalQuery& query,
+                                               const QueryPlannerParams& params);
     static StatusWith<std::vector<std::unique_ptr<QuerySolution>>> planCqWithoutPipeline(
         const CanonicalQuery& query, const QueryPlannerParams& params);
 

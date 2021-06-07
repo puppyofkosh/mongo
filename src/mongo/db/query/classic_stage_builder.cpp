@@ -414,11 +414,9 @@ std::unique_ptr<PlanStage> ClassicStageBuilder::build(const QuerySolutionNode* r
                 auto childStage = build(mpn->children[i]);
 
                 auto querySolution = std::make_unique<QuerySolution>(_solution.plannerOptions);
-                
+
                 querySolution->setRoot(std::unique_ptr<QuerySolutionNode>(root->clone()));
-                ret->addPlan(std::move(querySolution),
-                             std::move(childStage),
-                             _ws);
+                ret->addPlan(std::move(querySolution), std::move(childStage), _ws);
             }
             return ret;
         }

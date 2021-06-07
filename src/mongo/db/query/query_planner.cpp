@@ -44,6 +44,8 @@
 #include "mongo/db/matcher/expression_algo.h"
 #include "mongo/db/matcher/expression_geo.h"
 #include "mongo/db/matcher/expression_text.h"
+#include "mongo/db/pipeline/document_source_group.h"
+#include "mongo/db/pipeline/document_source_lookup.h"
 #include "mongo/db/query/canonical_query.h"
 #include "mongo/db/query/collation/collation_index_key.h"
 #include "mongo/db/query/collation/collator_interface.h"
@@ -1144,8 +1146,8 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::planCqWith
     return {std::move(out)};
 }
 
-StatusWith<QueryPlannerResult> QueryPlanner::plan(
-    const CanonicalQuery& query, const QueryPlannerParams& params) {
+StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
+                                                  const QueryPlannerParams& params) {
     auto swPlans = planCqWithoutPipeline(query, params);
     if (!swPlans.isOK()) {
         return swPlans.getStatus();
@@ -1153,6 +1155,18 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(
 
     QueryPlannerResult res;
     res.multiPlanCandidates = std::move(swPlans.getValue());
+    std::unique_ptr<QuerySolutionNode> newQsn;
+
+    for (auto&& stage : query.innerPipeline) {
+        if (auto* lookup = dynamic_cast<DocumentSourceLookUp*>(stage->ds()); lookup) {
+            // newQsn = std::make_unique<HashJoinNode>();
+        } else if (auto* group = dynamic_cast<DocumentSourceGroup*>(stage->ds()); group) {
+            // TODO: Maybe use some kind of sentinel node instead.
+            newQsn = std::make_unique<HashAggNode>(nullptr);
+        }
+    }
+    res.postMultiPlan = std::move(newQsn);
+
     return res;
     // if (!swPlans.isOK()) {
     //     return swPlans;
