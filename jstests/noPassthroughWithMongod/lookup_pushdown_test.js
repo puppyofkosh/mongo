@@ -1,7 +1,7 @@
 (function() {
     "use strict";
 
-    assert.commandWorked(db.adminCommand({setParameter: 1, "traceExceptions": true}));
+    //assert.commandWorked(db.adminCommand({setParameter: 1, "traceExceptions": true}));
 
     const groupBy = db.groupBy;
     assert.commandWorked(groupBy.insert({a: 1, b: 1}));
@@ -9,8 +9,15 @@
     assert.commandWorked(groupBy.insert({a: 2, b: 1}));
     assert.commandWorked(groupBy.insert({a: 2, b: 1}));
 
-    print("ian: running expl " + tojson(groupBy.explain().aggregate([{$group: {_id: "$a"}}])));
-    print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: "$a"}}]).toArray()));
+    assert.commandWorked(groupBy.insert({a: {b: 3}}));
+    assert.commandWorked(groupBy.insert({a: {b: 3}}));
+    assert.commandWorked(groupBy.insert({a: {b: 4}}));
+    assert.commandWorked(groupBy.insert({a: {b: 4}}));
+
+    print("ian: running expl " + tojson(groupBy.explain().aggregate([{$group: {_id: "$a.b"}}])));
+    print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: "$a.b"}}]).toArray()));
+
+    print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: {$add: ["$a.b", 1]}}}]).toArray()));
 
     if (0) {
         const local = db.local;

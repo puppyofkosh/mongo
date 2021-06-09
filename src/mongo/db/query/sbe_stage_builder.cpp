@@ -59,6 +59,7 @@
 #include "mongo/db/query/sbe_stage_builder_filter.h"
 #include "mongo/db/query/sbe_stage_builder_index_scan.h"
 #include "mongo/db/query/sbe_stage_builder_projection.h"
+#include "mongo/db/query/sbe_stage_builder_expression.h"
 #include "mongo/db/query/util/make_data_structure.h"
 #include "mongo/db/s/collection_sharding_state.h"
 #include "mongo/db/storage/execution_context.h"
@@ -2164,19 +2165,21 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     auto childReqs = reqs.copy().set(PlanStageSlots::kResult);
     auto [inputStage, childOutputs] = build(pn->children[0], childReqs);
 
-    // TODO: this is a hack until we can run the GB expressions.
-    const std::vector<std::string> gbFieldNames{"a"};
-    auto getFieldExpr = makeFunction("getField"_sd,
-                                     makeVariable(childOutputs.get(kResult)),
-                                     // TODO: this is hardcoded
-                                     // TODO: Oops! This is also incorrect. We need to evaluate the expression, not just use the field name!
-                                     sbe::makeE<sbe::EConstant>(gbFieldNames[0]));
+    invariant(pn->groupBy().size() == 1);
+
+    EvalStage evalStage;
+    evalStage.stage = std::move(inputStage);
+    evalStage.outSlots = sbe::makeSV(childOutputs.get(kResult));
+    auto [gbOutputSlot, gbExpr, gbStage] = generateExpression(_state, pn->groupBy()[0],
+                                                              std::move(evalStage),
+                                                              childOutputs.get(kResult),
+                                                              root->nodeId());
 
     auto gbSlotId = _slotIdGenerator.generate();
-    auto projectStage = sbe::makeProjectStage(std::move(inputStage),
+    auto projectStage = sbe::makeProjectStage(std::move(gbStage.stage),
                                               root->nodeId(),
                                               gbSlotId,
-                                              std::move(getFieldExpr));
+                                              std::move(gbExpr));
 
     sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs;
     auto hashAggStage = std::make_unique<sbe::HashAggStage>(std::move(projectStage),
@@ -2188,7 +2191,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     std::vector<std::unique_ptr<sbe::EExpression>> mkObjArgs;
 
     // TODO: Just distinct by one field for now.
-    mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(gbFieldNames[0]));
+    mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(pn->groupByFieldNames()[0]));
     mkObjArgs.emplace_back(sbe::makeE<sbe::EVariable>(gbSlotId));
 
     auto newObjExpression = sbe::makeE<sbe::EFunction>("newObj", std::move(mkObjArgs));
