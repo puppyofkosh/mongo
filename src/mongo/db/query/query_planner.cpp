@@ -1161,8 +1161,15 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
         if (auto* lookup = dynamic_cast<DocumentSourceLookUp*>(stage->ds()); lookup) {
             // newQsn = std::make_unique<HashJoinNode>();
         } else if (auto* group = dynamic_cast<DocumentSourceGroup*>(stage->ds()); group) {
+            std::vector<std::string> groupByFieldNames;
+            std::vector<Expression*> groupBy;
+            for (auto& idField : group->getIdFields()) {
+                groupByFieldNames.push_back(idField.first);
+                groupBy.push_back(idField.second.get());
+            }
+
             // TODO: Maybe use some kind of sentinel node instead.
-            newQsn = std::make_unique<HashAggNode>(nullptr);
+            newQsn = std::make_unique<HashAggNode>(std::move(newQsn), groupByFieldNames, groupBy);
         }
     }
     res.postMultiPlan = std::move(newQsn);

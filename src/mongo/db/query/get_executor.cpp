@@ -104,6 +104,24 @@
 
 namespace mongo {
 
+std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution> multiPlanned,
+                                                       std::unique_ptr<QuerySolutionNode> innerPipeline) {
+    // Find the bottom of the inner pipeline.
+
+    // For now we only look in the 0th child since by coincidence the nullptr/sentinel node is guaranteed to be there.
+    QuerySolutionNode* current = innerPipeline.get();
+    invariant(!current->children.empty());
+    while (current->children[0]) {
+        current = current->children[0];
+    }
+
+    current->children[0] = multiPlanned->extractRoot().release();
+    multiPlanned->setRoot(std::move(innerPipeline));
+
+    // We may have to recompute some properties, but for POC we don't care.
+    return multiPlanned;
+}
+
 boost::intrusive_ptr<ExpressionContext> makeExpressionContextForGetExecutor(
     OperationContext* opCtx, const BSONObj& requestCollation, const NamespaceString& nss) {
     invariant(opCtx);
@@ -684,9 +702,17 @@ public:
 
         if (1 == solutions.size()) {
             auto result = makeResult();
+
+            // ianb NOTE: At some point I need to figure out where we'll choose to _not_ do this
+            // for SBE. There's probably going to be some complexity in cases where we simply
+            // cannot use SBE for the find() layer. What will we do with the pushed down stages?
+            // Return some special value to indicate they need to be executed in the agg layer? I
+            // have to think about this...
+            auto finalSolution = stitchInnerPipeline(std::move(solutions[0]), std::move(plannerRes.postMultiPlan));
+            
             // Only one possible plan. Run it. Build the stages from the solution.
-            auto root = buildExecutableTree(*solutions[0]);
-            result->emplace(std::move(root), std::move(solutions[0]));
+            auto root = buildExecutableTree(*finalSolution);
+            result->emplace(std::move(root), std::move(finalSolution));
 
             LOGV2_DEBUG(20926,
                         2,
@@ -1144,6 +1170,8 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
                                                   result->needsSubplanning(),
                                                   yieldPolicy.get(),
                                                   plannerOptions)) {
+        // TODO: stitching needs to happen
+
         // Do the runtime planning and pick the best candidate plan.
         auto candidates = planner->plan(std::move(solutions), std::move(roots));
         return plan_executor_factory::make(opCtx,
@@ -1154,6 +1182,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
                                            std::move(nss),
                                            std::move(yieldPolicy));
     }
+
     // No need for runtime planning, just use the constructed plan stage tree.
     invariant(roots.size() == 1);
     return plan_executor_factory::make(opCtx,

@@ -873,6 +873,7 @@ RuntimeEnvironment::Accessor* RuntimeEnvironment::getAccessor(value::SlotId slot
         return &it->second;
     }
 
+    MONGO_UNREACHABLE;
     uasserted(4946301, str::stream() << "undefined slot accessor:" << slot);
 }
 

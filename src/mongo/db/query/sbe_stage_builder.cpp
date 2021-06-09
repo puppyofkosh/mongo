@@ -492,6 +492,11 @@ SlotBasedStageBuilder::SlotBasedStageBuilder(OperationContext* opCtx,
         auto vsn = static_cast<const VirtualScanNode*>(node);
         _shouldProduceRecordIdSlot = vsn->hasRecordId;
     }
+
+    // TODO: maybe some nicer way to do this
+    if (getNodeByType(solution.root(), STAGE_HASH_AGG)) {
+        _shouldProduceRecordIdSlot = false;
+    }
 }
 
 std::unique_ptr<sbe::PlanStage> SlotBasedStageBuilder::build(const QuerySolutionNode* root) {
@@ -2148,6 +2153,57 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
             std::move(outputs)};
 }
 
+std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildHashAgg(
+    const QuerySolutionNode* root, const PlanStageReqs& reqs) {
+    using namespace std::literals;
+    invariant(!reqs.getIndexKeyBitset());
+
+    auto pn = static_cast<const HashAggNode*>(root);
+
+    // Eventually we can do covered group-by + group-by without constructing an intermediate document.
+    auto childReqs = reqs.copy().set(PlanStageSlots::kResult);
+    auto [inputStage, childOutputs] = build(pn->children[0], childReqs);
+
+    // TODO: this is a hack until we can run the GB expressions.
+    const std::vector<std::string> gbFieldNames{"a"};
+    auto getFieldExpr = makeFunction("getField"_sd,
+                                     makeVariable(childOutputs.get(kResult)),
+                                     // TODO: this is hardcoded
+                                     // TODO: Oops! This is also incorrect. We need to evaluate the expression, not just use the field name!
+                                     sbe::makeE<sbe::EConstant>(gbFieldNames[0]));
+
+    auto gbSlotId = _slotIdGenerator.generate();
+    auto projectStage = sbe::makeProjectStage(std::move(inputStage),
+                                              root->nodeId(),
+                                              gbSlotId,
+                                              std::move(getFieldExpr));
+
+    sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs;
+    auto hashAggStage = std::make_unique<sbe::HashAggStage>(std::move(projectStage),
+                                                            sbe::makeSV(gbSlotId),
+                                                            std::move(aggs),
+                                                            boost::none,
+                                                            root->nodeId());
+
+    std::vector<std::unique_ptr<sbe::EExpression>> mkObjArgs;
+
+    // TODO: Just distinct by one field for now.
+    mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(gbFieldNames[0]));
+    mkObjArgs.emplace_back(sbe::makeE<sbe::EVariable>(gbSlotId));
+
+    auto newObjExpression = sbe::makeE<sbe::EFunction>("newObj", std::move(mkObjArgs));
+    auto resSlotId{_slotIdGenerator.generate()};
+    auto secondProjectStage = sbe::makeProjectStage(std::move(hashAggStage), root->nodeId(),
+                                                    resSlotId, std::move(newObjExpression));
+    PlanStageSlots outSlots;
+    outSlots.set(kResult, resSlotId);
+
+    // TODO: should not return 'outputs' since most of the other slots won't be avaible
+    //return {std::move(hashAggStage), std::move(childOutputs)};
+    return {std::move(secondProjectStage), std::move(outSlots)};
+
+}
+
 // Returns a non-null pointer to the root of a plan tree, or a non-OK status if the PlanStage tree
 // could not be constructed.
 std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::build(
@@ -2170,6 +2226,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
             {STAGE_PROJECTION_DEFAULT, &SlotBasedStageBuilder::buildProjectionDefault},
             {STAGE_PROJECTION_COVERED, &SlotBasedStageBuilder::buildProjectionCovered},
             {STAGE_OR, &SlotBasedStageBuilder::buildOr},
+            {STAGE_HASH_AGG, &SlotBasedStageBuilder::buildHashAgg},
             // In SBE TEXT_OR behaves like a regular OR. All the work to support "textScore"
             // metadata is done outside of TEXT_OR, unlike the legacy implementation.
             {STAGE_TEXT_OR, &SlotBasedStageBuilder::buildOr},

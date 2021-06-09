@@ -1301,7 +1301,13 @@ struct TextMatchNode : public QuerySolutionNodeWithSortSet {
 
 struct HashAggNode : public QuerySolutionNode {
     HashAggNode() {}
-    HashAggNode(std::unique_ptr<QuerySolutionNode> child) : QuerySolutionNode(std::move(child)) {}
+    HashAggNode(std::unique_ptr<QuerySolutionNode> child,
+                std::vector<std::string> groupByFieldNames,
+                std::vector<Expression*> groupBy) :
+        QuerySolutionNode(std::move(child)),
+        _groupByFieldNames(std::move(groupByFieldNames)),
+        _groupBy(std::move(groupBy))
+    {}
     virtual ~HashAggNode() {}
 
     virtual StageType getType() const {
@@ -1325,8 +1331,21 @@ struct HashAggNode : public QuerySolutionNode {
     }
 
     QuerySolutionNode* clone() const {
-        return new HashAggNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()));
+        return new HashAggNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()), _groupByFieldNames,
+                               _groupBy);
     }
+
+    const std::vector<Expression*>& groupBy() const {
+        return _groupBy;
+    }
+
+    const std::vector<std::string>& groupByFieldNames() const {
+        return _groupByFieldNames;
+    }
+
+private:
+    std::vector<std::string> _groupByFieldNames;
+    std::vector<Expression*> _groupBy;
 };
 
 struct HashJoinNode : public QuerySolutionNode {
