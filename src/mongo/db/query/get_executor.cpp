@@ -105,18 +105,21 @@
 namespace mongo {
 
 std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution> multiPlanned,
-                                                       std::unique_ptr<QuerySolutionNode> innerPipeline) {
+                                                   std::unique_ptr<QuerySolutionNode> innerPipeline) {
     // Find the bottom of the inner pipeline.
 
     // For now we only look in the 0th child since by coincidence the nullptr/sentinel node is guaranteed to be there.
     QuerySolutionNode* current = innerPipeline.get();
-    invariant(!current->children.empty());
-    while (current->children[0]) {
-        current = current->children[0];
-    }
 
-    current->children[0] = multiPlanned->extractRoot().release();
-    multiPlanned->setRoot(std::move(innerPipeline));
+    if (current) {
+        invariant(!current->children.empty());
+        while (current->children[0]) {
+            current = current->children[0];
+        }
+
+        current->children[0] = multiPlanned->extractRoot().release();
+        multiPlanned->setRoot(std::move(innerPipeline));
+    }
 
     // We may have to recompute some properties, but for POC we don't care.
     return multiPlanned;
