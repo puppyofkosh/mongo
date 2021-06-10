@@ -1169,7 +1169,8 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
             }
 
             // TODO: Maybe use some kind of sentinel node instead.
-            newQsn = std::make_unique<HashAggNode>(std::move(newQsn), groupByFieldNames, groupBy);
+            newQsn = std::make_unique<HashAggNode>(std::move(newQsn), groupByFieldNames, groupBy,
+                                                   group->getAccumulatedFields());
         }
     }
     res.postMultiPlan = std::move(newQsn);

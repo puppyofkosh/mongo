@@ -40,6 +40,9 @@
 #include "mongo/db/query/plan_cache.h"
 #include "mongo/db/query/plan_enumerator_explain_info.h"
 #include "mongo/db/query/stage_types.h"
+
+#include "mongo/db/pipeline/accumulation_statement.h"
+
 #include "mongo/util/id_generator.h"
 
 namespace mongo {
@@ -1303,10 +1306,13 @@ struct HashAggNode : public QuerySolutionNode {
     HashAggNode() {}
     HashAggNode(std::unique_ptr<QuerySolutionNode> child,
                 std::vector<std::string> groupByFieldNames,
-                std::vector<Expression*> groupBy) :
+                std::vector<Expression*> groupBy,
+                std::vector<AccumulationStatement> accumulators
+        ) :
         QuerySolutionNode(std::move(child)),
         _groupByFieldNames(std::move(groupByFieldNames)),
-        _groupBy(std::move(groupBy))
+        _groupBy(std::move(groupBy)),
+        _accumulators(std::move(accumulators))
     {}
     virtual ~HashAggNode() {}
 
@@ -1332,7 +1338,7 @@ struct HashAggNode : public QuerySolutionNode {
 
     QuerySolutionNode* clone() const {
         return new HashAggNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()), _groupByFieldNames,
-                               _groupBy);
+                               _groupBy, _accumulators);
     }
 
     const std::vector<Expression*>& groupBy() const {
@@ -1343,9 +1349,14 @@ struct HashAggNode : public QuerySolutionNode {
         return _groupByFieldNames;
     }
 
+    const std::vector<AccumulationStatement> accumulators() const {
+        return _accumulators;
+    }
+
 private:
     std::vector<std::string> _groupByFieldNames;
     std::vector<Expression*> _groupBy;
+    std::vector<AccumulationStatement> _accumulators;
 };
 
 struct HashJoinNode : public QuerySolutionNode {

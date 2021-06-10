@@ -2176,23 +2176,48 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                                                               root->nodeId());
 
     auto gbSlotId = _slotIdGenerator.generate();
-    auto projectStage = sbe::makeProjectStage(std::move(gbStage.stage),
-                                              root->nodeId(),
-                                              gbSlotId,
-                                              std::move(gbExpr));
+    auto subtree = sbe::makeProjectStage(std::move(gbStage.stage),
+                                         root->nodeId(),
+                                         gbSlotId,
+                                         std::move(gbExpr));
 
+    // Group accumulators.
     sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs;
-    auto hashAggStage = std::make_unique<sbe::HashAggStage>(std::move(projectStage),
+
+    // arguments mkObj which is performed after the group.
+    std::vector<std::unique_ptr<sbe::EExpression>> mkObjArgs;
+    mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(pn->groupByFieldNames()[0]));
+    mkObjArgs.emplace_back(sbe::makeE<sbe::EVariable>(gbSlotId));
+
+    {
+        for (auto && acc : pn->accumulators()) {
+            // Evaluate the expression used as the argument to the accumulator function.
+
+            EvalStage child;
+            child.stage = std::move(subtree);
+            evalStage.outSlots = sbe::makeSV(childOutputs.get(kResult));
+            auto [outputSlot, expr, stage] = generateExpression(_state,
+                                                                acc.expr.argument.get(),
+                                                                std::move(child),
+                                                                childOutputs.get(kResult),
+                                                                root->nodeId());
+
+            subtree = std::move(stage.stage);
+
+            // Set up the invocation of the accumulator function. Let's just hope the accumulator was $min.
+            auto aggSlot{_slotIdGenerator.generate()};
+            aggs.emplace(aggSlot, makeFunction("min", std::move(expr)));
+            mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(acc.fieldName));
+            mkObjArgs.emplace_back(sbe::makeE<sbe::EVariable>(aggSlot));
+        }
+    }
+
+    auto hashAggStage = std::make_unique<sbe::HashAggStage>(std::move(subtree),
                                                             sbe::makeSV(gbSlotId),
                                                             std::move(aggs),
                                                             boost::none,
                                                             root->nodeId());
 
-    std::vector<std::unique_ptr<sbe::EExpression>> mkObjArgs;
-
-    // TODO: Just distinct by one field for now.
-    mkObjArgs.emplace_back(sbe::makeE<sbe::EConstant>(pn->groupByFieldNames()[0]));
-    mkObjArgs.emplace_back(sbe::makeE<sbe::EVariable>(gbSlotId));
 
     auto newObjExpression = sbe::makeE<sbe::EFunction>("newObj", std::move(mkObjArgs));
     auto resSlotId{_slotIdGenerator.generate()};

@@ -9,13 +9,14 @@
     assert.commandWorked(groupBy.insert({a: 2, b: 1}));
     assert.commandWorked(groupBy.insert({a: 2, b: 1}));
 
-    assert.commandWorked(groupBy.insert({a: {b: 3}}));
-    assert.commandWorked(groupBy.insert({a: {b: 3}}));
-    assert.commandWorked(groupBy.insert({a: {b: 4}}));
-    assert.commandWorked(groupBy.insert({a: {b: 4}}));
+    assert.commandWorked(groupBy.insert({a: {b: 3}, c: 0}));
+    assert.commandWorked(groupBy.insert({a: {b: 3}, c: -1}));
+    assert.commandWorked(groupBy.insert({a: {b: 4}, c: 2}));
+    assert.commandWorked(groupBy.insert({a: {b: 4}, c: 3}));
 
-    print("ian: running expl " + tojson(groupBy.explain().aggregate([{$group: {_id: "$a.b"}}])));
-    print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: "$a.b"}}]).toArray()));
+    let pipeline = [{$match: {"a.b": {$type: "number"}}}, {$group: {_id: "$a.b", minVal: {$min: "$c"}}}];
+    print("ian: running expl " + tojson(groupBy.explain().aggregate(pipeline)));
+    print("ian: running query " + tojson(groupBy.aggregate(pipeline).toArray()));
 
     print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: {$add: ["$a.b", 1]}}}]).toArray()));
 
