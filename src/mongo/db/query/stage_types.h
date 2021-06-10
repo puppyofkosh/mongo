@@ -128,6 +128,8 @@ enum StageType {
 
     STAGE_HASH_AGG,
     STAGE_HASH_JOIN,
+
+    STAGE_SENTINEL,
 };
 
 inline bool isProjectionStageType(StageType stageType) {

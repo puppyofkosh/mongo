@@ -1157,6 +1157,10 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
     res.multiPlanCandidates = std::move(swPlans.getValue());
     std::unique_ptr<QuerySolutionNode> newQsn;
 
+    if (!query.innerPipeline.empty()) {
+        newQsn = std::make_unique<SentinelNode>();
+    }
+
     for (auto&& stage : query.innerPipeline) {
         if (auto* lookup = dynamic_cast<DocumentSourceLookUp*>(stage->ds()); lookup) {
             // newQsn = std::make_unique<HashJoinNode>();

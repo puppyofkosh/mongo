@@ -113,7 +113,7 @@ std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution
 
     if (current) {
         invariant(!current->children.empty());
-        while (current->children[0]) {
+        while (current->children[0]->getType() != STAGE_SENTINEL) {
             current = current->children[0];
         }
 
@@ -514,6 +514,14 @@ public:
         _solutions.push_back(std::move(solution));
     }
 
+    void setPostMultiPlan(std::unique_ptr<QuerySolutionNode> post) {
+        _postMultiPlan = std::move(post);
+    }
+
+    QuerySolutionNode* postMultiPlan() {
+        return _postMultiPlan.get();
+    }
+
     std::string getPlanSummary() const final {
         // We can report plan summary only if this result contains a single solution.
         invariant(_roots.size() == 1);
@@ -549,6 +557,7 @@ public:
     }
 
 private:
+    std::unique_ptr<QuerySolutionNode> _postMultiPlan;
     QuerySolutionVector _solutions;
     PlanStageVector _roots;
     boost::optional<size_t> _decisionWorks;
@@ -726,8 +735,13 @@ public:
             return std::move(result);
         }
 
-        return buildMultiPlan(std::move(solutions), plannerParams);
+        return buildMultiPlan(std::move(plannerRes), plannerParams);
     }
+
+    /**
+     * Constructs a PlanStage tree from the given query 'solution'.
+     */
+    virtual PlanStageType buildExecutableTree(const QuerySolution& solution) const = 0;
 
 protected:
     /**
@@ -737,11 +751,6 @@ protected:
     auto makeResult() const {
         return std::make_unique<ResultType>();
     }
-
-    /**
-     * Constructs a PlanStage tree from the given query 'solution'.
-     */
-    virtual PlanStageType buildExecutableTree(const QuerySolution& solution) const = 0;
 
     /**
      * If supported, constructs a special PlanStage tree for fast-path document retrievals via the
@@ -782,7 +791,7 @@ protected:
      *      object, if multi-planning is implemented as a standalone component.
      */
     virtual std::unique_ptr<ResultType> buildMultiPlan(
-        std::vector<std::unique_ptr<QuerySolution>> solutions,
+        QueryPlannerResult result,
         const QueryPlannerParams& plannerParams) = 0;
 
     OperationContext* _opCtx;
@@ -908,8 +917,10 @@ protected:
     }
 
     std::unique_ptr<ClassicPrepareExecutionResult> buildMultiPlan(
-        std::vector<std::unique_ptr<QuerySolution>> solutions,
+        QueryPlannerResult qpResult,
         const QueryPlannerParams& plannerParams) final {
+        auto& solutions = qpResult.multiPlanCandidates;
+        
         // Many solutions. Create a MultiPlanStage to pick the best, update the cache,
         // and so on. The working set will be shared by all candidate plans.
         auto multiPlanStage =
@@ -945,12 +956,12 @@ class SlotBasedPrepareExecutionHelper final
 public:
     using PrepareExecutionHelper::PrepareExecutionHelper;
 
-protected:
     std::pair<std::unique_ptr<sbe::PlanStage>, stage_builder::PlanStageData> buildExecutableTree(
         const QuerySolution& solution) const final {
         return stage_builder::buildSlotBasedExecutableTree(
             _opCtx, _collection, *_cq, solution, _yieldPolicy);
     }
+protected:
 
     std::unique_ptr<SlotBasedPrepareExecutionResult> buildIdHackPlan(
         const IndexDescriptor* descriptor, QueryPlannerParams* plannerParams) final {
@@ -1034,9 +1045,10 @@ protected:
     }
 
     std::unique_ptr<SlotBasedPrepareExecutionResult> buildMultiPlan(
-        std::vector<std::unique_ptr<QuerySolution>> solutions,
+        QueryPlannerResult qpResult,
         const QueryPlannerParams& plannerParams) final {
         auto result = makeResult();
+        auto& solutions = qpResult.multiPlanCandidates;
         for (size_t ix = 0; ix < solutions.size(); ++ix) {
             if (solutions[ix]->cacheData.get()) {
                 solutions[ix]->cacheData->indexFilterApplied = plannerParams.indexFiltersApplied;
@@ -1045,6 +1057,8 @@ protected:
             auto execTree = buildExecutableTree(*solutions[ix]);
             result->emplace(std::move(execTree), std::move(solutions[ix]));
         }
+        result->setPostMultiPlan(std::move(qpResult.postMultiPlan));
+        
         return result;
     }
 };
@@ -1177,6 +1191,23 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
 
         // Do the runtime planning and pick the best candidate plan.
         auto candidates = planner->plan(std::move(solutions), std::move(roots));
+
+        // Stitch here.
+        for (auto& candidate : candidates.plans) {
+            candidate.solution = stitchInnerPipeline(
+                std::move(candidate.solution),
+                std::unique_ptr<QuerySolutionNode>(result->postMultiPlan()->clone()));
+        }
+
+        // re-build the plan executor for the best plan.
+        auto& winner = candidates.winner();
+        winner.results = decltype(winner.results){};
+        std::tie(winner.root, winner.data) = helper.buildExecutableTree(*winner.solution);
+
+        // ...
+        winner.root->prepare(winner.data.ctx);
+        winner.root->open(false);
+        
         return plan_executor_factory::make(opCtx,
                                            std::move(cq),
                                            std::move(candidates),

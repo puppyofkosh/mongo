@@ -1302,6 +1302,36 @@ struct TextMatchNode : public QuerySolutionNodeWithSortSet {
     bool wantTextScore;
 };
 
+struct SentinelNode : public QuerySolutionNode {
+    SentinelNode() {}
+
+    virtual StageType getType() const {
+        return STAGE_SENTINEL;
+    }
+
+    virtual void appendToString(str::stream* ss, int indent) const {}
+
+    bool fetched() const {
+        return false;
+    }
+    FieldAvailability getFieldAvailability(const std::string& field) const {
+        // TODO: ian
+        return FieldAvailability::kNotProvided;
+    }
+    bool sortedByDiskLoc() const {
+        return false;
+    }
+    const ProvidedSortSet& providedSorts() const {
+        return kEmptyProvidedSortSet;
+    }
+
+    QuerySolutionNode* clone() const {
+        return new SentinelNode();
+    }
+
+private:
+};
+    
 struct HashAggNode : public QuerySolutionNode {
     HashAggNode() {}
     HashAggNode(std::unique_ptr<QuerySolutionNode> child,

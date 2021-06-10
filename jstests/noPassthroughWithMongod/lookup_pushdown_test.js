@@ -18,7 +18,21 @@
     print("ian: running expl " + tojson(groupBy.explain().aggregate(pipeline)));
     print("ian: running query " + tojson(groupBy.aggregate(pipeline).toArray()));
 
-    print("ian: running query " + tojson(groupBy.aggregate([{$group: {_id: {$add: ["$a.b", 1]}}}]).toArray()));
+    // $group with multi planning
+    {
+        const groupByMp = db.groupByMp;
+        assert.commandWorked(groupBy.insert({ka: 1, kb: 1, a: 1, b: 1}));
+        assert.commandWorked(groupBy.insert({ka: 1, kb: 1, a: 1, b: 2}));
+        assert.commandWorked(groupBy.insert({ka: 1, kb: 1, a: 2, b: 3}));
+        assert.commandWorked(groupBy.insert({ka: 1, kb: 1, a: 2, b: 4}));
+
+        assert.commandWorked(groupByMp.createIndex({ka:1}));
+        assert.commandWorked(groupByMp.createIndex({kb:1}));
+
+        let pipeline = [{$match: {ka: 1, kb: 1}}, {$group: {_id: "$a", minVal: {$min: "$b"}}}];
+        print("ian: running expl " + tojson(groupByMp.explain().aggregate(pipeline)));
+        print("ian: running query " + tojson(groupBy.aggregate(pipeline).toArray()));
+    }
 
     if (0) {
         const local = db.local;
