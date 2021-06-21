@@ -2232,14 +2232,69 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
 std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildHashJoin(
     const QuerySolutionNode* root, const PlanStageReqs& reqs) {
     // Build the outer side and add a project stage to get the field we're joining by.
+    // TODO: Eventually must support nested fields and arrays etc. Not now though :)
+
     auto pn = static_cast<const HashJoinNode*>(root);
 
     auto leftReqs = reqs.copy().set(PlanStageSlots::kResult);
     auto [leftStage, leftOutputs] = build(pn->children[0], leftReqs);
 
-    
+    auto leftFieldSlot {_slotIdGenerator.generate()};
+    const auto leftResultSlot = leftOutputs.get(kResult);
+    leftStage = sbe::makeProjectStage(
+        std::move(leftStage), root->nodeId(),
+        leftFieldSlot,
+        makeFunction("getField"_sd,
+                     makeVariable(leftResultSlot),
+                     sbe::makeE<sbe::EConstant>(pn->leftFieldName.getFieldName(0))));
 
-    MONGO_UNREACHABLE;
+    // Same with right side.
+    auto rightReqs = reqs.copy().set(PlanStageSlots::kResult);
+    auto [rightStage, rightOutputs] = build(pn->children[1], rightReqs);
+
+    auto rightFieldSlot {_slotIdGenerator.generate()};
+    const auto rightResultSlot = rightOutputs.get(kResult);
+
+    rightStage = sbe::makeProjectStage(
+        std::move(rightStage), root->nodeId(),
+        rightFieldSlot,
+        makeFunction("getField"_sd,
+                     makeVariable(rightResultSlot),
+                     sbe::makeE<sbe::EConstant>(pn->rightFieldName.getFieldName(0))));
+
+    // Build a hash join.
+    auto hj = sbe::makeS<sbe::HashJoinStage>(
+        std::move(leftStage),
+        std::move(rightStage),
+        sbe::makeSV(leftFieldSlot),
+        sbe::makeSV(leftResultSlot, leftOutputs.get(kRecordId)),
+        sbe::makeSV(rightFieldSlot),
+        sbe::makeSV(rightResultSlot),
+        boost::none,
+        root->nodeId());
+
+
+    auto outObjSlot {
+        _slotIdGenerator.generate()
+    };
+    auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(std::move(hj),
+                                                   outObjSlot,
+                                                   leftResultSlot,
+                                                   // drop no fields
+                                                   sbe::MakeBsonObjStage::FieldBehavior::drop,
+                                                   std::vector<std::string>{},
+
+                                                   // TODO: Don't we get this from the DocumentSourceLookup??
+                                                   std::vector<std::string>{"joinField"},
+                                                   sbe::makeSV(rightResultSlot),
+                                                   true,
+                                                   false,
+                                                   root->nodeId());
+    PlanStageSlots outSlots;
+    outSlots.set(kResult, outObjSlot);
+    outSlots.set(kRecordId, leftOutputs.get(kRecordId));
+    
+    return {std::move(mkobj), std::move(outSlots)};
 }
 
 // Returns a non-null pointer to the root of a plan tree, or a non-OK status if the PlanStage tree
