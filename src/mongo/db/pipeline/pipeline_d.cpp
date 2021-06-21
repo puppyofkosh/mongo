@@ -361,9 +361,10 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
             auto lookup = static_cast<DocumentSourceLookUp*>(pipeline->peekFront());
             if (lookup->hasLocalFieldForeignFieldJoin() && !lookup->hasPipeline() &&
                 !lookup->hasUnwind() && lookup->resolvedPipeline().size() == 1) {
-                std::cout << "ian: We gotta lookup eligible for pushdown\n";
+                std::cout << "ian: We got a lookup eligible for pushdown\n";
                 auto stage = pipeline->popFront();
 
+                cq.getValue()->involvedNamespaces.push_back(lookup->resolvedNs());
                 cq.getValue()->innerPipeline.push_back(
                     std::make_unique<InnerPipelineStageImpl>(stage));
             }

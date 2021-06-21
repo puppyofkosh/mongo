@@ -241,6 +241,8 @@ Status CanonicalQuery::init(OperationContext* opCtx,
         _metadataDeps.set(DocumentMetadataFields::kIndexKey);
     }
 
+    involvedNamespaces.push_back(nss());
+
     return Status::OK();
 }
 

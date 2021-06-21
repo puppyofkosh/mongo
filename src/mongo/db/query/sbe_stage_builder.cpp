@@ -2226,10 +2226,20 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     PlanStageSlots outSlots;
     outSlots.set(kResult, resSlotId);
 
-    // TODO: should not return 'outputs' since most of the other slots won't be avaible
-    //return {std::move(hashAggStage), std::move(childOutputs)};
     return {std::move(secondProjectStage), std::move(outSlots)};
+}
 
+std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildHashJoin(
+    const QuerySolutionNode* root, const PlanStageReqs& reqs) {
+    // Build the outer side and add a project stage to get the field we're joining by.
+    auto pn = static_cast<const HashJoinNode*>(root);
+
+    auto leftReqs = reqs.copy().set(PlanStageSlots::kResult);
+    auto [leftStage, leftOutputs] = build(pn->children[0], leftReqs);
+
+    
+
+    MONGO_UNREACHABLE;
 }
 
 // Returns a non-null pointer to the root of a plan tree, or a non-OK status if the PlanStage tree
@@ -2255,6 +2265,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
             {STAGE_PROJECTION_COVERED, &SlotBasedStageBuilder::buildProjectionCovered},
             {STAGE_OR, &SlotBasedStageBuilder::buildOr},
             {STAGE_HASH_AGG, &SlotBasedStageBuilder::buildHashAgg},
+            {STAGE_HASH_JOIN, &SlotBasedStageBuilder::buildHashJoin},
             // In SBE TEXT_OR behaves like a regular OR. All the work to support "textScore"
             // metadata is done outside of TEXT_OR, unlike the legacy implementation.
             {STAGE_TEXT_OR, &SlotBasedStageBuilder::buildOr},

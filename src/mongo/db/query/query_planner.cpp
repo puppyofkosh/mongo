@@ -1163,7 +1163,28 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
 
     for (auto&& stage : query.innerPipeline) {
         if (auto* lookup = dynamic_cast<DocumentSourceLookUp*>(stage->ds()); lookup) {
-            // newQsn = std::make_unique<HashJoinNode>();
+
+            // TODO: Decide on join algorithm eventually.
+
+            auto scan = std::make_unique<CollectionScanNode>();
+            scan->name = lookup->resolvedNs().ns();
+            scan->filter = nullptr;
+            scan->tailable = false;
+
+            newQsn = std::make_unique<HashJoinNode>(std::move(newQsn),
+                                                    *lookup->getLocalField(),
+                                                    std::move(scan),
+                                                    *lookup->getForeignField());
+            
+            // Decide on join algorithm.
+
+            // (1) Figure out which indexes are available on the right side.
+
+            // (2) Check collection of right side.
+
+            // (3) nlj/coll scan
+            
+            //newQsn = std::make_unique<HashJoinNode>();
         } else if (auto* group = dynamic_cast<DocumentSourceGroup*>(stage->ds()); group) {
             std::vector<std::string> groupByFieldNames;
             std::vector<Expression*> groupBy;

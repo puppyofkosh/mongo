@@ -238,6 +238,7 @@ public:
 
     // Should be private etc
     InnerPipeline innerPipeline;
+    std::vector<NamespaceString> involvedNamespaces;
 
 private:
     // You must go through canonicalize to create a CanonicalQuery.

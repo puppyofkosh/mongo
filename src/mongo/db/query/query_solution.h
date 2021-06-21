@@ -1390,9 +1390,10 @@ private:
 };
 
 struct HashJoinNode : public QuerySolutionNode {
-    HashJoinNode() {}
     HashJoinNode(std::unique_ptr<QuerySolutionNode> left,
-                 std::unique_ptr<QuerySolutionNode> right) {
+                 FieldPath leftFieldName,
+                 std::unique_ptr<QuerySolutionNode> right,
+                 FieldPath rightFieldName) :leftFieldName(leftFieldName), rightFieldName(rightFieldName) {
         children.push_back(left.release());
         children.push_back(right.release());
     }
@@ -1402,7 +1403,8 @@ struct HashJoinNode : public QuerySolutionNode {
         return STAGE_HASH_JOIN;
     }
 
-    virtual void appendToString(str::stream* ss, int indent) const;
+    virtual void appendToString(str::stream* ss, int indent) const {
+    }
 
     bool fetched() const {
         return children[0]->fetched() && children[1]->fetched();
@@ -1420,8 +1422,13 @@ struct HashJoinNode : public QuerySolutionNode {
 
     QuerySolutionNode* clone() const {
         return new HashJoinNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
-                                std::unique_ptr<QuerySolutionNode>(children[1]->clone()));
+                                leftFieldName,
+                                std::unique_ptr<QuerySolutionNode>(children[1]->clone()),
+                                rightFieldName);
     }
+
+    FieldPath leftFieldName;
+    FieldPath rightFieldName;
 };
 
 struct MultiPlanNode : public QuerySolutionNode {

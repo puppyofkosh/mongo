@@ -104,11 +104,21 @@
 
 namespace mongo {
 
+/*
+TODO list:
+-get a $lookup to run
+
+-try to avoid intermediate document materialization
+-$lookup special behavior with arrays
+-$group special behavior with null/missing
+ */
+    
 std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution> multiPlanned,
                                                    std::unique_ptr<QuerySolutionNode> innerPipeline) {
     // Find the bottom of the inner pipeline.
 
-    // For now we only look in the 0th child since by coincidence the nullptr/sentinel node is guaranteed to be there.
+    // For now we only look in the 0th child since by coincidence/design the
+    // nullptr/sentinel node is guaranteed to be on the left side.
     QuerySolutionNode* current = innerPipeline.get();
 
     if (current) {
@@ -1165,6 +1175,16 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
     std::unique_ptr<CanonicalQuery> cq,
     PlanYieldPolicy::YieldPolicy requestedYieldPolicy,
     size_t plannerOptions) {
+
+    // Get locks for other collections involved.
+    // TODO: Eventually pass this along to the query planner which will use the
+    // Collection* object to approximate the number of records.
+    stdx::unordered_map<NamespaceString, std::unique_ptr<AutoGetCollectionForReadMaybeLockFree>> autoGets;
+    for (auto && ns : cq->involvedNamespaces) {
+        std::cout << "acquiring lock for " << ns << std::endl;
+        autoGets.emplace(ns, std::make_unique<AutoGetCollectionForReadMaybeLockFree>(opCtx, ns));
+    }
+    
     invariant(cq);
     auto nss = cq->nss();
     auto yieldPolicy = makeSbeYieldPolicy(opCtx, requestedYieldPolicy, collection, nss);
@@ -1192,7 +1212,8 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
         // Do the runtime planning and pick the best candidate plan.
         auto candidates = planner->plan(std::move(solutions), std::move(roots));
 
-        // Stitch here.
+        // Stitch here. We do it for all plans so that the explain output reflects
+        // the group/lookup in all plans.
         for (auto& candidate : candidates.plans) {
             candidate.solution = stitchInnerPipeline(
                 std::move(candidate.solution),

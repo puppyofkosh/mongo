@@ -34,7 +34,8 @@
         print("ian: running query " + tojson(groupBy.aggregate(pipeline).toArray()));
     }
 
-    if (0) {
+    // $lookup
+    {
         const local = db.local;
         const foreign = db.foreign;
 
