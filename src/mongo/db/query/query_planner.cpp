@@ -56,6 +56,7 @@
 #include "mongo/db/query/planner_ixselect.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/db/query/query_solution.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/logv2/log.h"
 
 namespace mongo {
@@ -1153,6 +1154,8 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
         return swPlans.getStatus();
     }
 
+    invariant(params.collections.count(query.nss()));
+    
     QueryPlannerResult res;
     res.multiPlanCandidates = std::move(swPlans.getValue());
     std::unique_ptr<QuerySolutionNode> newQsn;
@@ -1170,6 +1173,12 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
             scan->name = lookup->resolvedNs().ns();
             scan->filter = nullptr;
             scan->tailable = false;
+
+            invariant(params.collections.count(lookup->resolvedNs()));
+
+            auto it = params.collections.find(lookup->resolvedNs());
+            invariant(it != params.collections.end());
+            std::cout << "Foreign collection has approx " << it->second.approxNumRecords << std::endl;
 
             newQsn = std::make_unique<HashJoinNode>(std::move(newQsn),
                                                     *lookup->getLocalField(),

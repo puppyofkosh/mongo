@@ -111,6 +111,7 @@ TODO list:
 -try to avoid intermediate document materialization
 -$lookup special behavior with arrays
 -$group special behavior with null/missing
+-cached plans are completely broken
  */
     
 std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution> multiPlanned,
@@ -590,12 +591,14 @@ public:
                            const CollectionPtr& collection,
                            CanonicalQuery* cq,
                            PlanYieldPolicy* yieldPolicy,
-                           size_t plannerOptions)
+                           size_t plannerOptions,
+                           std::map<NamespaceString, CollectionInfo> colls)
         : _opCtx{opCtx},
           _collection{collection},
           _cq{cq},
           _yieldPolicy{yieldPolicy},
-          _plannerOptions{plannerOptions} {
+          _plannerOptions{plannerOptions},
+          _colls(std::move(colls)) {
         invariant(_cq);
     }
 
@@ -621,6 +624,7 @@ public:
         QueryPlannerParams plannerParams;
         plannerParams.options = _plannerOptions;
         fillOutPlannerParams(_opCtx, _collection, _cq, &plannerParams);
+        plannerParams.collections = _colls;
 
         // If the canonical query does not have a user-specified collation and no one has given the
         // CanonicalQuery a collation already, set it from the collection default.
@@ -809,6 +813,7 @@ protected:
     CanonicalQuery* _cq;
     PlanYieldPolicy* _yieldPolicy;
     const size_t _plannerOptions;
+    std::map<NamespaceString, CollectionInfo> _colls;
 };
 
 /**
@@ -823,7 +828,7 @@ public:
                                   CanonicalQuery* cq,
                                   PlanYieldPolicy* yieldPolicy,
                                   size_t plannerOptions)
-        : PrepareExecutionHelper{opCtx, collection, std::move(cq), yieldPolicy, plannerOptions},
+        : PrepareExecutionHelper{opCtx, collection, std::move(cq), yieldPolicy, plannerOptions, {}},
           _ws{ws} {}
 
 protected:
@@ -969,7 +974,7 @@ public:
     std::pair<std::unique_ptr<sbe::PlanStage>, stage_builder::PlanStageData> buildExecutableTree(
         const QuerySolution& solution) const final {
         return stage_builder::buildSlotBasedExecutableTree(
-            _opCtx, _collection, *_cq, solution, _yieldPolicy);
+            _opCtx, _collection, *_cq, solution, _yieldPolicy, _colls);
     }
 protected:
 
@@ -1184,12 +1189,21 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
         std::cout << "acquiring lock for " << ns << std::endl;
         autoGets.emplace(ns, std::make_unique<AutoGetCollectionForReadMaybeLockFree>(opCtx, ns));
     }
+
+    std::map<NamespaceString, CollectionInfo> colls;
+    for (auto && ns : cq->involvedNamespaces) {
+        const CollectionPtr& collectionPtr = autoGets.find(ns)->second->getCollection();
+        colls.emplace(ns, CollectionInfo{
+                &collectionPtr,
+                    collectionPtr->numRecords(opCtx)
+                    });
+    }
     
     invariant(cq);
     auto nss = cq->nss();
     auto yieldPolicy = makeSbeYieldPolicy(opCtx, requestedYieldPolicy, collection, nss);
     SlotBasedPrepareExecutionHelper helper{
-        opCtx, *collection, cq.get(), yieldPolicy.get(), plannerOptions};
+        opCtx, *collection, cq.get(), yieldPolicy.get(), plannerOptions, std::move(colls)};
     auto executionResult = helper.prepare();
     if (!executionResult.isOK()) {
         return executionResult.getStatus();

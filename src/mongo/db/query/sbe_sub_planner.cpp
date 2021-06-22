@@ -60,8 +60,9 @@ CandidatePlans SubPlanner::plan(
 
         std::vector<std::pair<std::unique_ptr<PlanStage>, stage_builder::PlanStageData>> roots;
         for (auto&& solution : solutions) {
+            // TODO: need to pass collections in case of $lookup
             roots.push_back(stage_builder::buildSlotBasedExecutableTree(
-                _opCtx, _collection, *cq, *solution, _yieldPolicy));
+                _opCtx, _collection, *cq, *solution, _yieldPolicy, {}));
         }
 
         // Ensure that no previous plans are registered to yield while we multi plan each branch.
@@ -101,7 +102,7 @@ CandidatePlans SubPlanner::plan(
     // Build a plan stage tree from a composite solution.
     auto compositeSolution = std::move(subplanSelectStat.getValue());
     auto&& [root, data] = stage_builder::buildSlotBasedExecutableTree(
-        _opCtx, _collection, _cq, *compositeSolution, _yieldPolicy);
+        _opCtx, _collection, _cq, *compositeSolution, _yieldPolicy, {});
     auto status = prepareExecutionPlan(root.get(), &data);
     uassertStatusOK(status);
     auto [result, recordId, exitedEarly] = status.getValue();
@@ -119,7 +120,7 @@ CandidatePlans SubPlanner::planWholeQuery() const {
     // Only one possible plan. Build the stages from the solution.
     if (solutions.size() == 1) {
         auto&& [root, data] = stage_builder::buildSlotBasedExecutableTree(
-            _opCtx, _collection, _cq, *solutions[0], _yieldPolicy);
+            _opCtx, _collection, _cq, *solutions[0], _yieldPolicy, {});
         auto status = prepareExecutionPlan(root.get(), &data);
         uassertStatusOK(status);
         auto [result, recordId, exitedEarly] = status.getValue();
@@ -135,7 +136,7 @@ CandidatePlans SubPlanner::planWholeQuery() const {
     std::vector<std::pair<std::unique_ptr<PlanStage>, stage_builder::PlanStageData>> roots;
     for (auto&& solution : solutions) {
         roots.push_back(stage_builder::buildSlotBasedExecutableTree(
-            _opCtx, _collection, _cq, *solution, _yieldPolicy));
+                            _opCtx, _collection, _cq, *solution, _yieldPolicy, {}));
     }
 
     MultiPlanner multiPlanner{_opCtx, _collection, _cq, PlanCachingMode::AlwaysCache, _yieldPolicy};

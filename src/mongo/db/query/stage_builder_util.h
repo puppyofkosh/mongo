@@ -55,6 +55,7 @@ buildSlotBasedExecutableTree(OperationContext* opCtx,
                              const CollectionPtr& collection,
                              const CanonicalQuery& cq,
                              const QuerySolution& solution,
-                             PlanYieldPolicy* yieldPolicy);
+                             PlanYieldPolicy* yieldPolicy,
+                             std::map<NamespaceString, CollectionInfo> collections);
 
 }  // namespace mongo::stage_builder

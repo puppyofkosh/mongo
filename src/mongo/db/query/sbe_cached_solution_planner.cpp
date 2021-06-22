@@ -129,8 +129,9 @@ CandidatePlans CachedSolutionPlanner::replan(bool shouldCache, std::string reaso
     }
 
     auto buildExecutableTree = [&](const QuerySolution& sol) {
+                                   // TODO: Cached plans don't work yet.
         auto [root, data] = stage_builder::buildSlotBasedExecutableTree(
-            _opCtx, _collection, _cq, sol, _yieldPolicy);
+            _opCtx, _collection, _cq, sol, _yieldPolicy, {});
         data.replanReason.emplace(reason);
         return std::make_pair(std::move(root), std::move(data));
     };

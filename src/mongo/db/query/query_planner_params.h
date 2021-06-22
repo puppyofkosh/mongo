@@ -30,12 +30,22 @@
 #pragma once
 
 #include <vector>
+#include <map>
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/query/index_entry.h"
 #include "mongo/db/query/query_knobs_gen.h"
 
 namespace mongo {
+    class CollectionPtr;
+    
+    // TODO: Better name, maybe PlannerCollectionInfo.
+    // Info about one collection for use in planning.
+    struct CollectionInfo {
+        const CollectionPtr* collectionPtr = nullptr;
+        long long approxNumRecords = 0;
+        // TODO: indexes, whatever else I think of
+    };
 
 struct QueryPlannerParams {
     QueryPlannerParams()
@@ -135,7 +145,7 @@ struct QueryPlannerParams {
     // See Options enum above.
     size_t options;
 
-    // What indices are available for planning?
+    // What indices are available for planning? (on main collection)
     std::vector<IndexEntry> indices;
 
     // What's our shard key?  If INCLUDE_SHARD_FILTER is set we will create a shard filtering
@@ -154,6 +164,9 @@ struct QueryPlannerParams {
     // Set if we allow optimization which converts "_id" predicates into range collection scan using
     // minRecord and maxRecord.
     bool allowRIDRange;
+
+    // Map of collections used in the query.
+    std::map<NamespaceString, CollectionInfo> collections;
 };
 
 }  // namespace mongo
