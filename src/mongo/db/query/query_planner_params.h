@@ -35,6 +35,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/query/index_entry.h"
 #include "mongo/db/query/query_knobs_gen.h"
+#include "mongo/db/query/index_entry.h"
 
 namespace mongo {
     class CollectionPtr;
@@ -44,6 +45,7 @@ namespace mongo {
     struct CollectionInfo {
         const CollectionPtr* collectionPtr = nullptr;
         long long approxNumRecords = 0;
+        std::vector<IndexEntry> indices;
         // TODO: indexes, whatever else I think of
     };
 

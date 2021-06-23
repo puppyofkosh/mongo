@@ -303,32 +303,39 @@ void applyIndexFilters(const CollectionPtr& collection,
     }
 }
 
+    void getIndexesForCollection(OperationContext* opCtx,
+                                 const CanonicalQuery& canonicalQuery,
+                                 const CollectionPtr& collection,
+                                 const bool apiStrict,
+                                 std::vector<IndexEntry>* indexes) {
+        std::unique_ptr<IndexCatalog::IndexIterator> ii =
+            collection->getIndexCatalog()->getIndexIterator(opCtx, false);
+        while (ii->more()) {
+            const IndexCatalogEntry* ice = ii->next();
+
+            // Indexes excluded from API version 1 should _not_ be used for planning if apiStrict is set
+            // to true.
+            auto indexType = ice->descriptor()->getIndexType();
+            if (apiStrict &&
+                (indexType == IndexType::INDEX_HAYSTACK || indexType == IndexType::INDEX_TEXT ||
+                 ice->descriptor()->isSparse()))
+                continue;
+
+            // Skip the addition of hidden indexes to prevent use in query planning.
+            if (ice->descriptor()->hidden())
+                continue;
+            indexes->push_back(
+                indexEntryFromIndexCatalogEntry(opCtx, *ice, &canonicalQuery));
+        }
+    }
+
 void fillOutPlannerParams(OperationContext* opCtx,
                           const CollectionPtr& collection,
                           CanonicalQuery* canonicalQuery,
                           QueryPlannerParams* plannerParams) {
     invariant(canonicalQuery);
     bool apiStrict = APIParameters::get(opCtx).getAPIStrict().value_or(false);
-    // If it's not NULL, we may have indices.  Access the catalog and fill out IndexEntry(s)
-    std::unique_ptr<IndexCatalog::IndexIterator> ii =
-        collection->getIndexCatalog()->getIndexIterator(opCtx, false);
-    while (ii->more()) {
-        const IndexCatalogEntry* ice = ii->next();
-
-        // Indexes excluded from API version 1 should _not_ be used for planning if apiStrict is set
-        // to true.
-        auto indexType = ice->descriptor()->getIndexType();
-        if (apiStrict &&
-            (indexType == IndexType::INDEX_HAYSTACK || indexType == IndexType::INDEX_TEXT ||
-             ice->descriptor()->isSparse()))
-            continue;
-
-        // Skip the addition of hidden indexes to prevent use in query planning.
-        if (ice->descriptor()->hidden())
-            continue;
-        plannerParams->indices.push_back(
-            indexEntryFromIndexCatalogEntry(opCtx, *ice, canonicalQuery));
-    }
+    getIndexesForCollection(opCtx, *canonicalQuery, collection, apiStrict, &plannerParams->indices);
 
     // If query supports index filters, filter params.indices by indices in query settings.
     // Ignore index filters when it is possible to use the id-hack.
@@ -1195,10 +1202,14 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
     std::map<NamespaceString, CollectionInfo> colls;
     for (auto && ns : cq->involvedNamespaces) {
         const CollectionPtr& collectionPtr = autoGets.find(ns)->second->getCollection();
-        colls.emplace(ns, CollectionInfo{
+        auto [it, inserted] = colls.emplace(ns, CollectionInfo{
                 &collectionPtr,
-                    collectionPtr->numRecords(opCtx)
+                    collectionPtr->numRecords(opCtx),
                     });
+        invariant(inserted);
+        
+        getIndexesForCollection(opCtx, *cq, *collection, false, /* api strict false for now */
+                                &it->second.indices);
     }
     
     invariant(cq);

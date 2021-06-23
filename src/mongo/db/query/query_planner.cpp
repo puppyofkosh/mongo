@@ -1166,35 +1166,36 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
 
     for (auto&& stage : query.innerPipeline) {
         if (auto* lookup = dynamic_cast<DocumentSourceLookUp*>(stage->ds()); lookup) {
-
-            // TODO: Decide on join algorithm eventually.
-
-            auto scan = std::make_unique<CollectionScanNode>();
-            scan->nss = lookup->resolvedNs();
-            scan->name = lookup->resolvedNs().ns();
-            scan->filter = nullptr;
-            scan->tailable = false;
-
-            invariant(params.collections.count(lookup->resolvedNs()));
-
             auto it = params.collections.find(lookup->resolvedNs());
             invariant(it != params.collections.end());
-            std::cout << "Foreign collection has approx " << it->second.approxNumRecords << std::endl;
+            std::cout << "Foreign collection has approx " << it->second.approxNumRecords <<
+                " records and " << it->second.indices.size() << " indices " << std::endl;
 
-            newQsn = std::make_unique<HashJoinNode>(std::move(newQsn),
-                                                    *lookup->getLocalField(),
-                                                    std::move(scan),
-                                                    *lookup->getForeignField());
-            
-            // Decide on join algorithm.
+            // TODO: This actually isn't correct. Doesn't work for wildcard indexes and just
+            // because an index is "relevant" doesn't mean it can be used. To do this correctly
+            // we'll need to factor out some of the query planner logic for determining which
+            // indexes may answer the predicate.
+            auto relevantIndices = QueryPlannerIXSelect::findRelevantIndices(
+                stdx::unordered_set<std::string>{lookup->getForeignField()->fullPath()},
+                it->second.indices);
 
-            // (1) Figure out which indexes are available on the right side.
+            if (!relevantIndices.empty()) {
+                // TODO: indexed NLJ
+            } else if (it->second.approxNumRecords < 100) {
+                // Group join.
+                auto scan = std::make_unique<CollectionScanNode>();
+                scan->nss = lookup->resolvedNs();
+                scan->name = lookup->resolvedNs().ns();
+                scan->filter = nullptr;
+                scan->tailable = false;
 
-            // (2) Check collection of right side.
-
-            // (3) nlj/coll scan
-            
-            //newQsn = std::make_unique<HashJoinNode>();
+                newQsn = std::make_unique<HashJoinNode>(std::move(newQsn),
+                                                        *lookup->getLocalField(),
+                                                        std::move(scan),
+                                                        *lookup->getForeignField());
+            } else {
+                // Nested loop join + StreamingGroup.
+            }
         } else if (auto* group = dynamic_cast<DocumentSourceGroup*>(stage->ds()); group) {
             std::vector<std::string> groupByFieldNames;
             std::vector<Expression*> groupBy;
