@@ -1170,6 +1170,7 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
             // TODO: Decide on join algorithm eventually.
 
             auto scan = std::make_unique<CollectionScanNode>();
+            scan->nss = lookup->resolvedNs();
             scan->name = lookup->resolvedNs().ns();
             scan->filter = nullptr;
             scan->tailable = false;

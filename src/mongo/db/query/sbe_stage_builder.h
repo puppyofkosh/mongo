@@ -267,7 +267,8 @@ public:
                           const CanonicalQuery& cq,
                           const QuerySolution& solution,
                           PlanYieldPolicySBE* yieldPolicy,
-                          ShardFiltererFactoryInterface* shardFilterer);
+                          ShardFiltererFactoryInterface* shardFilterer,
+                          std::map<NamespaceString, CollectionInfo> collections);
 
     std::unique_ptr<sbe::PlanStage> build(const QuerySolutionNode* root) final;
 
@@ -391,5 +392,7 @@ private:
 
     // Common parameters to SBE stage builder functions.
     StageBuilderState _state;
+
+    std::map<NamespaceString, CollectionInfo> _collections;
 };
 }  // namespace mongo::stage_builder

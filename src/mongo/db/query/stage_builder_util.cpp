@@ -73,7 +73,7 @@ buildSlotBasedExecutableTree(OperationContext* opCtx,
     auto shardFilterer = std::make_unique<ShardFiltererFactoryImpl>(collection);
 
     auto builder = std::make_unique<SlotBasedStageBuilder>(
-        opCtx, collection, cq, solution, sbeYieldPolicy, shardFilterer.get());
+        opCtx, collection, cq, solution, sbeYieldPolicy, shardFilterer.get(), std::move(collections));
     auto root = builder->build(solution.root());
     auto data = builder->getPlanStageData();
 

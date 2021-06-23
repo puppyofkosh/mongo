@@ -112,6 +112,8 @@ TODO list:
 -$lookup special behavior with arrays
 -$group special behavior with null/missing
 -cached plans are completely broken
+-think about problems with "multi key" hash join: having to make one copy of the document for each
+ key in the HT.
  */
     
 std::unique_ptr<QuerySolution> stitchInnerPipeline(std::unique_ptr<QuerySolution> multiPlanned,

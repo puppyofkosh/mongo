@@ -266,6 +266,7 @@ std::unique_ptr<QuerySolutionNode> QueryPlannerAccess::makeCollectionScan(
     const CanonicalQuery& query, bool tailable, const QueryPlannerParams& params) {
     // Make the (only) node, a collection scan.
     auto csn = std::make_unique<CollectionScanNode>();
+    csn->nss = query.nss();
     csn->name = query.ns();
     csn->filter = query.root()->shallowClone();
     csn->tailable = tailable;

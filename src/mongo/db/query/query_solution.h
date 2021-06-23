@@ -438,6 +438,8 @@ struct CollectionScanNode : public QuerySolutionNodeWithSortSet {
 
     // Name of the namespace.
     std::string name;
+    // TODO: We don't need both of these.
+    NamespaceString nss;
 
     // If present, this parameter sets the start point of a forward scan or the end point of a
     // reverse scan.
@@ -1389,6 +1391,8 @@ private:
     std::vector<AccumulationStatement> _accumulators;
 };
 
+    // What should I call this? Should I even call it "join", since it
+    // really represents a join + group?
 struct HashJoinNode : public QuerySolutionNode {
     HashJoinNode(std::unique_ptr<QuerySolutionNode> left,
                  FieldPath leftFieldName,

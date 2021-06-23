@@ -467,7 +467,8 @@ SlotBasedStageBuilder::SlotBasedStageBuilder(OperationContext* opCtx,
                                              const CanonicalQuery& cq,
                                              const QuerySolution& solution,
                                              PlanYieldPolicySBE* yieldPolicy,
-                                             ShardFiltererFactoryInterface* shardFiltererFactory)
+                                             ShardFiltererFactoryInterface* shardFiltererFactory,
+                                             std::map<NamespaceString, CollectionInfo> colls)
     : StageBuilder(opCtx, collection, cq, solution),
       _yieldPolicy(yieldPolicy),
       _data(makeRuntimeEnvironment(_cq, _opCtx, &_slotIdGenerator)),
@@ -478,7 +479,8 @@ SlotBasedStageBuilder::SlotBasedStageBuilder(OperationContext* opCtx,
              _cq.getExpCtxRaw()->variables,
              &_slotIdGenerator,
              &_frameIdGenerator,
-             &_spoolIdGenerator) {
+             &_spoolIdGenerator),
+      _collections(std::move(colls)) {
     // SERVER-52803: In the future if we need to gather more information from the QuerySolutionNode
     // tree, rather than doing one-off scans for each piece of information, we should add a formal
     // analysis pass here.
@@ -531,8 +533,12 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
 
     auto csn = static_cast<const CollectionScanNode*>(root);
 
+    auto it = _collections.find(csn->nss);
+    invariant(it != _collections.end());
+    const auto& collectionPtr = *it->second.collectionPtr;
+
     auto [stage, outputs] = generateCollScan(_state,
-                                             _collection,
+                                             collectionPtr,
                                              csn,
                                              _yieldPolicy,
                                              reqs.getIsTailableCollScanResumeBranch(),
@@ -2262,22 +2268,35 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                      makeVariable(rightResultSlot),
                      sbe::makeE<sbe::EConstant>(pn->rightFieldName.getFieldName(0))));
 
-    // Build a hash join.
+    // TODO: Eventually we can use GroupJoin instead of HJ + HashAgg.
+
+    // Note SBE hash join uses its LEFT side as the build side. We therefore flip the sides of the join, since
+    // $lookup's RIGHT side is the build side.
     auto hj = sbe::makeS<sbe::HashJoinStage>(
-        std::move(leftStage),
         std::move(rightStage),
-        sbe::makeSV(leftFieldSlot),
-        sbe::makeSV(leftResultSlot, leftOutputs.get(kRecordId)),
+        std::move(leftStage),
         sbe::makeSV(rightFieldSlot),
         sbe::makeSV(rightResultSlot),
+        sbe::makeSV(leftFieldSlot),
+        sbe::makeSV(leftResultSlot, leftOutputs.get(kRecordId)),
         boost::none,
         root->nodeId());
 
+    // TODO: group by. For now I'll use record ID+full obj as the group key but we should have some
+    // slot which acts as a sort of "counter" etc.
+    const auto arraySlot = _slotIdGenerator.generate();
+    auto hashAgg = sbe::makeS<sbe::HashAggStage>(
+        std::move(hj),
+        sbe::makeSV(leftOutputs.get(kRecordId), leftResultSlot),
+        sbe::makeEM(arraySlot, makeFunction("addToArray",
+                                            makeVariable(rightResultSlot))),
+        boost::none, // collator
+        root->nodeId());
 
     auto outObjSlot {
         _slotIdGenerator.generate()
     };
-    auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(std::move(hj),
+    auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(std::move(hashAgg),
                                                    outObjSlot,
                                                    leftResultSlot,
                                                    // drop no fields
@@ -2286,7 +2305,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
 
                                                    // TODO: Don't we get this from the DocumentSourceLookup??
                                                    std::vector<std::string>{"joinField"},
-                                                   sbe::makeSV(rightResultSlot),
+                                                   sbe::makeSV(arraySlot),
                                                    true,
                                                    false,
                                                    root->nodeId());
