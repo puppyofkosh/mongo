@@ -116,47 +116,51 @@ void HashAggStage::open(bool reOpen) {
     auto optTimer(getOptTimer(_opCtx));
 
     _commonStats.opens++;
-    _children[0]->open(reOpen);
+    if (!reOpen) {
+        _children[0]->open(reOpen);
 
-    if (_collatorAccessor) {
-        auto [tag, collatorVal] = _collatorAccessor->getViewOfValue();
-        uassert(5402503, "collatorSlot must be of collator type", tag == value::TypeTags::collator);
-        auto collatorView = value::getCollatorView(collatorVal);
-        const value::MaterializedRowHasher hasher(collatorView);
-        const value::MaterializedRowEq equator(collatorView);
-        _ht.emplace(0, hasher, equator);
-    } else {
-        _ht.emplace();
+        if (_collatorAccessor) {
+            auto [tag, collatorVal] = _collatorAccessor->getViewOfValue();
+            uassert(5402503, "collatorSlot must be of collator type", tag == value::TypeTags::collator);
+            auto collatorView = value::getCollatorView(collatorVal);
+            const value::MaterializedRowHasher hasher(collatorView);
+            const value::MaterializedRowEq equator(collatorView);
+            _ht.emplace(0, hasher, equator);
+        } else {
+            _ht.emplace();
+        }
+
+        while (_children[0]->getNext() == PlanState::ADVANCED) {
+            value::MaterializedRow key{_inKeyAccessors.size()};
+            // Copy keys in order to do the lookup.
+            size_t idx = 0;
+            for (auto& p : _inKeyAccessors) {
+                auto [tag, val] = p->getViewOfValue();
+                key.reset(idx++, false, tag, val);
+            }
+
+            auto [it, inserted] = _ht->try_emplace(std::move(key), value::MaterializedRow{0});
+            if (inserted) {
+                // Copy keys.
+                const_cast<value::MaterializedRow&>(it->first).makeOwned();
+                // Initialize accumulators.
+                it->second.resize(_outAggAccessors.size());
+            }
+
+            // Accumulate.
+            _htIt = it;
+            for (size_t idx = 0; idx < _outAggAccessors.size(); ++idx) {
+                auto [owned, tag, val] = _bytecode.run(_aggCodes[idx].get());
+                _outAggAccessors[idx]->reset(owned, tag, val);
+            }
+        }
+
+        // TODO: We should uncomment this and change behavior of re-open.
+        _children[0]->close();
     }
 
-    while (_children[0]->getNext() == PlanState::ADVANCED) {
-        value::MaterializedRow key{_inKeyAccessors.size()};
-        // Copy keys in order to do the lookup.
-        size_t idx = 0;
-        for (auto& p : _inKeyAccessors) {
-            auto [tag, val] = p->getViewOfValue();
-            key.reset(idx++, false, tag, val);
-        }
-
-        auto [it, inserted] = _ht->try_emplace(std::move(key), value::MaterializedRow{0});
-        if (inserted) {
-            // Copy keys.
-            const_cast<value::MaterializedRow&>(it->first).makeOwned();
-            // Initialize accumulators.
-            it->second.resize(_outAggAccessors.size());
-        }
-
-        // Accumulate.
-        _htIt = it;
-        for (size_t idx = 0; idx < _outAggAccessors.size(); ++idx) {
-            auto [owned, tag, val] = _bytecode.run(_aggCodes[idx].get());
-            _outAggAccessors[idx]->reset(owned, tag, val);
-        }
-    }
-
-    // TODO: We should uncomment this and change behavior of re-open.
-    //_children[0]->close();
-
+    // Regardles of whether re-opening, re-position the iterator.
+    invariant(_ht);
     _htIt = _ht->end();
 }
 

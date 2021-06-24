@@ -36,6 +36,7 @@
 
     // $lookup
     {
+        print("Running a simple $lookup\n");
         const local = db.local;
         const foreign = db.foreign;
 
