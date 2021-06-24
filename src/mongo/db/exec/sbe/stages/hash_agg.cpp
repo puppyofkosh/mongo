@@ -154,7 +154,8 @@ void HashAggStage::open(bool reOpen) {
         }
     }
 
-    _children[0]->close();
+    // TODO: We should uncomment this and change behavior of re-open.
+    //_children[0]->close();
 
     _htIt = _ht->end();
 }
