@@ -2282,18 +2282,17 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
 
     // Now we put a filter on top of the group-by for the key we want (the left side's join field,
     // which will be a correlated variable.
-    auto filter = sbe::makeS<sbe::FilterStage<false>>(
-        std::move(hashAgg),
-        sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
-                                     makeVariable(leftFieldSlot),
-                                     makeVariable(rightFieldSlot)),
-        root->nodeId()
-        );
-
+    // auto filter = sbe::makeS<sbe::FilterStage<false>>(
+    //     std::move(hashAgg),
+    //     sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
+    //                                  makeVariable(leftFieldSlot),
+    //                                  makeVariable(rightFieldSlot)),
+    //     root->nodeId()
+    //     );
 
     auto nlj = sbe::makeS<sbe::LoopJoinStage>(
         std::move(leftStage),
-        std::move(filter),
+        std::move(hashAgg),
         sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
         sbe::makeSV(leftFieldSlot),
         nullptr,

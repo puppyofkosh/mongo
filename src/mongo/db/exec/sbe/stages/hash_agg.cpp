@@ -45,11 +45,11 @@ HashAggStage::HashAggStage(std::unique_ptr<PlanStage> input,
       _gbs(std::move(gbs)),
       _aggs(std::move(aggs)),
       _collatorSlot(collatorSlot),
-      _keyToFilterBy(std::move(keyToFilterBy)) {
+      _keyToFilterBySlots(std::move(keyToFilterBy)) {
     _children.emplace_back(std::move(input));
 
-    if (_keyToFilterBy) {
-        invariant(_keyToFilterBy->size() == _gbs.size());
+    if (_keyToFilterBySlots) {
+        invariant(_keyToFilterBySlots->size() == _gbs.size());
     }
 }
 
@@ -59,7 +59,7 @@ std::unique_ptr<PlanStage> HashAggStage::clone() const {
         aggs.emplace(k, v->clone());
     }
     return std::make_unique<HashAggStage>(
-        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _keyToFilterBy, _commonStats.nodeId);
+        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _keyToFilterBySlots, _commonStats.nodeId);
 }
 
 void HashAggStage::prepare(CompileCtx& ctx) {
@@ -84,8 +84,8 @@ void HashAggStage::prepare(CompileCtx& ctx) {
         _outAccessors[slot] = _outKeyAccessors.back().get();
     }
 
-    if (_keyToFilterBy) {
-        for (auto&& slot : *_keyToFilterBy) {
+    if (_keyToFilterBySlots) {
+        for (auto&& slot : *_keyToFilterBySlots) {
             _keyToFilterByAccessors.emplace_back(_children[0]->getAccessor(ctx, slot));
         }
     }
@@ -145,6 +145,10 @@ void HashAggStage::open(bool reOpen) {
             _ht.emplace();
         }
 
+        if (_keyToFilterBySlots) {
+            _keyToFilterBy.resize(_keyToFilterBySlots->size());
+        }
+
         while (_children[0]->getNext() == PlanState::ADVANCED) {
             value::MaterializedRow key{_inKeyAccessors.size()};
 
@@ -174,6 +178,15 @@ void HashAggStage::open(bool reOpen) {
         _children[0]->close();
     }
 
+    if (_keyToFilterBySlots) {
+        // Copy keys in order to do the lookup.
+        size_t idx = 0;
+        for (auto& p : _keyToFilterByAccessors) {
+            auto [tag, val] = p->getViewOfValue();
+            _keyToFilterBy.reset(idx++, false, tag, val);
+        }
+    }
+    
     // Regardles of whether re-opening, re-position the iterator.
     invariant(_ht);
     _htIt = _ht->end();
@@ -183,8 +196,17 @@ PlanState HashAggStage::getNext() {
     auto optTimer(getOptTimer(_opCtx));
 
     if (_htIt == _ht->end()) {
-        _htIt = _ht->begin();
+        // First invocation of getNext().
+        if (_keyToFilterBySlots) {
+            _htIt = _ht->find(_keyToFilterBy);
+        } else {
+            _htIt = _ht->begin();
+        }
+    } else if (_keyToFilterBySlots) {
+        // Subsequent invocation with a filter.
+        _htIt = _ht->end();
     } else {
+        // Returning the results of the entire hash table.
         ++_htIt;
     }
 
@@ -252,6 +274,18 @@ std::vector<DebugPrinter::Block> HashAggStage::debugPrint() const {
         first = false;
     });
     ret.emplace_back("`]");
+
+    if (_keyToFilterBySlots) {
+        ret.emplace_back(DebugPrinter::Block("[`"));
+        for (size_t idx = 0; idx < _keyToFilterBySlots->size(); ++idx) {
+            if (idx) {
+                ret.emplace_back(DebugPrinter::Block("`,"));
+            }
+
+            DebugPrinter::addIdentifier(ret, (*_keyToFilterBySlots)[idx]);
+        }
+        ret.emplace_back(DebugPrinter::Block("`]"));
+    }
 
     if (_collatorSlot) {
         DebugPrinter::addIdentifier(ret, *_collatorSlot);

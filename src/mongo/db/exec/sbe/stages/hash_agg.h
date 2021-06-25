@@ -76,13 +76,14 @@ private:
     const value::SlotMap<std::unique_ptr<EExpression>> _aggs;
     const boost::optional<value::SlotId> _collatorSlot;
     
-    const boost::optional<value::SlotVector> _keyToFilterBy;
+    const boost::optional<value::SlotVector> _keyToFilterBySlots;
 
     value::SlotAccessorMap _outAccessors;
     std::vector<value::SlotAccessor*> _inKeyAccessors;
     std::vector<std::unique_ptr<HashKeyAccessor>> _outKeyAccessors;
 
     std::vector<value::SlotAccessor*> _keyToFilterByAccessors;
+    value::MaterializedRow _keyToFilterBy;
 
     std::vector<std::unique_ptr<HashAggAccessor>> _outAggAccessors;
     std::vector<std::unique_ptr<vm::CodeFragment>> _aggCodes;
