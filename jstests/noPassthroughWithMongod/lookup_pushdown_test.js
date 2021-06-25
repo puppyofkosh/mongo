@@ -43,6 +43,9 @@
         assert.commandWorked(local.insert({_id: 0, joinFieldLocal: "a"}));
         assert.commandWorked(local.insert({_id: 1, joinFieldLocal: "b"}));
 
+        for (let i = 0; i < 100; ++i) {
+            assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 1}));
+        }
         assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 1}));
         assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 2}));
         assert.commandWorked(foreign.insert({joinFieldForeign: "b", x: 3}));

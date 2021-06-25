@@ -40,12 +40,14 @@ HashAggStage::HashAggStage(std::unique_ptr<PlanStage> input,
                            value::SlotMap<std::unique_ptr<EExpression>> aggs,
                            boost::optional<value::SlotId> collatorSlot,
                            boost::optional<value::SlotVector> keyToFilterBy,
+                           bool recomputeOnReOpen,
                            PlanNodeId planNodeId)
     : PlanStage("group"_sd, planNodeId),
       _gbs(std::move(gbs)),
       _aggs(std::move(aggs)),
       _collatorSlot(collatorSlot),
-      _keyToFilterBySlots(std::move(keyToFilterBy)) {
+      _keyToFilterBySlots(std::move(keyToFilterBy)),
+      _recomputeOnReOpen(recomputeOnReOpen) {
     _children.emplace_back(std::move(input));
 
     if (_keyToFilterBySlots) {
@@ -59,7 +61,7 @@ std::unique_ptr<PlanStage> HashAggStage::clone() const {
         aggs.emplace(k, v->clone());
     }
     return std::make_unique<HashAggStage>(
-        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _keyToFilterBySlots, _commonStats.nodeId);
+        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _keyToFilterBySlots, _recomputeOnReOpen, _commonStats.nodeId);
 }
 
 void HashAggStage::prepare(CompileCtx& ctx) {
@@ -131,7 +133,7 @@ void HashAggStage::open(bool reOpen) {
     // AND add an option to build one big hash table up front, or to build a buncha little ones.
 
     _commonStats.opens++;
-    if (!reOpen) {
+    if (!reOpen || _recomputeOnReOpen) {
         _children[0]->open(reOpen);
 
         if (_collatorAccessor) {
@@ -175,7 +177,9 @@ void HashAggStage::open(bool reOpen) {
             }
         }
 
-        _children[0]->close();
+        if (!_recomputeOnReOpen) {
+            _children[0]->close();
+        }
     }
 
     if (_keyToFilterBySlots) {
@@ -274,6 +278,8 @@ std::vector<DebugPrinter::Block> HashAggStage::debugPrint() const {
         first = false;
     });
     ret.emplace_back("`]");
+
+    ret.emplace_back(_recomputeOnReOpen ? "recompute" : "cached");
 
     if (_keyToFilterBySlots) {
         ret.emplace_back(DebugPrinter::Block("[`"));

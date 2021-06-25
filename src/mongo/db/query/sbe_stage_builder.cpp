@@ -2223,6 +2223,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                                                             std::move(aggs),
                                                             boost::none,
                                                             boost::none,
+                                                            true, // re-compute on reopen
                                                             root->nodeId());
 
 
@@ -2236,11 +2237,10 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     return {std::move(secondProjectStage), std::move(outSlots)};
 }
 
-// TODO: maybe call this JoinGroup? I think just call it HashEqLookup or something.
-std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildHashJoin(
+std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildEqLookup(
     const QuerySolutionNode* root, const PlanStageReqs& reqs) {
     // TODO: Eventually must support nested fields and arrays etc. Not now though :)
-    auto pn = static_cast<const HashJoinNode*>(root);
+    auto pn = static_cast<const EqLookupNode*>(root);
 
     auto leftReqs = reqs.copy().set(PlanStageSlots::kResult);
     auto [leftStage, leftOutputs] = build(pn->children[0], leftReqs);
@@ -2268,7 +2268,25 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                      makeVariable(rightResultSlot),
                      sbe::makeE<sbe::EConstant>(pn->rightFieldName.getFieldName(0))));
 
-    // First we group the right side by the join field.
+    // If the 'strategy' is hash join, we'll have the right side build a hash table from join key
+    // to results. We'll push the filter into the group stage so that each invocation we only read
+    // from the hash table.
+
+    boost::optional<sbe::value::SlotVector> filterSlots;
+    if (pn->strategy == EqLookupNode::Strategy::hashed) {
+        filterSlots = sbe::makeSV(leftFieldSlot);
+    } else {
+        // We'll re-run the right side each time, in a nested loop join.
+        // Before the group, we'll put a filter for the keys which match the join predicate.
+        rightStage = sbe::makeS<sbe::FilterStage<false>>(
+            std::move(rightStage),
+            sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
+                                         makeVariable(leftFieldSlot),
+                                         makeVariable(rightFieldSlot)),
+            root->nodeId()
+            );
+    }
+
     const auto arraySlot = _slotIdGenerator.generate();
     auto hashAgg = sbe::makeS<sbe::HashAggStage>(
         std::move(rightStage),
@@ -2276,19 +2294,9 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
         sbe::makeEM(arraySlot, makeFunction("addToArray",
                                             makeVariable(rightResultSlot))),
         boost::none, // collator
-        sbe::makeSV(leftFieldSlot),
+        std::move(filterSlots), // empty if we're doing nlj
+        pn->strategy == EqLookupNode::Strategy::nlj, // only recompute when re-opening for nlj
         root->nodeId());
-
-
-    // Now we put a filter on top of the group-by for the key we want (the left side's join field,
-    // which will be a correlated variable.
-    // auto filter = sbe::makeS<sbe::FilterStage<false>>(
-    //     std::move(hashAgg),
-    //     sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
-    //                                  makeVariable(leftFieldSlot),
-    //                                  makeVariable(rightFieldSlot)),
-    //     root->nodeId()
-    //     );
 
     auto nlj = sbe::makeS<sbe::LoopJoinStage>(
         std::move(leftStage),
@@ -2344,7 +2352,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
             {STAGE_PROJECTION_COVERED, &SlotBasedStageBuilder::buildProjectionCovered},
             {STAGE_OR, &SlotBasedStageBuilder::buildOr},
             {STAGE_HASH_AGG, &SlotBasedStageBuilder::buildHashAgg},
-            {STAGE_HASH_JOIN, &SlotBasedStageBuilder::buildHashJoin},
+            {STAGE_EQ_LOOKUP, &SlotBasedStageBuilder::buildEqLookup},
             // In SBE TEXT_OR behaves like a regular OR. All the work to support "textScore"
             // metadata is done outside of TEXT_OR, unlike the legacy implementation.
             {STAGE_TEXT_OR, &SlotBasedStageBuilder::buildOr},

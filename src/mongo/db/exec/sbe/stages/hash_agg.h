@@ -49,6 +49,7 @@ public:
                  value::SlotMap<std::unique_ptr<EExpression>> aggs,
                  boost::optional<value::SlotId> collatorSlot,
                  boost::optional<value::SlotVector> keyToFilterBy,
+                 bool recomputeOnReOpen,
                  PlanNodeId planNodeId);
 
     std::unique_ptr<PlanStage> clone() const final;
@@ -77,6 +78,7 @@ private:
     const boost::optional<value::SlotId> _collatorSlot;
     
     const boost::optional<value::SlotVector> _keyToFilterBySlots;
+    const bool _recomputeOnReOpen;
 
     value::SlotAccessorMap _outAccessors;
     std::vector<value::SlotAccessor*> _inKeyAccessors;

@@ -335,7 +335,7 @@ private:
         const QuerySolutionNode* root, const PlanStageReqs& reqs);
     std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> buildHashAgg(
         const QuerySolutionNode* root, const PlanStageReqs& reqs);
-    std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> buildHashJoin(
+    std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> buildEqLookup(
         const QuerySolutionNode* root, const PlanStageReqs& reqs);
     
     std::tuple<sbe::value::SlotId, sbe::value::SlotId, std::unique_ptr<sbe::PlanStage>>

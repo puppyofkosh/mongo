@@ -1132,6 +1132,7 @@ void Parser::walkGroup(AstQuery& ast) {
         collatorSlotPos ? lookupSlot(std::move(ast.nodes[collatorSlotPos]->identifier))
                         : boost::none,
         boost::none,
+        true,
         getCurrentPlanNodeId());
 }
 

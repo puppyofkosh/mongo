@@ -1181,20 +1181,22 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
 
             if (!relevantIndices.empty()) {
                 // TODO: indexed NLJ
-            } else if (it->second.approxNumRecords < 100) {
-                // Group join.
+            } else {
                 auto scan = std::make_unique<CollectionScanNode>();
                 scan->nss = lookup->resolvedNs();
                 scan->name = lookup->resolvedNs().ns();
                 scan->filter = nullptr;
                 scan->tailable = false;
 
-                newQsn = std::make_unique<HashJoinNode>(std::move(newQsn),
+                auto strategy = EqLookupNode::Strategy::hashed;
+                if (it->second.approxNumRecords > 100) {
+                    strategy = EqLookupNode::Strategy::nlj;
+                }
+                newQsn = std::make_unique<EqLookupNode>(std::move(newQsn),
                                                         *lookup->getLocalField(),
                                                         std::move(scan),
-                                                        *lookup->getForeignField());
-            } else {
-                // Nested loop join + StreamingGroup.
+                                                        *lookup->getForeignField(),
+                                                        strategy);
             }
         } else if (auto* group = dynamic_cast<DocumentSourceGroup*>(stage->ds()); group) {
             std::vector<std::string> groupByFieldNames;
@@ -1204,7 +1206,6 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
                 groupBy.push_back(idField.second.get());
             }
 
-            // TODO: Maybe use some kind of sentinel node instead.
             newQsn = std::make_unique<HashAggNode>(std::move(newQsn), groupByFieldNames, groupBy,
                                                    group->getAccumulatedFields());
         }

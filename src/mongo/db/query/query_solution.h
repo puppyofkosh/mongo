@@ -1393,18 +1393,26 @@ private:
 
     // What should I call this? Should I even call it "join", since it
     // really represents a join + group? How about just HashLookup?
-struct HashJoinNode : public QuerySolutionNode {
-    HashJoinNode(std::unique_ptr<QuerySolutionNode> left,
+struct EqLookupNode : public QuerySolutionNode {
+    enum Strategy {
+        hashed,
+        nlj
+    };
+    
+    EqLookupNode(std::unique_ptr<QuerySolutionNode> left,
                  FieldPath leftFieldName,
                  std::unique_ptr<QuerySolutionNode> right,
-                 FieldPath rightFieldName) :leftFieldName(leftFieldName), rightFieldName(rightFieldName) {
+                 FieldPath rightFieldName,
+                 Strategy strategy) :leftFieldName(leftFieldName),
+                                     rightFieldName(rightFieldName),
+                                     strategy(strategy) {
         children.push_back(left.release());
         children.push_back(right.release());
     }
-    virtual ~HashJoinNode() {}
+    virtual ~EqLookupNode() {}
 
     virtual StageType getType() const {
-        return STAGE_HASH_JOIN;
+        return STAGE_EQ_LOOKUP;
     }
 
     virtual void appendToString(str::stream* ss, int indent) const {
@@ -1425,14 +1433,16 @@ struct HashJoinNode : public QuerySolutionNode {
     }
 
     QuerySolutionNode* clone() const {
-        return new HashJoinNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
+        return new EqLookupNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
                                 leftFieldName,
                                 std::unique_ptr<QuerySolutionNode>(children[1]->clone()),
-                                rightFieldName);
+                                rightFieldName,
+                                strategy);
     }
 
     FieldPath leftFieldName;
     FieldPath rightFieldName;
+    Strategy strategy;
 };
 
 struct MultiPlanNode : public QuerySolutionNode {

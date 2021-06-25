@@ -1136,6 +1136,7 @@ public:
                                       sbe::makeEM(groupSlot, std::move(addToArrayExpr)),
                                       collatorSlot,
                                       boost::none,
+                                      true, // recomputeOnReOpen
                                       _context->planNodeId);
 
         // Build subtree to handle nulls. If an input is null, return null. Otherwise, unwind the
@@ -1165,6 +1166,7 @@ public:
                         sbe::makeEM(finalGroupSlot, std::move(finalAddToArrayExpr)),
                         collatorSlot,
                         boost::none,
+                        true, // recomputeOnReOpen
                         _context->planNodeId);
 
         // Create a branch stage to select between the branch that produces one null if any elements
