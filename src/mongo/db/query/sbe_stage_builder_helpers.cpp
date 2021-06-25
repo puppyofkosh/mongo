@@ -432,13 +432,18 @@ EvalStage makeHashAgg(EvalStage stage,
                       sbe::value::SlotVector gbs,
                       sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs,
                       boost::optional<sbe::value::SlotId> collatorSlot,
+                      sbe::HashAggStage::FilterMode filterMode,
+                      boost::optional<sbe::value::SlotVector> keyToFilterBy,
                       PlanNodeId planNodeId) {
     stage.outSlots = gbs;
     for (auto& [slot, _] : aggs) {
         stage.outSlots.push_back(slot);
     }
     stage.stage = sbe::makeS<sbe::HashAggStage>(
-        std::move(stage.stage), std::move(gbs), std::move(aggs), collatorSlot, planNodeId);
+        std::move(stage.stage), std::move(gbs), std::move(aggs), collatorSlot,
+        filterMode,
+        std::move(keyToFilterBy),
+        planNodeId);
     return stage;
 }
 

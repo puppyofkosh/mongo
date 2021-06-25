@@ -38,6 +38,7 @@
 #include "mongo/db/exec/sbe/stages/filter.h"
 #include "mongo/db/exec/sbe/stages/makeobj.h"
 #include "mongo/db/exec/sbe/stages/project.h"
+#include "mongo/db/exec/sbe/stages/hash_agg.h"
 #include "mongo/db/query/sbe_stage_builder_eval_frame.h"
 #include "mongo/db/query/stage_types.h"
 
@@ -335,6 +336,8 @@ EvalStage makeHashAgg(EvalStage stage,
                       sbe::value::SlotVector gbs,
                       sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs,
                       boost::optional<sbe::value::SlotId> collatorSlot,
+                      sbe::HashAggStage::FilterMode filterMode,
+                      boost::optional<sbe::value::SlotVector> keyToFilterBy,
                       PlanNodeId planNodeId);
 
 EvalStage makeMkBsonObj(EvalStage stage,

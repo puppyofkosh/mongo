@@ -1135,6 +1135,8 @@ public:
                                       sbe::makeSV(),
                                       sbe::makeEM(groupSlot, std::move(addToArrayExpr)),
                                       collatorSlot,
+                                      sbe::HashAggStage::FilterMode::noFilter,
+                                      boost::none,
                                       _context->planNodeId);
 
         // Build subtree to handle nulls. If an input is null, return null. Otherwise, unwind the
@@ -1163,6 +1165,8 @@ public:
                         sbe::makeSV(),
                         sbe::makeEM(finalGroupSlot, std::move(finalAddToArrayExpr)),
                         collatorSlot,
+                        sbe::HashAggStage::FilterMode::noFilter,
+                        boost::none,
                         _context->planNodeId);
 
         // Create a branch stage to select between the branch that produces one null if any elements

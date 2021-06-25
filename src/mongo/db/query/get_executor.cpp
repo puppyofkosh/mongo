@@ -109,6 +109,7 @@ TODO list:
 -get a $lookup to run
 
 -try to avoid intermediate document materialization
+-$lookup unwind absorb
 -$lookup special behavior with arrays
 -$group special behavior with null/missing
 -cached plans are completely broken
@@ -1204,7 +1205,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getSlotBasedExe
         const CollectionPtr& collectionPtr = autoGets.find(ns)->second->getCollection();
         auto [it, inserted] = colls.emplace(ns, CollectionInfo{
                 &collectionPtr,
-                    collectionPtr->numRecords(opCtx),
+                    collectionPtr->numRecords(opCtx)
                     });
         invariant(inserted);
         

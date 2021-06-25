@@ -2222,6 +2222,8 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                                                             sbe::makeSV(gbSlotId),
                                                             std::move(aggs),
                                                             boost::none,
+                                                            sbe::HashAggStage::FilterMode::noFilter,
+                                                            boost::none,
                                                             root->nodeId());
 
 
@@ -2235,11 +2237,10 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     return {std::move(secondProjectStage), std::move(outSlots)};
 }
 
+// TODO: maybe call this JoinGroup? I think just call it HashEqLookup or something.
 std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder::buildHashJoin(
     const QuerySolutionNode* root, const PlanStageReqs& reqs) {
-    // Build the outer side and add a project stage to get the field we're joining by.
     // TODO: Eventually must support nested fields and arrays etc. Not now though :)
-
     auto pn = static_cast<const HashJoinNode*>(root);
 
     auto leftReqs = reqs.copy().set(PlanStageSlots::kResult);
@@ -2276,23 +2277,25 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
         sbe::makeEM(arraySlot, makeFunction("addToArray",
                                             makeVariable(rightResultSlot))),
         boost::none, // collator
+        sbe::HashAggStage::FilterMode::filterBeforeAgg,
+        sbe::makeSV(leftFieldSlot),
         root->nodeId());
 
 
     // Now we put a filter on top of the group-by for the key we want (the left side's join field,
     // which will be a correlated variable.
-    auto filter = sbe::makeS<sbe::FilterStage<false>>(
-        std::move(hashAgg),
-        sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
-                                     makeVariable(leftFieldSlot),
-                                     makeVariable(rightFieldSlot)),
-        root->nodeId()
-        );
+    // auto filter = sbe::makeS<sbe::FilterStage<false>>(
+    //     std::move(hashAgg),
+    //     sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
+    //                                  makeVariable(leftFieldSlot),
+    //                                  makeVariable(rightFieldSlot)),
+    //     root->nodeId()
+    //     );
 
 
     auto nlj = sbe::makeS<sbe::LoopJoinStage>(
         std::move(leftStage),
-        std::move(filter),
+        std::move(hashAgg),
         sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
         sbe::makeSV(leftFieldSlot),
         nullptr,
