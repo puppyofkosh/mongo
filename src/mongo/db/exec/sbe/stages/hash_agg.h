@@ -40,25 +40,14 @@ namespace mongo {
 namespace sbe {
 
     /**
-     * -keyToFilterBy: (optional) use if only interested in the group for one key. Essentially pushing
-     * down an equality filter into the group.
-     * -applyFilterFirst: If true, will apply the filter before building the hash table. This means that
-     * each call to open() may build a new hash table. If false, will apply the filter afterwards. The first
-     * call to open() will build a hash table containing all keys. Subsequent re-opens will not need to build a new table.
+     * TODO: Describe keyToFilterBy
      */
 class HashAggStage final : public PlanStage {
 public:
-    enum FilterMode {
-        noFilter,
-        filterBeforeAgg,
-        filterAfterAgg
-    };
-    
     HashAggStage(std::unique_ptr<PlanStage> input,
                  value::SlotVector gbs,
                  value::SlotMap<std::unique_ptr<EExpression>> aggs,
                  boost::optional<value::SlotId> collatorSlot,
-                 FilterMode filterMode,
                  boost::optional<value::SlotVector> keyToFilterBy,
                  PlanNodeId planNodeId);
 
@@ -88,7 +77,6 @@ private:
     const boost::optional<value::SlotId> _collatorSlot;
     
     const boost::optional<value::SlotVector> _keyToFilterBy;
-    const FilterMode _filterMode;
 
     value::SlotAccessorMap _outAccessors;
     std::vector<value::SlotAccessor*> _inKeyAccessors;

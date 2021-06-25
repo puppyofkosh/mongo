@@ -1131,7 +1131,6 @@ void Parser::walkGroup(AstQuery& ast) {
         lookupSlots(std::move(ast.nodes[1]->projects)),
         collatorSlotPos ? lookupSlot(std::move(ast.nodes[collatorSlotPos]->identifier))
                         : boost::none,
-        HashAggStage::FilterMode::noFilter,
         boost::none,
         getCurrentPlanNodeId());
 }

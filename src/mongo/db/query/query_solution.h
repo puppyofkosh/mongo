@@ -1392,7 +1392,7 @@ private:
 };
 
     // What should I call this? Should I even call it "join", since it
-    // really represents a join + group?
+    // really represents a join + group? How about just HashLookup?
 struct HashJoinNode : public QuerySolutionNode {
     HashJoinNode(std::unique_ptr<QuerySolutionNode> left,
                  FieldPath leftFieldName,

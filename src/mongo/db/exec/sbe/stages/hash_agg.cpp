@@ -39,22 +39,17 @@ HashAggStage::HashAggStage(std::unique_ptr<PlanStage> input,
                            value::SlotVector gbs,
                            value::SlotMap<std::unique_ptr<EExpression>> aggs,
                            boost::optional<value::SlotId> collatorSlot,
-                           FilterMode filterMode,
                            boost::optional<value::SlotVector> keyToFilterBy,
                            PlanNodeId planNodeId)
     : PlanStage("group"_sd, planNodeId),
       _gbs(std::move(gbs)),
       _aggs(std::move(aggs)),
       _collatorSlot(collatorSlot),
-      _keyToFilterBy(std::move(keyToFilterBy)),
-      _filterMode(filterMode) {
+      _keyToFilterBy(std::move(keyToFilterBy)) {
     _children.emplace_back(std::move(input));
 
     if (_keyToFilterBy) {
-        invariant(_filterMode != FilterMode::noFilter);
         invariant(_keyToFilterBy->size() == _gbs.size());
-    } else {
-        invariant(_filterMode == FilterMode::noFilter);
     }
 }
 
@@ -64,7 +59,7 @@ std::unique_ptr<PlanStage> HashAggStage::clone() const {
         aggs.emplace(k, v->clone());
     }
     return std::make_unique<HashAggStage>(
-        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _filterMode, _keyToFilterBy, _commonStats.nodeId);
+        _children[0]->clone(), _gbs, std::move(aggs), _collatorSlot, _keyToFilterBy, _commonStats.nodeId);
 }
 
 void HashAggStage::prepare(CompileCtx& ctx) {
@@ -136,7 +131,7 @@ void HashAggStage::open(bool reOpen) {
     // AND add an option to build one big hash table up front, or to build a buncha little ones.
 
     _commonStats.opens++;
-    if (!reOpen || _filterMode == FilterMode::filterBeforeAgg) {
+    if (!reOpen) {
         _children[0]->open(reOpen);
 
         if (_collatorAccessor) {
@@ -160,20 +155,6 @@ void HashAggStage::open(bool reOpen) {
                 key.reset(idx++, false, tag, val);
             }
 
-            if (_filterMode == FilterMode::filterBeforeAgg) {
-                // Check whether this key matches the filter.
-                
-                // Not great to re-copy this each time, but it's pretty convenient.
-                value::MaterializedRow filterKey {
-                    _inKeyAccessors.size()
-                };
-                const auto eq = value::MaterializedRowEq{};
-                if (!eq(filterKey, key)) {
-                    // Skip this key.
-                    continue;
-                }
-            }
-            
             auto [it, inserted] = _ht->try_emplace(std::move(key), value::MaterializedRow{0});
             if (inserted) {
                 // Copy keys.
@@ -190,10 +171,7 @@ void HashAggStage::open(bool reOpen) {
             }
         }
 
-        // TODO: We should uncomment this and change behavior of re-open.
-        if (_filterMode != FilterMode::filterBeforeAgg) {
-            _children[0]->close();
-        }
+        _children[0]->close();
     }
 
     // Regardles of whether re-opening, re-position the iterator.

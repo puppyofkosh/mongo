@@ -1135,7 +1135,6 @@ public:
                                       sbe::makeSV(),
                                       sbe::makeEM(groupSlot, std::move(addToArrayExpr)),
                                       collatorSlot,
-                                      sbe::HashAggStage::FilterMode::noFilter,
                                       boost::none,
                                       _context->planNodeId);
 
@@ -1165,7 +1164,6 @@ public:
                         sbe::makeSV(),
                         sbe::makeEM(finalGroupSlot, std::move(finalAddToArrayExpr)),
                         collatorSlot,
-                        sbe::HashAggStage::FilterMode::noFilter,
                         boost::none,
                         _context->planNodeId);
 

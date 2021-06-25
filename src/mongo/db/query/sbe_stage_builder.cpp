@@ -2222,7 +2222,6 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                                                             sbe::makeSV(gbSlotId),
                                                             std::move(aggs),
                                                             boost::none,
-                                                            sbe::HashAggStage::FilterMode::noFilter,
                                                             boost::none,
                                                             root->nodeId());
 
@@ -2277,25 +2276,24 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
         sbe::makeEM(arraySlot, makeFunction("addToArray",
                                             makeVariable(rightResultSlot))),
         boost::none, // collator
-        sbe::HashAggStage::FilterMode::filterBeforeAgg,
         sbe::makeSV(leftFieldSlot),
         root->nodeId());
 
 
     // Now we put a filter on top of the group-by for the key we want (the left side's join field,
     // which will be a correlated variable.
-    // auto filter = sbe::makeS<sbe::FilterStage<false>>(
-    //     std::move(hashAgg),
-    //     sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
-    //                                  makeVariable(leftFieldSlot),
-    //                                  makeVariable(rightFieldSlot)),
-    //     root->nodeId()
-    //     );
+    auto filter = sbe::makeS<sbe::FilterStage<false>>(
+        std::move(hashAgg),
+        sbe::makeE<sbe::EPrimBinary>(sbe::EPrimBinary::Op::eq,
+                                     makeVariable(leftFieldSlot),
+                                     makeVariable(rightFieldSlot)),
+        root->nodeId()
+        );
 
 
     auto nlj = sbe::makeS<sbe::LoopJoinStage>(
         std::move(leftStage),
-        std::move(hashAgg),
+        std::move(filter),
         sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
         sbe::makeSV(leftFieldSlot),
         nullptr,

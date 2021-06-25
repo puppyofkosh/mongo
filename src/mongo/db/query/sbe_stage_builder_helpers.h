@@ -336,7 +336,6 @@ EvalStage makeHashAgg(EvalStage stage,
                       sbe::value::SlotVector gbs,
                       sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> aggs,
                       boost::optional<sbe::value::SlotId> collatorSlot,
-                      sbe::HashAggStage::FilterMode filterMode,
                       boost::optional<sbe::value::SlotVector> keyToFilterBy,
                       PlanNodeId planNodeId);
 
