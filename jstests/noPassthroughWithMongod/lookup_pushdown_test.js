@@ -34,11 +34,40 @@
         print("ian: running query " + tojson(groupBy.aggregate(pipeline).toArray()));
     }
 
-    // $lookup
+    // $lookup with small foreign collection. (HJ)
     {
         print("Running a simple $lookup\n");
         const local = db.local;
         const foreign = db.foreign;
+
+        assert.commandWorked(local.insert({_id: 0, joinFieldLocal: "a"}));
+        assert.commandWorked(local.insert({_id: 1, joinFieldLocal: "b"}));
+
+        for (let i = 0; i < 3; ++i) {
+            assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 1}));
+        }
+        assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 1}));
+        assert.commandWorked(foreign.insert({joinFieldForeign: "a", x: 2}));
+        assert.commandWorked(foreign.insert({joinFieldForeign: "b", x: 3}));
+        assert.commandWorked(foreign.insert({joinFieldForeign: "b", x: 4}));
+
+        printjson(local.aggregate([{$lookup: {
+            from: "foreign",
+            localField: "joinFieldLocal",
+            foreignField: "joinFieldForeign",
+            as: "arr"
+        }}]).toArray());
+
+        // TODO: Try $unwind!
+    }
+
+    // $lookup with "big" foreign collection (NLJ)
+    {
+        print("Running a simple $lookup\n");
+        const local = db.local;
+        const foreign = db.foreign;
+        local.drop();
+        foreign.drop();
 
         assert.commandWorked(local.insert({_id: 0, joinFieldLocal: "a"}));
         assert.commandWorked(local.insert({_id: 1, joinFieldLocal: "b"}));

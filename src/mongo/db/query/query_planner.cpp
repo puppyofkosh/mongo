@@ -1180,7 +1180,19 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
                 it->second.indices);
 
             if (!relevantIndices.empty()) {
-                // TODO: indexed NLJ
+                // TODO: need parameterized IX scan.
+
+                auto ixscan = std::make_unique<IndexScanNode>(relevantIndices[0]);
+                // TODO: fill out parameters.
+                ixscan->direction = 1;
+                ixscan->addKeyMetadata = false;
+                ixscan->queryCollator = nullptr;
+                // TODO: Mark the bounds as a correlated variable.
+
+                auto fetch = std::make_unique<FetchNode>(std::move(ixscan));
+
+                
+                                
             } else {
                 auto scan = std::make_unique<CollectionScanNode>();
                 scan->nss = lookup->resolvedNs();

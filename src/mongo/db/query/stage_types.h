@@ -129,6 +129,8 @@ enum StageType {
     STAGE_HASH_AGG,
     STAGE_EQ_LOOKUP,
 
+    STAGE_NLJ,
+
     STAGE_SENTINEL,
 };
 

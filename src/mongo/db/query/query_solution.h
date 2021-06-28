@@ -1445,6 +1445,45 @@ struct EqLookupNode : public QuerySolutionNode {
     Strategy strategy;
 };
 
+struct NLJNode : public QuerySolutionNode {
+    NLJNode(std::unique_ptr<QuerySolutionNode> left,
+            std::unique_ptr<QuerySolutionNode> right,
+            std::vector<int> correlatedIds) :correlatedIds(correlatedIds) {
+        children.push_back(left.release());
+        children.push_back(right.release());
+    }
+    virtual ~NLJNode() {}
+
+    virtual StageType getType() const {
+        return STAGE_EQ_LOOKUP;
+    }
+
+    virtual void appendToString(str::stream* ss, int indent) const {
+    }
+
+    bool fetched() const {
+        return children[0]->fetched() && children[1]->fetched();
+    }
+    FieldAvailability getFieldAvailability(const std::string& field) const {
+        // TODO: ian
+        return FieldAvailability::kNotProvided;
+    }
+    bool sortedByDiskLoc() const {
+        return false;
+    }
+    const ProvidedSortSet& providedSorts() const {
+        return kEmptyProvidedSortSet;
+    }
+
+    QuerySolutionNode* clone() const {
+        return new NLJNode(std::unique_ptr<QuerySolutionNode>(children[0]->clone()),
+                                std::unique_ptr<QuerySolutionNode>(children[1]->clone()),
+                                correlatedIds);
+    }
+
+    std::vector<int> correlatedIds;
+};
+    
 struct MultiPlanNode : public QuerySolutionNode {
     MultiPlanNode() {}
     MultiPlanNode(std::vector<std::unique_ptr<QuerySolutionNode>> ownedChildren) {
