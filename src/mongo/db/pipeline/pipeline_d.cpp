@@ -355,7 +355,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> attemptToGetExe
     }
 
     // TODO and false
-    if (pipeline) {
+    if (pipeline && internalQueryAllowGroupLookup.load()) {
         // Push other stuff down.
         if (pipeline->peekFront() && pipeline->peekFront()->getSourceName() == "$lookup"_sd) {
             auto lookup = static_cast<DocumentSourceLookUp*>(pipeline->peekFront());

@@ -1149,18 +1149,19 @@ StatusWith<std::vector<std::unique_ptr<QuerySolution>>> QueryPlanner::planCqWith
 
 StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
                                                   const QueryPlannerParams& params) {
+    const static bool forceHashJoin = false;
+    
     auto swPlans = planCqWithoutPipeline(query, params);
     if (!swPlans.isOK()) {
         return swPlans.getStatus();
     }
 
-    invariant(params.collections.count(query.nss()));
-    
     QueryPlannerResult res;
     res.multiPlanCandidates = std::move(swPlans.getValue());
     std::unique_ptr<QuerySolutionNode> newQsn;
 
     if (!query.innerPipeline.empty()) {
+        invariant(params.collections.count(query.nss()));
         newQsn = std::make_unique<SentinelNode>();
     }
 
@@ -1201,7 +1202,7 @@ StatusWith<QueryPlannerResult> QueryPlanner::plan(const CanonicalQuery& query,
                 scan->tailable = false;
 
                 auto strategy = EqLookupNode::Strategy::hashed;
-                if (it->second.approxNumRecords > 100) {
+                if (it->second.approxNumRecords > 100 && !forceHashJoin) {
                     strategy = EqLookupNode::Strategy::nlj;
                 }
                 newQsn = std::make_unique<EqLookupNode>(std::move(newQsn),

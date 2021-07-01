@@ -478,3 +478,10 @@ server_parameters:
     cpp_varname: "internalQueryForceClassicEngine"
     cpp_vartype: AtomicWord<bool>
     default: false
+
+  internalQueryAllowGroupLookup:
+    description: "If true, force use of the classic query engine."
+    set_at: [ startup, runtime ]
+    cpp_varname: "internalQueryAllowGroupLookup"
+    cpp_vartype: AtomicWord<bool>
+    default: false

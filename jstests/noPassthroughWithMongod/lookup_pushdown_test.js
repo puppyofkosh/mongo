@@ -87,4 +87,46 @@
             as: "arr"
         }}]).toArray());
     }
+
+
+    // Perf test.
+    const results = [];
+    if (false) {
+        const local = db.local;
+        const foreign = db.foreign;
+        local.drop();
+        foreign.drop();
+
+        for (let i = 0; i < 10000; ++i) {
+            assert.commandWorked(local.insert({_id: i, joinFieldLocal: i % 100}));
+        }
+
+        for (let i = 0; i < 1000; ++i) {
+            assert.commandWorked(foreign.insert({joinFieldForeign: i % 100, x: 1}));
+        }
+
+        let iters = 10;
+        let totalTime = 0;
+        for (let i = 0; i < 10; ++i) {
+            let start = Date.now();
+            
+            let res = local.aggregate([{$lookup: {
+                from: "foreign",
+                localField: "joinFieldLocal",
+                foreignField: "joinFieldForeign",
+                as: "arr"
+            }}]).toArray();
+
+            let end = Date.now();
+            print("Elapsed time " + (end - start));
+
+            totalTime += (end - start);
+            results.push(res);
+        }
+
+        print ("Average time " + totalTime/iters);
+
+        //printjson(results[0]);
+    }
+    
 })();
