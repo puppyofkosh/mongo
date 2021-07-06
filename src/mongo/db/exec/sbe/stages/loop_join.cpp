@@ -81,6 +81,7 @@ void LoopJoinStage::prepare(CompileCtx& ctx) {
 
 value::SlotAccessor* LoopJoinStage::getAccessor(CompileCtx& ctx, value::SlotId slot) {
     if (_outerRefs.count(slot)) {
+        std::cout << "loop join looking in outer for " << slot << std::endl;
         return _children[0]->getAccessor(ctx, slot);
     }
 

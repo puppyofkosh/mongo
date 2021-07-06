@@ -46,9 +46,11 @@
 #include "mongo/db/exec/sbe/stages/scan.h"
 #include "mongo/db/exec/sbe/stages/sort.h"
 #include "mongo/db/exec/sbe/stages/sorted_merge.h"
+#include "mongo/db/exec/sbe/stages/spool.h"
 #include "mongo/db/exec/sbe/stages/traverse.h"
 #include "mongo/db/exec/sbe/stages/union.h"
 #include "mongo/db/exec/sbe/stages/unique.h"
+#include "mongo/db/exec/sbe/stages/zip.h"
 #include "mongo/db/exec/sbe/values/sort_spec.h"
 #include "mongo/db/exec/shard_filterer.h"
 #include "mongo/db/fts/fts_index_format.h"
@@ -2247,6 +2249,7 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
 
     auto leftFieldSlot {_slotIdGenerator.generate()};
     const auto leftResultSlot = leftOutputs.get(kResult);
+    const auto leftRecordId = leftOutputs.get(kRecordId);
     leftStage = sbe::makeProjectStage(
         std::move(leftStage), root->nodeId(),
         leftFieldSlot,
@@ -2273,8 +2276,131 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
     // from the hash table.
 
     boost::optional<sbe::value::SlotVector> filterSlots;
+    std::unique_ptr<sbe::PlanStage> joinStage;
     if (pn->strategy == EqLookupNode::Strategy::hashed) {
-        filterSlots = sbe::makeSV(leftFieldSlot);
+        // Create a stack spool.
+
+        auto spoolOutSlotId = _slotIdGenerator.generate();
+        auto spoolId = _spoolIdGenerator.generate();
+        auto sspool = sbe::makeS<sbe::SpoolConsumerStage<true>>(
+            spoolId,
+            sbe::makeSV(spoolOutSlotId),
+            root->nodeId());
+
+        auto nextDocIdSlotId = _slotIdGenerator.generate();
+        auto project = sbe::makeProjectStage(
+            std::move(sspool), root->nodeId(),
+            nextDocIdSlotId,
+            sbe::makeE<sbe::EPrimBinary>(
+                sbe::EPrimBinary::Op::add,
+                makeVariable(spoolOutSlotId),
+                stage_builder::makeConstant(sbe::value::TypeTags::NumberInt32, 1)));
+
+
+        auto innerNlj = sbe::makeS<sbe::LoopJoinStage>(
+            std::move(leftStage),
+            std::move(project),
+            sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
+            sbe::makeSV(),
+            nullptr,
+            root->nodeId());
+
+
+        auto hj = sbe::makeS<sbe::HashJoinStage>(
+            std::move(rightStage),
+            std::move(innerNlj),
+            sbe::makeSV(rightFieldSlot),
+            sbe::makeSV(rightResultSlot),
+            sbe::makeSV(leftFieldSlot),
+            sbe::makeSV(leftFieldSlot, leftRecordId, leftResultSlot,
+                        nextDocIdSlotId),
+            boost::none,
+            root->nodeId());
+
+        // should be streaming agg
+        const auto arraySlot = _slotIdGenerator.generate();
+        const auto groupLeftResult = _slotIdGenerator.generate();
+        const auto groupLeftRecordId = _slotIdGenerator.generate();
+        
+        auto hashagg = sbe::makeS<sbe::HashAggStage>(
+            std::move(hj),
+            sbe::makeSV(nextDocIdSlotId),
+            sbe::makeEM(arraySlot, makeFunction("addToArray",
+                                                makeVariable(rightResultSlot)),
+                        groupLeftResult, makeFunction("first", makeVariable(leftResultSlot)),
+                        groupLeftRecordId, makeFunction("first", makeVariable(leftRecordId))
+                ),
+            boost::none,
+            boost::none,
+            true,
+            root->nodeId()
+            );
+
+
+        // Anchor branch.
+        auto zeroSlots = _slotIdGenerator.generateMultiple(4);
+        sbe::value::SlotMap<std::unique_ptr<sbe::EExpression>> projects;
+        for (auto&& zeroSlot : zeroSlots) {
+            projects.insert({zeroSlot, makeConstant(sbe::value::TypeTags::NumberInt32, 0)});
+        }
+        
+        auto anchor = sbe::makeS<sbe::ProjectStage>(
+            makeLimitCoScanTree(root->nodeId()),
+            std::move(projects),
+            root->nodeId());
+
+        // Now a union stage with an anchor branch etc.
+        std::vector<std::unique_ptr<sbe::PlanStage>> inputStages;
+        inputStages.push_back(std::move(anchor));
+        inputStages.push_back(std::move(hashagg));
+
+        // TODO: Union has to forward the results and so on.
+        auto unionOutputDocId = _slotIdGenerator.generate();
+        auto unionLeftSideId = _slotIdGenerator.generate();
+        auto unionLeftRecordId = _slotIdGenerator.generate();
+        auto unionArrayId = _slotIdGenerator.generate();
+        auto unionStage =
+            sbe::makeS<sbe::UnionStage>(
+                std::move(inputStages),
+                std::vector<sbe::value::SlotVector>{
+                    zeroSlots,
+                        sbe::makeSV(nextDocIdSlotId,
+                                    groupLeftResult,
+                                    groupLeftRecordId,
+                                    arraySlot)},
+                sbe::makeSV(unionOutputDocId, unionLeftSideId, unionLeftRecordId,
+                            unionArrayId),
+                root->nodeId());
+
+        auto lspool = sbe::makeS<sbe::SpoolLazyProducerStage>(
+            std::move(unionStage),
+            spoolId,
+            sbe::makeSV(unionOutputDocId),
+            nullptr,
+            root->nodeId());
+
+        auto outObjSlot {
+            _slotIdGenerator.generate()
+        };
+        auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(
+            std::move(lspool),
+            outObjSlot,
+            unionLeftSideId,
+            // drop no fields
+            sbe::MakeBsonObjStage::FieldBehavior::drop,
+            std::vector<std::string>{},
+
+            // TODO: Don't we get this from the DocumentSourceLookup??
+            std::vector<std::string>{"joinField"},
+            sbe::makeSV(unionArrayId),
+            true,
+            false,
+            root->nodeId());
+        PlanStageSlots outSlots;
+        outSlots.set(kResult, outObjSlot);
+        outSlots.set(kRecordId, unionLeftRecordId);
+    
+        return {std::move(mkobj), std::move(outSlots)};
     } else {
         // We'll re-run the right side each time, in a nested loop join.
         // Before the group, we'll put a filter for the keys which match the join predicate.
@@ -2285,48 +2411,48 @@ std::pair<std::unique_ptr<sbe::PlanStage>, PlanStageSlots> SlotBasedStageBuilder
                                          makeVariable(rightFieldSlot)),
             root->nodeId()
             );
+
+        const auto arraySlot = _slotIdGenerator.generate();
+        auto hashAgg = sbe::makeS<sbe::HashAggStage>(
+            std::move(rightStage),
+            sbe::makeSV(rightFieldSlot),
+            sbe::makeEM(arraySlot, makeFunction("addToArray",
+                                                makeVariable(rightResultSlot))),
+            boost::none, // collator
+            std::move(filterSlots), // empty if we're doing nlj
+            pn->strategy == EqLookupNode::Strategy::nlj, // only recompute when re-opening for nlj
+            root->nodeId());
+
+        joinStage = sbe::makeS<sbe::LoopJoinStage>(
+            std::move(leftStage),
+            std::move(hashAgg),
+            sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
+            sbe::makeSV(leftFieldSlot),
+            nullptr,
+            root->nodeId());
+    
+        auto outObjSlot {
+            _slotIdGenerator.generate()
+        };
+        auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(std::move(joinStage),
+                                                       outObjSlot,
+                                                       leftResultSlot,
+                                                       // drop no fields
+                                                       sbe::MakeBsonObjStage::FieldBehavior::drop,
+                                                       std::vector<std::string>{},
+
+                                                       // TODO: Don't we get this from the DocumentSourceLookup??
+                                                       std::vector<std::string>{"joinField"},
+                                                       sbe::makeSV(arraySlot),
+                                                       true,
+                                                       false,
+                                                       root->nodeId());
+        PlanStageSlots outSlots;
+        outSlots.set(kResult, outObjSlot);
+        outSlots.set(kRecordId, leftOutputs.get(kRecordId));
+    
+        return {std::move(mkobj), std::move(outSlots)};
     }
-
-    const auto arraySlot = _slotIdGenerator.generate();
-    auto hashAgg = sbe::makeS<sbe::HashAggStage>(
-        std::move(rightStage),
-        sbe::makeSV(rightFieldSlot),
-        sbe::makeEM(arraySlot, makeFunction("addToArray",
-                                            makeVariable(rightResultSlot))),
-        boost::none, // collator
-        std::move(filterSlots), // empty if we're doing nlj
-        pn->strategy == EqLookupNode::Strategy::nlj, // only recompute when re-opening for nlj
-        root->nodeId());
-
-    auto nlj = sbe::makeS<sbe::LoopJoinStage>(
-        std::move(leftStage),
-        std::move(hashAgg),
-        sbe::makeSV(leftFieldSlot, leftOutputs.get(kRecordId), leftResultSlot),
-        sbe::makeSV(leftFieldSlot),
-        nullptr,
-        root->nodeId());
-    
-    auto outObjSlot {
-        _slotIdGenerator.generate()
-    };
-    auto mkobj = sbe::makeS<sbe::MakeBsonObjStage>(std::move(nlj),
-                                                   outObjSlot,
-                                                   leftResultSlot,
-                                                   // drop no fields
-                                                   sbe::MakeBsonObjStage::FieldBehavior::drop,
-                                                   std::vector<std::string>{},
-
-                                                   // TODO: Don't we get this from the DocumentSourceLookup??
-                                                   std::vector<std::string>{"joinField"},
-                                                   sbe::makeSV(arraySlot),
-                                                   true,
-                                                   false,
-                                                   root->nodeId());
-    PlanStageSlots outSlots;
-    outSlots.set(kResult, outObjSlot);
-    outSlots.set(kRecordId, leftOutputs.get(kRecordId));
-    
-    return {std::move(mkobj), std::move(outSlots)};
 }
 
 // Returns a non-null pointer to the root of a plan tree, or a non-OK status if the PlanStage tree
