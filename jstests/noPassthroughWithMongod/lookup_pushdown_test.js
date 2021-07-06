@@ -36,7 +36,7 @@
 
     // $lookup with small foreign collection. (HJ)
     {
-        print("Running a simple $lookup which should use HJ\n");
+        print("Running a simple $lookup\n");
         const local = db.local;
         const foreign = db.foreign;
 

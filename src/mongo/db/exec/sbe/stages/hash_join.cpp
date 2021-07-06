@@ -122,7 +122,6 @@ value::SlotAccessor* HashJoinStage::getAccessor(CompileCtx& ctx, value::SlotId s
             return it->second;
         }
 
-        std::cout << "hj checking for " << slot << " in child[1] " << std::endl;
         return _children[1]->getAccessor(ctx, slot);
     }
 

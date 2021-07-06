@@ -54,7 +54,6 @@ sbeEnv.Library(
         'stages/union.cpp',
         'stages/unique.cpp',
         'stages/unwind.cpp',
-        'stages/zip.cpp',
         'util/debug_print.cpp',
         'values/slot.cpp',
         'vm/arith.cpp',
